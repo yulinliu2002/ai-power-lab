@@ -1,0 +1,89 @@
+# AI Power Lab — V1 default configuration
+#
+# Full electrical + thermal + protection chain: SST average-value model,
+# DC bus, PI voltage controller, dynamic AI load, lumped thermal model,
+# and a thermal-driven protection/derating state machine.
+#
+# Units are given explicitly in every key name. All values here are
+# illustrative educational parameters (Category C in the architecture
+# review) unless otherwise noted, and are NOT characteristics of any
+# real commercial SST or data-center load.
+
+simulation:
+  timestep_s: 1.0e-4       # Euler integration step [s]. Chosen << tau_sst and
+                            # << the DC bus energy time constant (see sst/dc_bus
+                            # below): both are O(10-20 ms), so 0.1 ms gives
+                            # roughly a 100-200x safety margin.
+  duration_s: 0.6            # total simulated time [s]
+
+sst:
+  rated_power_w: 500000.0   # maximum SST output (bus-referenced) power [W]
+  min_power_w: 0.0          # minimum SST output power [W] (no reverse flow in V1)
+  efficiency: 0.97          # constant conversion efficiency [-] (0-1), bus-output-referenced
+  time_constant_s: 0.02     # tau_sst: first-order power response time constant [s]
+
+dc_bus:
+  nominal_voltage_v: 800.0  # design-point DC bus voltage [V]
+  capacitance_f: 0.02       # equivalent DC-link capacitance [F]
+  initial_voltage_v: 800.0  # bus voltage at simulation start [V]
+  min_energy_j: 1.0         # numerical floor on stored energy [J] -- NOT a
+                             # physical limit, purely a safeguard against the
+                             # integrator driving E_dc below zero in one step.
+                             # See src/dc_bus.py module docstring and README
+                             # "Key Design Decisions" #1.
+
+controller:
+  voltage_reference_v: 800.0   # V_ref [V]
+  kp_w_per_v: 2000.0           # proportional gain [W/V]
+  ki_w_per_v_s: 1500.0         # integral gain [W/(V*s)]
+  # Picked by a small empirical sweep, not formal loop-shaping (see README
+  # "Key Design Decisions" #4). The first-pass gains (Kp=10000, Ki=10000) were
+  # underdamped: 4-5 visible ringing cycles after both startup and the
+  # load step. These lower gains settle in ~1-2 cycles instead, trading a
+  # slightly deeper single transient dip for far less ringing, while
+  # keeping settling time in the same ~100 ms ballpark. A fully
+  # non-oscillatory design was deliberately not pursued -- it requires
+  # gains an order of magnitude lower still and pushes settling out to
+  # several hundred ms, which is over-tuned for this demo's purposes.
+  integral_min_v_s: -250.0     # integrator clamp, lower bound [V*s]
+  integral_max_v_s: 250.0      # integrator clamp, upper bound [V*s]
+
+load:
+  rated_power_w: 400000.0   # AI load rated power [W], used to scale fractional profiles
+
+thermal:
+  ambient_temperature_c: 25.0          # T_ambient [degC]
+  initial_temperature_c: 25.0          # SST temperature at simulation start [degC]
+  thermal_resistance_c_per_w: 0.01     # R_th [degC/W]
+  thermal_capacitance_j_per_c: 3000.0  # C_th [J/degC]
+  # R_th * C_th = 30 s thermal time constant -- visibly slower than the
+  # ~20-50 ms electrical time constants, so thermal plots clearly read as
+  # a separate, slower phenomenon. At rated SST power (500 kW, 0.97
+  # efficiency) full-rated loss is ~15.5 kW, giving a steady-state
+  # temperature of ~180 degC if sustained undiminished -- comfortably
+  # above the trip threshold below, so sustained near-rated loading can
+  # genuinely reach the trip condition rather than only ever asymptoting
+  # just under it.
+
+protection:
+  thermal_derate_start_c: 70.0   # derating begins above this temperature [degC]
+  thermal_trip_c: 100.0          # trip timer runs while T >= this [degC]
+  thermal_trip_time_s: 2.0       # required sustained duration above
+                                  # thermal_trip_c before latching TRIPPED [s]
+                                  # -- debounce so a brief transient can't trip it
+  derate_factor_min: 0.5         # derate_factor at/above thermal_trip_c, before
+                                  # an actual trip latches [-]
+  # Chosen via direct simulation, not hand analysis (see README "Key Design
+  # Decisions" #6), so that
+  # a sustained demand low enough to never saturate the derated cap settles
+  # safely below thermal_trip_c (Scenario B), while a demand that stays
+  # saturated against the cap converges to a steady-state loss that keeps
+  # temperature AT/ABOVE thermal_trip_c indefinitely, guaranteeing a real
+  # trip rather than a last-second self-rescue (Scenario C). A lower
+  # derate_factor_min (e.g. 0.2) cools enough to self-stabilize just under
+  # the trip threshold even under full saturation -- demonstrating only
+  # derating, never a trip, for ANY sustained load. This value is an
+  # engineering modeling assumption, not a derived figure.
+
+grid:
+  nominal_voltage_pu: 1.0   # grid voltage outside of any scenario disturbance [-]
