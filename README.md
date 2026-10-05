@@ -11,7 +11,7 @@ hardware-design-validation fidelity.
 
 V1.0 (tagged `v1.0.0`) delivered the validated simulation engine. V1.1
 wraps that engine in an interactive Streamlit dashboard -- the engine
-and physics are unchanged; see "What Is Currently Modeled" below.
+and physics are unchanged; see "Modeling Scope" and "Limitations" below.
 
 **What AI Power Lab is.** An interactive platform connecting theory
 (the Learn section), system architecture/simulation (this project's own
@@ -41,12 +41,8 @@ performance numbers beyond what's attributed to a public source there.
   distinguishing commercial products, industry architecture/standards
   work, and research.
 
-**How to run the dashboard:**
-```bash
-source .venv/bin/activate      # or create one -- see "Running the Project" below
-pip install -r requirements.txt
-streamlit run app.py
-```
+**How to run it:** see [Quick Start](#quick-start) below -- clone, create a
+venv, `pip install -r requirements.txt`, then `streamlit run app.py`.
 
 **What is currently modeled** vs. **what is not** is unchanged from
 V1.0 and detailed fully below (Modeling Scope, Limitations) -- the
@@ -273,7 +269,7 @@ condition) — they never reach into internal physical states directly.
 
 ## Results
 
-Running each scenario (see **Running the Project** below) regenerates
+Running each scenario (see [Quick Start](#quick-start) below) regenerates
 its plots under `results/`. Headline numbers from this project's own
 validation run:
 
@@ -328,11 +324,12 @@ ai-power-lab/
 │   │   ├── simulation_adapter.py   # parameterized wrappers around src.simulation.run_simulation
 │   │   ├── content_loader.py       # loads + validates content/learn/*.yaml
 │   │   └── industry_data.py        # loads + validates data/industry/*.yaml
-│   ├── components/                # reusable chart/diagram/metric widgets
+│   ├── components/                # reusable chart/diagram/console-chrome widgets
 │   │   ├── palette.py               # validated chart color palette
+│   │   ├── console_theme.py         # shared console CSS + status-chip/stat helpers
 │   │   ├── plots.py                 # interactive Plotly versions of scenarios/plotting.py
-│   │   ├── diagram.py               # reusable flow-diagram renderer
-│   │   └── metrics.py               # summary-metric + state-badge display helpers
+│   │   ├── diagram.py               # reusable flow-diagram renderer (Overview, AI Data Center)
+│   │   └── schematic.py             # live power-flow schematic (Simulator hero visualization)
 │   └── pages/                     # the five dashboard sections
 │       ├── overview.py
 │       ├── simulator.py
@@ -352,10 +349,10 @@ ai-power-lab/
 │   ├── research.yaml
 │   └── weekly_updates.yaml
 ├── tests/                       # one test module per physics/logic module, plus dashboard/content/industry-data tests
-└── results/                      # generated plots and CSV telemetry (gitignored data, not code)
+└── results/                      # generated plots + CSV telemetry, tracked in git as evidence
 ```
 
-## Running the Project
+## Quick Start
 
 ```bash
 python3 -m venv .venv
