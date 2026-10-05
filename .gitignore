@@ -5,3 +5,11 @@ __pycache__/
 .DS_Store
 .idea/
 .vscode/
+
+# Local AI-agent/Claude Code tooling (symlinks into .venv's bundled
+# skills, not a project dependency -- see V1.1 pre-commit audit).
+.agents/
+.claude/
+
+# Streamlit local secrets -- never committed if one is ever created.
+.streamlit/secrets.toml

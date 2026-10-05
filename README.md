@@ -1,7 +1,90 @@
-# AI Power Lab: SST Digital Twin
+# AI Power Lab
 
-An educational, system-level digital twin of an SST-powered 800 VDC AI
-data-center power architecture.
+A system-level simulation and visualization platform for learning how
+an SST-powered 800 VDC AI data-center power architecture behaves,
+end-to-end -- electrically, thermally, and under protection logic. It
+is best described as an **educational digital-twin framework**: it is
+not calibrated to any specific commercial SST, and makes no claim to
+hardware-design-validation fidelity.
+
+## V1.1: Platform Overview
+
+V1.0 (tagged `v1.0.0`) delivered the validated simulation engine. V1.1
+wraps that engine in an interactive Streamlit dashboard -- the engine
+and physics are unchanged; see "What Is Currently Modeled" below.
+
+**What AI Power Lab is.** An interactive platform connecting theory
+(the Learn section), system architecture/simulation (this project's own
+SST + 800 VDC bus + AI load model), and real industry development
+(curated, sourced public records) for solid-state-transformer-powered,
+800 VDC AI data-center power.
+
+**Why SST + 800 VDC matter.** Public industry sources (NVIDIA, the Open
+Compute Project) describe an industry shift toward centralized power
+conversion and 800 VDC distribution for high-density AI racks, aimed at
+reducing the number of conversion stages between the grid and the
+compute load. See the **AI Data Center** and **Industry** dashboard
+pages for sourced detail -- this project does not invent or claim any
+performance numbers beyond what's attributed to a public source there.
+
+**What can be demonstrated.**
+- The five V1 scenarios (A-E below), run interactively with
+  user-adjustable parameters (load levels, timing, SST rating, voltage
+  reference) and live Plotly plots, instead of only static
+  pre-generated PNGs.
+- The full causal chain for the flagship **AI Load Step** demo: load
+  increase &rarr; power deficit &rarr; bus energy/voltage sag &rarr; PI
+  controller response &rarr; SST power recovery &rarr; bus recovery.
+- A **Learn** section connecting each Level 1-3 topic directly to the
+  demo that exercises it ("Try it in Simulator").
+- A curated, sourced **Industry Intelligence** knowledge base
+  distinguishing commercial products, industry architecture/standards
+  work, and research.
+
+**How to run the dashboard:**
+```bash
+source .venv/bin/activate      # or create one -- see "Running the Project" below
+pip install -r requirements.txt
+streamlit run app.py
+```
+
+**What is currently modeled** vs. **what is not** is unchanged from
+V1.0 and detailed fully below (Modeling Scope, Limitations) -- the
+dashboard adds no new physics. In particular: average-value SST only
+(no switching/semiconductor/PWM/MFT physics), thermal-only protection
+(no voltage protection), and no AC power flow.
+
+**What the Learning Platform contains:** four priority levels -- Level
+1 System Architecture + Controls (power flow, energy balance, DC bus,
+dynamic load, voltage regulation, PI control, transient response),
+Level 2 SST Power-Electronics Architecture (conceptual only -- AFE, DC
+link, isolated DC/DC, MFT, modular conversion -- explicitly NOT
+simulated), Level 3 System Behavior (efficiency/loss, thermal dynamics,
+derating, protection, grid sag, grid loss -- mapped directly onto
+existing modules), and Level 4 Future Deep Dives (roadmap placeholders
+only: SiC/GaN, switching/modulation, MFT electromagnetics, EMI,
+detailed semiconductor loss, detailed control loops).
+
+**What Industry Intelligence does:** reads a curated, local YAML
+knowledge base (`data/industry/*.yaml`) -- no scraping, no live
+browsing from the app. Every record is either `status: verified` (with
+a real public source) or `status: sample` (an explicit placeholder,
+never confused for a verified record), and every record carries a
+`maturity` label (`commercial_product` / `architecture_standard` /
+`research`) so the UI always visually separates the three. Initial
+seeds: NVIDIA's public 800 VDC architecture description, the Open
+Compute Project's 800 VDC/LVDC standardization work (including "SST
+Specification v0.3"), and Eaton's publicly listed medium-voltage SST
+product (15 kV class, 2 MW, >97% efficiency at 800 VDC output,
+liquid-cooled).
+
+**Roadmap (not implemented in V1.1):** an Architecture Comparison
+Simulator (traditional vs. emerging AI data-center power architecture);
+deeper Level 2/4 content; load- and temperature-dependent SST
+efficiency; a real weekly industry-update cadence (curated by hand,
+still no scraping); DC-bus over/undervoltage protection. See "Future
+Work" at the end of this document for the full V1.0-era list, which
+remains valid.
 
 ## Purpose
 
@@ -219,9 +302,10 @@ ai-power-lab/
 ├── CLAUDE.md                 # permanent project rules
 ├── requirements.txt
 ├── conftest.py                # lets tests/scenarios import `src` as a package
+├── app.py                      # Streamlit entry point -- streamlit run app.py
 ├── config/
 │   └── default.yaml           # every engineering parameter, with units
-├── src/
+├── src/                        # the V1 simulation engine (unchanged by V1.1)
 │   ├── config.py               # YAML -> validated, typed dataclasses
 │   ├── grid.py                 # exogenous grid_voltage_pu / grid_available model
 │   ├── load.py                 # AI load power profile (step function)
@@ -232,14 +316,42 @@ ai-power-lab/
 │   ├── protection.py            # RUNNING / DERATED / TRIPPED state machine
 │   ├── telemetry.py             # Telemetry container + CSV export
 │   └── simulation.py            # the full per-step update loop
-├── scenarios/
+├── scenarios/                   # the five V1 scenarios (static matplotlib + CSV)
 │   ├── plotting.py               # shared matplotlib helpers
 │   ├── load_step.py              # Scenario A
 │   ├── sustained_high_load.py    # Scenario B
 │   ├── thermal_trip.py           # Scenario C
 │   ├── grid_sag.py               # Scenario D
 │   └── grid_loss.py              # Scenario E
-├── tests/                       # one test module per physics/logic module
+├── dashboard/                    # V1.1 Streamlit platform
+│   ├── adapters/                  # thin bridge from src/scenarios to the UI -- no physics here
+│   │   ├── simulation_adapter.py   # parameterized wrappers around src.simulation.run_simulation
+│   │   ├── content_loader.py       # loads + validates content/learn/*.yaml
+│   │   └── industry_data.py        # loads + validates data/industry/*.yaml
+│   ├── components/                # reusable chart/diagram/metric widgets
+│   │   ├── palette.py               # validated chart color palette
+│   │   ├── plots.py                 # interactive Plotly versions of scenarios/plotting.py
+│   │   ├── diagram.py               # reusable flow-diagram renderer
+│   │   └── metrics.py               # summary-metric + state-badge display helpers
+│   └── pages/                     # the five dashboard sections
+│       ├── overview.py
+│       ├── simulator.py
+│       ├── learn.py
+│       ├── ai_datacenter.py
+│       └── industry.py
+├── content/learn/                 # Learn-section topics (YAML, by priority level)
+│   ├── level1_system.yaml
+│   ├── level2_sst_architecture.yaml
+│   ├── level3_system_behavior.yaml
+│   └── level4_future.yaml
+├── data/industry/                 # curated, sourced public industry-intelligence records
+│   ├── companies.yaml
+│   ├── products.yaml
+│   ├── standards.yaml
+│   ├── developments.yaml
+│   ├── research.yaml
+│   └── weekly_updates.yaml
+├── tests/                       # one test module per physics/logic module, plus dashboard/content/industry-data tests
 └── results/                      # generated plots and CSV telemetry (gitignored data, not code)
 ```
 
@@ -259,6 +371,9 @@ python -m scenarios.sustained_high_load
 python -m scenarios.thermal_trip
 python -m scenarios.grid_sag
 python -m scenarios.grid_loss
+
+# Launch the interactive dashboard (V1.1)
+streamlit run app.py
 ```
 
 ## Limitations

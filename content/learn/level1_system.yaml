@@ -1,0 +1,295 @@
+# Level 1 -- System Architecture + Controls (highest learning priority).
+#
+# Each entry follows the repeatable learning template from CLAUDE.md /
+# the V1.1 product brief. Every physics claim here is grounded in the
+# modules under src/ -- see those modules' docstrings for the full
+# governing-equation treatment; this file is the teaching layer on top.
+
+- id: power-flow
+  title: Power Flow
+  level: 1-system
+  what_is_it: >
+    The left-to-right chain of power through the system: Grid -> SST ->
+    800 VDC Bus -> AI Load. At every instant, power produced by the SST
+    either goes to the load or changes the energy stored in the DC bus.
+  why_it_exists: >
+    Nothing in this system is static -- power flow is the backbone every
+    other subsystem (control, thermal, protection) reacts to. Understanding
+    it is the prerequisite for understanding everything else in Level 1.
+  inputs_outputs: >
+    Inputs: P_load(t) [W] (exogenous AI demand), grid condition
+    (grid_voltage_pu, grid_available). Outputs: P_sst [W] (delivered to
+    the bus), P_loss [W] (dissipated as heat).
+  key_physics: >
+    Power balance at the DC bus node: whatever the SST delivers that the
+    load doesn't consume accumulates (or depletes) as stored capacitor
+    energy. This single balance is what links the electrical, thermal,
+    and control stories together.
+  key_control_idea: >
+    The PI voltage controller exists specifically to keep P_sst tracking
+    P_load (plus a correction term) so that stored energy -- and
+    therefore bus voltage -- stays near its reference.
+  equations:
+    - "dE_dc/dt = P_sst - P_load"
+    - "P_in = P_sst / efficiency"
+    - "P_loss = P_in - P_sst"
+  what_can_go_wrong: >
+    If P_sst cannot track P_load (SST saturated, derated, or grid-limited),
+    the imbalance drains or overfills the DC-link energy, moving V_dc away
+    from its reference -- see Energy Balance and DC Bus below.
+  how_modeled: >
+    src/simulation.py's per-step loop evaluates load and grid inputs,
+    computes available SST power, runs the controller, steps the SST's
+    first-order power response, and updates stored bus energy -- in that
+    causal order, once per timestep.
+  what_ignored: >
+    No AC-side power flow, no reactive power, no multi-bus or
+    multi-converter topology -- a single aggregated SST feeding a single
+    lumped bus feeding a single lumped load.
+  industry_relevance: >
+    Real AI data centers increasingly centralize power conversion (fewer,
+    larger conversion stages) specifically to simplify this power-flow
+    picture at facility scale -- see the AI Data Center section.
+  try_it_scenario: load_step
+
+- id: energy-balance
+  title: Energy Balance
+  level: 1-system
+  what_is_it: >
+    The statement that the DC bus's stored capacitor energy only changes
+    because of the net power flowing in or out of it -- nothing else
+    changes it.
+  why_it_exists: >
+    It is the single governing equation for the DC bus state, and the
+    reason the bus "remembers" a transient for a short time rather than
+    responding instantaneously.
+  inputs_outputs: >
+    Inputs: P_sst(t), P_load(t) [W]. State: E_dc [J]. Output (derived):
+    V_dc [V].
+  key_physics: >
+    A capacitor stores energy E = 0.5*C*V^2. Its rate of change equals
+    net input power exactly -- a direct consequence of energy
+    conservation, not a design choice.
+  key_control_idea: >
+    Because voltage is recovered from energy (not integrated directly),
+    the controller is really regulating energy, with voltage as the
+    square-root-shaped lens through which that energy is observed.
+  equations:
+    - "E_dc = 0.5 * C_dc * V_dc^2"
+    - "dE_dc/dt = P_sst - P_load"
+    - "V_dc = sqrt(2 * E_dc / C_dc)"
+  what_can_go_wrong: >
+    A sustained power deficit drains E_dc toward zero; V1's small
+    illustrative capacitance means this happens within roughly 100 ms of
+    deficit (see DC Bus below) -- fast enough that any sustained shortfall
+    collapses the bus rather than settling at an intermediate sagged
+    voltage.
+  how_modeled: >
+    src/dc_bus.py integrates E_dc (not V_dc) specifically to avoid the
+    1/V_dc singularity in the equivalent voltage-form ODE as V_dc -> 0.
+  what_ignored: >
+    No cabling impedance, no distributed capacitance, no AC ripple -- a
+    single lumped capacitance.
+  industry_relevance: >
+    Real DC-link sizing is a major design tradeoff: more capacitance
+    means slower, gentler transients but a bigger, costlier, bulkier
+    component -- exactly the tradeoff this toy model's "small illustrative
+    capacitance" choice makes visible.
+  try_it_scenario: grid_loss
+
+- id: dc-bus
+  title: DC Bus
+  level: 1-system
+  what_is_it: >
+    The 800 VDC node connecting the SST's output to the AI load's input --
+    modeled as a single lumped capacitance holding the system's only
+    electrical state.
+  why_it_exists: >
+    It decouples the SST's and load's dynamics from each other and gives
+    the system memory -- without it, SST output would have to equal load
+    demand at every instant with zero tolerance.
+  inputs_outputs: >
+    Inputs: P_sst, P_load [W]. State: E_dc [J]. Output: V_dc [V].
+  key_physics: >
+    See Energy Balance above -- the DC bus's only physics is that one
+    power-balance integral.
+  key_control_idea: >
+    V_dc is the one quantity the PI controller measures and regulates;
+    everything else in the control loop exists to keep V_dc near V_ref.
+  equations:
+    - "E_dc = 0.5 * C_dc * V_dc^2"
+    - "dE_dc/dt = P_sst - P_load"
+  what_can_go_wrong: >
+    V1 uses a small illustrative capacitance (C_dc = 0.02 F) chosen to
+    keep transients visible on human timescales -- a side effect is that
+    any power deficit longer than ~100 ms drains the bus to the
+    numerical energy floor rather than settling at an intermediate
+    voltage. Scenarios D and E both touch this floor; it's shaded
+    explicitly in the plots as non-physical.
+  how_modeled: src/dc_bus.py -- see Energy Balance above for the equations.
+  what_ignored: >
+    No voltage ripple, no multiple parallel sources/loads sharing the
+    bus, no real capacitor ESR/ESL.
+  industry_relevance: >
+    800 VDC (vs traditional low-voltage AC distribution) is itself an
+    industry trend -- see the AI Data Center section for why higher
+    DC bus voltages are gaining traction for high-density AI racks.
+  try_it_scenario: grid_sag
+
+- id: dynamic-load
+  title: Dynamic Load
+  level: 1-system
+  what_is_it: >
+    The AI compute load's power draw, P_load(t) -- an exogenous signal
+    this project treats as an ideal power sink with no internal dynamics
+    of its own.
+  why_it_exists: >
+    AI workloads are the disturbance this entire system exists to serve;
+    their power steps and transients are what exercise the SST, bus, and
+    controller.
+  inputs_outputs: >
+    Input: time t [s] and a profile definition (e.g. step parameters).
+    Output: P_load(t) [W].
+  key_physics: >
+    None beyond P_load = load_fraction(t) * rated_power_w -- this is a
+    Category C profile definition, not a derived relationship.
+  key_control_idea: >
+    The controller's feedforward term uses P_load directly, on the
+    assumption of perfect, instantaneous load measurement -- removing
+    most of the steady-state regulation burden from the PI terms.
+  equations:
+    - "P_load(t) = load_fraction(t) * rated_power_w"
+  what_can_go_wrong: >
+    A step profile is the only load archetype in V1 -- real AI workloads
+    are bursty and duty-cycled in ways a single step cannot represent.
+  how_modeled: >
+    src/load.py implements a single-step profile (make_step_load_profile);
+    scenarios assemble constant or stepped profiles from it.
+  what_ignored: >
+    No burstiness, no duty cycling, no current-limiting/constant-impedance
+    behavior -- the load always draws exactly P_load(t) regardless of
+    bus voltage.
+  industry_relevance: >
+    Real GPU training/inference workloads produce power transients on
+    millisecond-to-second timescales that are a major driver of modern
+    power-delivery design -- this project's step load is a deliberately
+    simplified stand-in for that broader phenomenon.
+  try_it_scenario: load_step
+
+- id: voltage-regulation
+  title: Voltage Regulation
+  level: 1-system
+  what_is_it: >
+    The task of keeping V_dc near its 800 V reference despite changing
+    load and grid conditions -- the PI controller's job.
+  why_it_exists: >
+    AI compute hardware expects a stable supply voltage; large excursions
+    risk equipment limits even before protection logic engages.
+  inputs_outputs: >
+    Inputs: V_dc (measured), V_ref. Output: P_cmd -> P_target (commanded
+    SST power).
+  key_physics: >
+    None directly -- voltage regulation is a control problem layered on
+    top of the DC bus's energy-balance physics.
+  key_control_idea: >
+    Drive the voltage error (V_ref - V_dc) toward zero by commanding more
+    or less SST power -- see PI Control below for exactly how.
+  equations:
+    - "e = V_ref - V_dc"
+  what_can_go_wrong: >
+    If the required P_target would exceed what the SST can currently
+    deliver (rated power, thermal derating, or grid-availability limit),
+    the command saturates and voltage regulation is lost until that limit
+    is lifted -- exactly what Scenario C (thermal trip) demonstrates.
+  how_modeled: src/controller.py -- see PI Control below.
+  what_ignored: >
+    No voltage protection (over/undervoltage trip) in V1 -- protection is
+    thermal-only (see Protection in Level 3).
+  industry_relevance: >
+    Tight voltage regulation under fast load transients is one of the
+    central engineering challenges cited by industry sources describing
+    AI-factory power architectures.
+  try_it_scenario: load_step
+
+- id: pi-control
+  title: PI Control
+  level: 1-system
+  what_is_it: >
+    A proportional-integral controller with load feedforward, computing
+    the SST power command from the voltage error.
+  why_it_exists: >
+    Proportional action responds immediately to error; integral action
+    eliminates steady-state offset that proportional action alone would
+    leave behind.
+  inputs_outputs: >
+    Inputs: V_dc, P_load, V_ref, Kp, Ki. State: integral_error_v_s [V*s].
+    Outputs: P_cmd (unsaturated), P_target (saturated to SST limits).
+  key_physics: None -- this is a control algorithm, not a physical law.
+  key_control_idea: >
+    P_cmd = P_load (feedforward) + Kp*e (proportional) + Ki*integral(e)
+    (integral). Saturation is applied to keep P_target within the SST's
+    deliverable range; simple conditional-integration anti-windup freezes
+    the integrator while saturated, so it doesn't "wind up" past a useful
+    value during a saturated transient.
+  equations:
+    - "e = V_ref - V_dc"
+    - "P_cmd = P_load + Kp * e + Ki * integral(e dt)"
+  what_can_go_wrong: >
+    Gains that are too high ring/oscillate; too low responds too slowly.
+    This project's gains (Kp=2000 W/V, Ki=1500 W/(V*s)) came from a small
+    empirical sweep, not formal loop-shaping -- see README "Key Design
+    Decisions" for the reasoning and the tradeoffs considered.
+  how_modeled: src/controller.py:step_voltage_controller.
+  what_ignored: >
+    No gain scheduling, no back-calculation anti-windup (conditional
+    integration only), no controller enable/disable logic tied to
+    protection state.
+  industry_relevance: >
+    PI control (or variants of it) is the standard approach for DC bus
+    voltage regulation across the power-electronics industry -- the
+    concept transfers directly even though real SST control loops are
+    far more elaborate (multi-loop, model-based, etc.).
+  try_it_scenario: load_step
+
+- id: transient-response
+  title: Transient Response
+  level: 1-system
+  what_is_it: >
+    How V_dc, P_sst, and temperature behave in the seconds immediately
+    following a disturbance (a load step, a grid sag, a grid loss) before
+    settling to a new steady state (or tripping).
+  why_it_exists: >
+    Steady-state behavior alone doesn't reveal whether a system is safe
+    or well-designed -- the transient is where voltage dips, thermal
+    spikes, and protection logic actually get exercised.
+  inputs_outputs: >
+    Inputs: any disturbance (load step, grid sag/loss). Outputs: the full
+    time-series Telemetry record (V_dc, P_sst, T, operating_state, ...).
+  key_physics: >
+    The combined effect of the SST's first-order power lag (tau_sst),
+    the DC bus's energy-balance dynamics, and the PI controller's
+    closed-loop response, all interacting.
+  key_control_idea: >
+    The SST's finite response time (tau_sst = 20 ms) means P_sst cannot
+    instantly track P_target -- this lag is what makes the bus visibly
+    sag and recover rather than responding instantaneously.
+  equations:
+    - "dP_sst/dt = (P_target - P_sst) / tau_sst"
+  what_can_go_wrong: >
+    The project's chosen PI gains settle within 1-2 ringing cycles rather
+    than zero ringing -- a fully non-oscillatory design was deliberately
+    not pursued because it over-tunes for this project's teaching
+    purposes (slower settling, less visible transient story). See README
+    "Key Design Decisions" #4.
+  how_modeled: >
+    The full causal loop in src/simulation.py's per-step update -- see
+    its module docstring for the exact causality/ordering.
+  what_ignored: >
+    No switching-level ripple or sub-millisecond behavior -- the fastest
+    dynamic represented is the SST's 20 ms average-value power lag.
+  industry_relevance: >
+    Fast, large AI load transients (e.g. a training job's loss spikes or
+    GPU power state changes) are specifically called out by industry
+    sources as a reason centralized, fast-responding power architectures
+    matter for AI data centers.
+  try_it_scenario: load_step

@@ -1,0 +1,28 @@
+# Standards / industry-architecture workstreams relevant to SST + 800 VDC.
+
+- date: "2024-2025"
+  organization: "Open Compute Project (Google, Microsoft, NVIDIA)"
+  category: standard
+  title: "OCP SST Specification v0.3 and 800 VDC / LVDC workstream"
+  summary: >
+    Open Compute Project has publicized a workstream, with Google,
+    Microsoft, and NVIDIA collaboration, to standardize and accelerate
+    industry adoption of an 800 VDC (LVDC) data-center power
+    architecture. This includes work covering the path from
+    medium-voltage AC to 800 VDC, an "SST Specification v0.3" defining
+    system-level performance and interface requirements, and interaction
+    with standards and safety organizations.
+  technology_area: "800 VDC / LVDC architecture standardization"
+  relevance_to_sst: >
+    Directly names an SST specification effort at the interface/
+    performance-requirement level -- public evidence of cross-industry
+    standardization work, not a specific vendor's internal design.
+  relevance_to_ai_data_centers: >
+    Represents multiple major hyperscalers plus NVIDIA aligning on a
+    common 800 VDC architecture rather than each pursuing an isolated,
+    incompatible approach.
+  source_name: "Open Compute Project Blog -- Powering the Next Era of AI"
+  source_url: "https://www.opencompute.org/index.php/blog/powering-the-next-era-of-ai-how-google-microsoft-and-nvidia-are-standardizing-and-accelerating-the-industry-transition-to-lvdc"
+  verified_date: "2026-10-04"
+  status: verified
+  maturity: architecture_standard

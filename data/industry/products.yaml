@@ -1,0 +1,28 @@
+# Specific commercial products relevant to SST / 800 VDC power.
+
+- date: ongoing (product catalog listing, not a dated announcement)
+  organization: Eaton
+  category: product
+  title: "Eaton Medium-Voltage Solid-State Transformer -- 15 kV class, 2 MW"
+  summary: >
+    A publicly listed commercial product: 15 kV class input, 2 MW
+    overall load power rating, >97% converter efficiency at 800 VDC
+    output, explicit support for emerging 800 VDC architectures, and a
+    liquid-cooled power section. This is the clearest publicly available
+    "real commercial SST" data point used anywhere in this project --
+    AI Power Lab's own SST model is NOT calibrated to this or any other
+    specific product.
+  technology_area: "Medium-voltage solid-state transformer"
+  relevance_to_sst: >
+    A directly comparable real product to what this project's SST model
+    abstracts -- useful for sanity-checking this project's illustrative
+    parameters (e.g. efficiency) against a real public figure, without
+    claiming the model represents this specific product.
+  relevance_to_ai_data_centers: >
+    800 VDC output support is explicitly marketed, directly relevant to
+    this project's bus voltage choice.
+  source_name: "Eaton -- Medium-Voltage Solid-State Transformer"
+  source_url: "https://www.eaton.com/us/en-us/catalog/medium-voltage-power-distribution-control-systems/medium-voltage-solid-state-transformer.html"
+  verified_date: "2026-10-04"
+  status: verified
+  maturity: commercial_product

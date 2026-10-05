@@ -1,0 +1,229 @@
+# Level 3 -- System Behavior (Efficiency/Loss, Thermal, Derating,
+# Protection, Grid Sag, Grid Loss). These topics map directly onto
+# existing, validated V1 modules.
+
+- id: efficiency-loss
+  title: Efficiency / Loss
+  level: 3-system-behavior
+  what_is_it: >
+    The gap between grid-side input power and bus-side delivered power,
+    dissipated as heat -- the link between the electrical and thermal
+    stories.
+  why_it_exists: >
+    No real converter is 100% efficient; the dissipated difference is
+    exactly what drives the thermal model and, eventually, protection.
+  inputs_outputs: >
+    Input: P_sst [W] (delivered output power), efficiency [-]. Outputs:
+    P_in [W] (grid-side input), P_loss [W].
+  key_physics: >
+    Conservation of energy applied across the conversion stage: whatever
+    power goes in but doesn't come out as useful output must leave as
+    heat.
+  key_control_idea: None -- this is a static relationship, not a control loop.
+  equations:
+    - "P_in = P_sst / efficiency"
+    - "P_loss = P_in - P_sst = P_sst * (1 - efficiency) / efficiency"
+  what_can_go_wrong: >
+    A constant efficiency (this project's choice) cannot represent the
+    load- and temperature-dependent efficiency curves real converters
+    exhibit, where relative losses rise at both very light and very
+    heavy loading.
+  how_modeled: src/sst.py:compute_sst_losses, using one fixed efficiency value.
+  what_ignored: >
+    Load-dependent and temperature-dependent efficiency variation (see
+    README Future Work).
+  industry_relevance: >
+    Eaton's publicly listed medium-voltage SST product cites ">97%
+    converter efficiency at 800 VDC output" -- see the Industry section
+    for the sourced figure.
+  try_it_scenario: sustained_high_load
+
+- id: thermal-dynamics
+  title: Thermal Dynamics
+  level: 3-system-behavior
+  what_is_it: >
+    How a single, representative SST temperature evolves over time in
+    response to conversion loss, modeled as one lumped thermal mass
+    exchanging heat with ambient.
+  why_it_exists: >
+    Temperature is the quantity protection actually watches -- without a
+    thermal model there is nothing for derating/tripping logic to react
+    to.
+  inputs_outputs: >
+    Input: P_loss(t) [W]. State/output: T [degC].
+  key_physics: >
+    A first-order RC thermal circuit: heat accumulates in a thermal
+    capacitance and leaks to ambient through a thermal resistance --
+    exactly analogous in form to an electrical RC circuit.
+  key_control_idea: None -- open-loop physics; protection (below) is what acts on it.
+  equations:
+    - "C_th * dT/dt = P_loss - (T - T_ambient) / R_th"
+    - "T_ss = T_ambient + R_th * P_loss"
+  what_can_go_wrong: >
+    A single lumped node cannot represent junction-vs-case-vs-heatsink
+    temperature differences, or any spatial gradient -- it is a coupling
+    demonstration (loss -> heat -> protection), not a device survival
+    prediction.
+  how_modeled: src/thermal.py:step_thermal_temperature.
+  what_ignored: >
+    Multi-node thermal behavior, airflow/coolant-flow dependence, any
+    real device's actual thermal time constants.
+  industry_relevance: >
+    Thermal management is cited across industry sources as a central
+    constraint on power density for high-power conversion in AI data
+    centers (e.g. Eaton's liquid-cooled MV SST product).
+  try_it_scenario: sustained_high_load
+
+- id: derating
+  title: Derating
+  level: 3-system-behavior
+  what_is_it: >
+    A temperature-triggered reduction in the maximum power the SST is
+    allowed to deliver, intended to prevent (or delay) overtemperature
+    damage.
+  why_it_exists: >
+    Reducing power reduces loss, which reduces further temperature rise
+    -- a self-limiting safety response that can, for some loads, let the
+    system stabilize safely instead of continuing to heat.
+  inputs_outputs: >
+    Input: T [degC]. Output: derate_factor [-], in [derate_factor_min, 1.0].
+  key_physics: None beyond the thermal model above -- this is the protection logic's response to it.
+  key_control_idea: >
+    A linear ramp of derate_factor between a "derating starts" and a
+    "fully derated" temperature threshold -- simple and interpretable, at
+    the cost of not representing any real manufacturer's actual derating
+    curve shape.
+  equations:
+    - "derate_factor(T) = 1 - (1 - derate_factor_min) * (T - derate_start_c) / (trip_c - derate_start_c)"
+  what_can_go_wrong: >
+    Whether derating is enough to self-stabilize depends on whether the
+    load demand stays below the derated power cap -- Scenario B shows a
+    safe self-stabilization; Scenario C shows a load that saturates
+    against the cap and continues toward a trip. See config/default.yaml's
+    derate_factor_min comment for exactly why this threshold was chosen
+    to allow both outcomes to exist.
+  how_modeled: src/protection.py:compute_derate_factor.
+  what_ignored: >
+    Any real manufacturer's actual (likely nonlinear) derating curve;
+    this is an illustrative educational choice (Category C).
+  industry_relevance: >
+    Thermal derating is universal practice across power electronics,
+    though real curve shapes and thresholds are product-specific and
+    rarely public.
+  try_it_scenario: thermal_trip
+
+- id: protection
+  title: Protection
+  level: 3-system-behavior
+  what_is_it: >
+    The RUNNING / DERATED / TRIPPED state machine that watches SST
+    temperature and, if it stays too high for too long, latches the SST
+    output to zero.
+  why_it_exists: >
+    Derating alone may not be enough if demand keeps saturating the
+    reduced power cap; a hard trip is the backstop that actually halts
+    operation rather than letting temperature climb indefinitely.
+  inputs_outputs: >
+    Input: T [degC]. Outputs: operating_state, derate_factor,
+    trip_active, trip_reason.
+  key_physics: None -- this is protection logic layered on the thermal model.
+  key_control_idea: >
+    A debounce timer requires temperature to stay at/above the trip
+    threshold for a sustained duration before latching TRIPPED, so a
+    brief transient spike can't trip the system -- and once TRIPPED, V1
+    has no automatic reset (a deliberate simplification).
+  equations: []
+  what_can_go_wrong: >
+    Once latched TRIPPED, the SST stays at zero output for the rest of
+    the scenario -- there is no automatic recovery logic in V1 (see
+    README Limitations).
+  how_modeled: src/protection.py -- a 3-state machine with one trip cause (sustained overtemperature).
+  what_ignored: >
+    DC bus over/undervoltage protection (not implemented -- thermal is
+    the only trip cause in V1), any reset/restart logic, any real
+    relay/contactor timing behavior.
+  industry_relevance: >
+    Protection coordination (thermal, overvoltage, overcurrent, and
+    their interaction with control and derating) is a core power-system
+    engineering discipline well beyond this project's single-cause
+    scope.
+  try_it_scenario: thermal_trip
+
+- id: grid-sag
+  title: Grid Sag
+  level: 3-system-behavior
+  what_is_it: >
+    A temporary drop in grid voltage (while the grid remains
+    "available") that proportionally reduces the SST's available output
+    power.
+  why_it_exists: >
+    Real grids experience voltage sags from faults, large load/generation
+    changes, or switching events elsewhere on the network -- a
+    disturbance any grid-connected converter must tolerate to some
+    degree.
+  inputs_outputs: >
+    Input: grid_voltage_pu(t) [-]. Output (via
+    grid_power_availability_factor): a multiplier on available SST
+    power.
+  key_physics: >
+    None derived -- src/grid.py uses the simplest physically-motivated
+    assumption: available power scales linearly with per-unit grid
+    voltage.
+  key_control_idea: >
+    The same PI controller and saturation logic used elsewhere in the
+    system handles this automatically -- no special-case sag logic is
+    needed; the bus simply responds to reduced available power through
+    the existing energy balance.
+  equations:
+    - "availability_factor = clip(grid_voltage_pu, 0, 1)   (if grid_available)"
+    - "P_available_max = rated_power_w * derate_factor * availability_factor"
+  what_can_go_wrong: >
+    This project's small illustrative DC-link capacitance means even a
+    moderate, short sag can briefly drain the bus to its numerical
+    floor before recovering -- shaded explicitly as non-physical in the
+    voltage plot.
+  how_modeled: src/grid.py:make_sag_profile + grid_power_availability_factor.
+  what_ignored: >
+    No real low-voltage-ride-through curve (which depends on topology
+    and control design and can sustain full power into a sag via
+    increased current, up to a device limit); no reactive power or
+    three-phase imbalance.
+  industry_relevance: >
+    Grid-code ride-through requirements are a major real-world design
+    driver for grid-interactive converters generally.
+  try_it_scenario: grid_sag
+
+- id: grid-loss
+  title: Grid Loss
+  level: 3-system-behavior
+  what_is_it: >
+    A complete, sustained loss of grid availability -- the SST's
+    available power is driven to zero and stays there.
+  why_it_exists: >
+    It is the limiting case of a grid disturbance: a full outage, with
+    no energy storage or backup generation modeled to ride through it.
+  inputs_outputs: >
+    Input: grid_available(t) = False. Output: available SST power -> 0.
+  key_physics: >
+    None new -- grid loss simply forces the availability factor to
+    zero; the SST's existing first-order decay and the bus's existing
+    energy balance do the rest without any special-case shutdown logic.
+  key_control_idea: >
+    No new control logic is needed: the controller's existing saturation
+    (P_target clipped to P_available_max, which is now zero) already
+    produces the correct "target power is zero" behavior.
+  equations: []
+  what_can_go_wrong: >
+    With no battery, UPS, or other energy-storage concept in V1, the DC
+    bus simply discharges per its existing energy balance -- there is no
+    ride-through capability represented at all.
+  how_modeled: src/grid.py:make_outage_profile.
+  what_ignored: >
+    Any backup energy source (UPS, battery, generator) -- V1 has no
+    energy-storage concept anywhere in the system.
+  industry_relevance: >
+    Real data centers rely on UPS/battery/generator backup specifically
+    because a converter alone (SST or otherwise) cannot ride through a
+    sustained outage -- see the AI Data Center section's "energy storage
+    concept" discussion.
+  try_it_scenario: grid_loss

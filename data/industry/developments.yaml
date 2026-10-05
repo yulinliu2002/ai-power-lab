@@ -1,0 +1,50 @@
+# Specific, dated public developments relevant to SST / 800 VDC / AI
+# data-center power. See companies.yaml for stable organization
+# profiles and standards.yaml for the standards-body workstream detail.
+
+- date: "2024-2025"
+  organization: NVIDIA
+  category: architecture
+  title: "NVIDIA publishes 800 VDC power architecture vision for AI factories"
+  summary: >
+    NVIDIA publicly described a transition from traditional AC
+    data-center infrastructure toward an 800 VDC power architecture,
+    including an 800 VDC power rack, a row-level power center, and a
+    future facility-scale DC power block concept with direct
+    medium-voltage conversion -- framed as reducing the number of power-
+    conversion stages between the grid and the compute load.
+  technology_area: "800 VDC AI data-center power architecture"
+  relevance_to_sst: >
+    Frames the 800 VDC distribution target this project's own SST model
+    feeds -- not a claim that NVIDIA builds or sells an SST.
+  relevance_to_ai_data_centers: >
+    One of the clearest public statements of industry intent behind the
+    800 VDC architecture trend this project is built to teach.
+  source_name: "NVIDIA Blog -- 800 VDC Power Architecture for AI Factories"
+  source_url: "https://blogs.nvidia.com/blog/800-vdc-power-architecture-ai-factory/"
+  verified_date: "2026-10-04"
+  status: verified
+  maturity: architecture_standard
+
+- date: "2024-2025"
+  organization: "Open Compute Project, Google, Microsoft, NVIDIA"
+  category: partnership
+  title: "Google, Microsoft, and NVIDIA collaborate via OCP on 800 VDC standardization"
+  summary: >
+    Open Compute Project published on a collaboration among Google,
+    Microsoft, and NVIDIA to standardize and accelerate the industry's
+    transition to 800 VDC (LVDC) data-center power architecture,
+    including a medium-voltage-AC-to-800-VDC workstream and an "SST
+    Specification v0.3."
+  technology_area: "800 VDC / LVDC standardization"
+  relevance_to_sst: >
+    Directly evidences cross-industry SST specification work at the
+    interface/performance-requirement level.
+  relevance_to_ai_data_centers: >
+    Multiple major hyperscalers aligning publicly on a shared 800 VDC
+    architecture, rather than isolated single-vendor approaches.
+  source_name: "Open Compute Project Blog -- Powering the Next Era of AI"
+  source_url: "https://www.opencompute.org/index.php/blog/powering-the-next-era-of-ai-how-google-microsoft-and-nvidia-are-standardizing-and-accelerating-the-industry-transition-to-lvdc"
+  verified_date: "2026-10-04"
+  status: verified
+  maturity: architecture_standard

@@ -1,0 +1,49 @@
+# AI Power Lab -- dark engineering-console theme.
+#
+# Deliberately a single locked theme (no [theme.light]/[theme.dark] toggle):
+# this is the console identity, not a preference. Hues reuse the exact
+# dark-mode steps from dashboard/components/palette.py's validated
+# categorical/status palette, so chart colors, status badges, and chrome
+# never drift out of sync.
+
+[theme]
+base = "dark"
+
+backgroundColor = "#0a0e14"
+secondaryBackgroundColor = "#121820"
+textColor = "#e7edf3"
+borderColor = "#24303c"
+
+primaryColor = "#3987e5"
+linkColor = "#3987e5"
+linkUnderline = false
+
+greenColor = "#0ca30c"
+yellowColor = "#fab219"
+orangeColor = "#ec835a"
+redColor = "#d03b3b"
+blueColor = "#3987e5"
+violetColor = "#9085e9"
+grayColor = "#6b7680"
+
+chartCategoricalColors = [
+    "#3987e5", "#d95926", "#199e70", "#c98500",
+    "#d55181", "#008300", "#9085e9", "#e66767",
+]
+
+font = "'IBM Plex Sans':https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap"
+headingFont = "'IBM Plex Sans':https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap"
+codeFont = "'IBM Plex Mono':https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap"
+baseFontSize = 14
+
+baseRadius = "4px"
+buttonRadius = "4px"
+showWidgetBorder = true
+showSidebarBorder = true
+
+[theme.sidebar]
+backgroundColor = "#080b10"
+secondaryBackgroundColor = "#121820"
+textColor = "#e7edf3"
+borderColor = "#24303c"
+primaryColor = "#3987e5"

@@ -2,3 +2,6 @@ numpy
 pyyaml
 matplotlib
 pytest
+streamlit
+plotly
+pandas

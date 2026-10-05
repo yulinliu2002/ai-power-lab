@@ -1,0 +1,82 @@
+# Company/organization profiles relevant to SST + 800 VDC AI data-center
+# power. These are stable, slowly-changing background profiles -- see
+# developments.yaml for specific dated announcements and standards.yaml
+# for standards-body workstreams. Every record here is "verified":
+# status/maturity enforcement in dashboard/adapters/industry_data.py
+# requires a real public source_name/source_url for any such record.
+
+- date: "2024-2025"
+  organization: NVIDIA
+  category: company_profile
+  title: "NVIDIA: 800 VDC power architecture for AI factories"
+  summary: >
+    NVIDIA has publicly described moving from traditional AC data-center
+    power infrastructure toward an 800 VDC power architecture for
+    high-density AI "factories," including an 800 VDC power rack, a
+    row-level power center, and a future facility-scale DC power block
+    concept -- all aimed at reducing the number of power-conversion
+    stages between the grid and the compute load.
+  technology_area: "800 VDC AI data-center power architecture"
+  relevance_to_sst: >
+    Describes the 800 VDC distribution bus this project's own SST model
+    feeds into -- not a description of NVIDIA building or selling an
+    SST itself.
+  relevance_to_ai_data_centers: >
+    A primary public industry source motivating this project's choice
+    of an 800 VDC bus as the V1 architecture.
+  source_name: "NVIDIA Blog -- 800 VDC Power Architecture for AI Factories"
+  source_url: "https://blogs.nvidia.com/blog/800-vdc-power-architecture-ai-factory/"
+  verified_date: "2026-10-04"
+  status: verified
+  maturity: architecture_standard
+
+- date: "2024-2025"
+  organization: "Open Compute Project (Google, Microsoft, NVIDIA collaboration)"
+  category: company_profile
+  title: "OCP 800 VDC / LVDC standardization effort"
+  summary: >
+    Open Compute Project has published on a Google/Microsoft/NVIDIA
+    collaboration to standardize and accelerate industry adoption of
+    800 VDC (LVDC) data-center power architecture, including a workstream
+    covering the path from medium-voltage AC to 800 VDC and an "SST
+    Specification v0.3" defining system-level performance/interface
+    requirements, developed in interaction with standards and safety
+    organizations.
+  technology_area: "800 VDC / LVDC standardization"
+  relevance_to_sst: >
+    Directly names an SST specification effort -- the clearest public
+    evidence that SSTs are being standardized for this application, at
+    the level of interface/performance requirements rather than any
+    specific commercial design.
+  relevance_to_ai_data_centers: >
+    Shows multiple major hyperscalers and NVIDIA collaborating on a
+    common 800 VDC architecture, suggesting broader-than-single-vendor
+    industry momentum.
+  source_name: "Open Compute Project Blog -- Powering the Next Era of AI"
+  source_url: "https://www.opencompute.org/index.php/blog/powering-the-next-era-of-ai-how-google-microsoft-and-nvidia-are-standardizing-and-accelerating-the-industry-transition-to-lvdc"
+  verified_date: "2026-10-04"
+  status: verified
+  maturity: architecture_standard
+
+- date: ongoing (product catalog listing, not a dated announcement)
+  organization: Eaton
+  category: company_profile
+  title: "Eaton: medium-voltage solid-state transformer product line"
+  summary: >
+    Eaton publicly lists a 15 kV class medium-voltage solid-state
+    transformer product with a 2 MW overall load power rating, >97%
+    converter efficiency at 800 VDC output, support for emerging 800 VDC
+    architectures, and a liquid-cooled power section.
+  technology_area: "Medium-voltage solid-state transformer (commercial product)"
+  relevance_to_sst: >
+    The clearest publicly available example in this dataset of an actual
+    shipping commercial SST product, as opposed to a conceptual
+    architecture description.
+  relevance_to_ai_data_centers: >
+    Explicitly marketed as supporting 800 VDC output -- directly relevant
+    to this project's modeled bus voltage.
+  source_name: "Eaton -- Medium-Voltage Solid-State Transformer"
+  source_url: "https://www.eaton.com/us/en-us/catalog/medium-voltage-power-distribution-control-systems/medium-voltage-solid-state-transformer.html"
+  verified_date: "2026-10-04"
+  status: verified
+  maturity: commercial_product

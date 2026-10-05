@@ -1,0 +1,31 @@
+# Academic/review-literature references on SST and medium-voltage power
+# conversion. Used only as CONCEPTUAL background for Level 2 Learn
+# content (AFE, isolated DC/DC, MFT, modular conversion) -- never to
+# present a research prototype as a commercial product.
+#
+# This file intentionally contains no individually-sourced paper yet:
+# citing a specific paper/result without independently re-verifying it
+# would risk exactly the kind of overconfident, unsourced claim
+# CLAUDE.md's engineering-honesty rules forbid. The single entry below
+# is an explicit SAMPLE placeholder (status: sample, no source) marking
+# where curated, individually-sourced research summaries belong in a
+# future version.
+
+- date: "2026-10-04"
+  organization: "Academic / IEEE literature (general, not a specific paper)"
+  category: research
+  title: "[SAMPLE PLACEHOLDER] SST and MV power conversion research -- not a verified record"
+  summary: >
+    AI Power Lab's Level 2 Learn content references the general existence
+    of public IEEE/academic review literature on solid-state transformers
+    and medium-voltage power conversion as conceptual background. No
+    specific paper, research group, or prototype design is represented
+    by this placeholder record, and no numeric value from any specific
+    paper is used anywhere in this project. This entry exists only to
+    show where individually-sourced research summaries will be added in
+    a future version.
+  technology_area: "SST power electronics (general)"
+  relevance_to_sst: "Placeholder only -- no specific result is cited or implied."
+  relevance_to_ai_data_centers: "Placeholder only -- establishes SST as an active research area, nothing more specific."
+  status: sample
+  maturity: research

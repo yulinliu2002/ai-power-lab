@@ -1,0 +1,237 @@
+# Level 2 -- SST Power-Electronics Architecture.
+#
+# IMPORTANT: everything in this file describes REAL SST architecture at
+# a conceptual level, using public engineering knowledge. None of these
+# stages are explicitly simulated by AI Power Lab V1/V1.1 -- the current
+# model represents the entire SST as a single average-value power-lag
+# block (src/sst.py). Every topic's `how_modeled` field says this
+# explicitly so the distinction between real architecture and the
+# current model abstraction is never ambiguous.
+
+- id: what-is-an-sst
+  title: What is an SST?
+  level: 2-sst-architecture
+  what_is_it: >
+    A Solid-State Transformer is a power-electronic converter that
+    performs voltage transformation and (often) AC/DC conversion using
+    semiconductor switching stages and a medium-frequency transformer,
+    instead of a bulk 50/60 Hz iron-core transformer.
+  why_it_exists: >
+    Conventional line-frequency transformers are large, heavy, and
+    electrically passive (no active control). An SST trades that bulk
+    for active semiconductor control, a much smaller/lighter medium-
+    frequency transformer, and the ability to actively regulate output
+    voltage, power factor, and ride-through behavior.
+  inputs_outputs: >
+    Typically: medium-voltage AC in, a regulated DC (or AC) output --
+    for this project's scope, a regulated 800 VDC output.
+  key_physics: >
+    Operating the transformer at a much higher frequency than 50/60 Hz
+    shrinks the required core size roughly in proportion to frequency,
+    for a given power rating -- the core engineering reason SSTs can be
+    far smaller/lighter than line-frequency transformers of the same
+    rating.
+  key_control_idea: >
+    Every stage (grid-side converter, isolated DC/DC) is actively
+    switched and controlled, so an SST can regulate its output far more
+    tightly and flexibly than a passive transformer ever could.
+  equations: []
+  what_can_go_wrong: >
+    Added complexity (many semiconductor devices, a medium-frequency
+    transformer, multi-stage control) versus a passive transformer's
+    simplicity and ruggedness -- a real engineering tradeoff, not
+    represented in this project's abstraction.
+  how_modeled: >
+    NOT explicitly modeled. AI Power Lab represents the entire SST as a
+    single average-value power-lag block (dP_sst/dt = (P_target -
+    P_sst)/tau_sst, see src/sst.py) plus a constant efficiency -- no
+    internal stages, no switching, no semiconductor devices.
+  what_ignored: >
+    Every internal stage described in this Level 2 section is ignored by
+    the current model -- see each stage's own topic below.
+  industry_relevance: >
+    SSTs are an active area of both industry and standards development
+    for AI data-center power -- see the Industry section for sourced,
+    public examples (NVIDIA, Open Compute Project, Eaton).
+  try_it_scenario: null
+
+- id: grid-side-converter-afe
+  title: Grid-Side Converter / AFE
+  level: 2-sst-architecture
+  what_is_it: >
+    An Active Front End: the SST's first stage, converting medium-voltage
+    AC from the grid into a controlled DC link, using actively switched
+    semiconductor devices rather than a passive rectifier.
+  why_it_exists: >
+    Active switching allows control of input power factor, harmonic
+    content, and (within device limits) ride-through behavior during
+    grid disturbances -- capabilities a passive diode rectifier cannot
+    provide.
+  inputs_outputs: >
+    Input: medium-voltage AC. Output: a regulated DC link voltage feeding
+    the next stage.
+  key_physics: >
+    Active rectification/PWM switching at the device level -- out of
+    scope for this project's average-value treatment.
+  key_control_idea: >
+    Typically a current-mode or voltage-oriented control loop regulating
+    DC-link voltage and input current waveform shape.
+  equations: []
+  what_can_go_wrong: >
+    Grid disturbances (sags, imbalance, harmonics) stress this stage
+    first; real AFE designs include ride-through and protection logic
+    far more detailed than this project's linear grid-availability model.
+  how_modeled: >
+    NOT explicitly modeled. This project's src/grid.py represents the
+    grid-to-available-power relationship as a simple scalar
+    (grid_voltage_pu, grid_available) -> availability_factor relationship
+    -- it does not simulate an AFE's internal switching or control.
+  what_ignored: >
+    PWM switching, harmonic/power-factor behavior, three-phase imbalance,
+    real fault ride-through curves.
+  industry_relevance: >
+    Modular multilevel and other advanced AFE topologies are active
+    research/industry areas for medium-voltage grid interfaces.
+  try_it_scenario: grid_sag
+
+- id: dc-link
+  title: DC Link
+  level: 2-sst-architecture
+  what_is_it: >
+    The intermediate DC bus inside a real SST, between the grid-side
+    converter and the isolated DC/DC stage -- NOT the same thing as this
+    project's 800 VDC output bus, which sits after all internal SST
+    conversion.
+  why_it_exists: >
+    It decouples the grid-side converter's switching dynamics from the
+    isolated DC/DC stage's, and provides energy buffering internal to the
+    SST.
+  inputs_outputs: >
+    Input: DC from the AFE. Output: DC to the isolated DC/DC stage.
+  key_physics: >
+    Energy storage in a capacitor bank, conceptually similar to this
+    project's own DC bus energy-balance treatment -- but internal to the
+    SST, not exposed at its output.
+  key_control_idea: >
+    Usually regulated by the AFE stage's control loop.
+  equations: []
+  what_can_go_wrong: >
+    Undersized DC-link capacitance causes excessive switching ripple;
+    oversized capacitance is costly and bulky -- the same fundamental
+    tradeoff this project's own DC-bus sizing discussion makes (see
+    Level 1: DC Bus), just at a different point in the real architecture.
+  how_modeled: >
+    NOT explicitly modeled as a separate stage. This project's single DC
+    bus (src/dc_bus.py) stands in for the SST's *output*, not this
+    internal link.
+  what_ignored: Internal SST energy buffering and its own dynamics.
+  industry_relevance: >
+    Internal DC-link design is a core SST engineering tradeoff, not
+    something this project attempts to resolve.
+  try_it_scenario: null
+
+- id: isolated-dc-dc
+  title: Isolated DC/DC Conversion
+  level: 2-sst-architecture
+  what_is_it: >
+    The SST stage providing galvanic isolation and voltage transformation
+    between the DC link and the output, typically via a topology like a
+    Dual Active Bridge (DAB) driving a medium-frequency transformer.
+  why_it_exists: >
+    Galvanic isolation is a safety/code requirement in most power
+    architectures; doing it at medium frequency (rather than 50/60 Hz)
+    is what makes the transformer small.
+  inputs_outputs: >
+    Input: DC link voltage. Output: isolated, transformed DC (feeding
+    this project's modeled 800 VDC bus).
+  key_physics: >
+    High-frequency switching through a transformer -- magnetics and
+    switching-loss physics this project does not represent.
+  key_control_idea: >
+    Phase-shift or similar modulation control of the active bridges to
+    regulate power transfer across the isolation boundary.
+  equations: []
+  what_can_go_wrong: >
+    Switching losses and transformer design constraints scale with
+    frequency and power -- a major detailed-design topic, entirely out
+    of this project's scope (see Level 4).
+  how_modeled: >
+    NOT explicitly modeled. This project's SST model (src/sst.py) is a
+    single aggregate power-lag + constant-efficiency block representing
+    the combined effect of all internal stages, including this one.
+  what_ignored: DAB topology, phase-shift modulation, switching loss detail.
+  industry_relevance: >
+    DAB and related isolated DC/DC topologies are a major active research
+    and product-development area for SSTs.
+  try_it_scenario: null
+
+- id: medium-frequency-transformer
+  title: Medium-Frequency Transformer (MFT)
+  level: 2-sst-architecture
+  what_is_it: >
+    The transformer inside the isolated DC/DC stage, operated at a much
+    higher frequency than grid frequency (typically kHz-range) to shrink
+    its physical size for a given power rating.
+  why_it_exists: >
+    It is the core enabling component that lets an SST be dramatically
+    smaller/lighter than an equivalent line-frequency transformer.
+  inputs_outputs: >
+    Input/output: high-frequency AC at the isolated DC/DC stage's
+    switching frequency.
+  key_physics: >
+    Core loss and winding loss both scale with frequency in ways that
+    create real design tradeoffs (core material selection, winding
+    construction) -- detailed electromagnetic design entirely out of
+    scope for this project.
+  key_control_idea: None -- the MFT itself is a passive component.
+  equations: []
+  what_can_go_wrong: >
+    Core saturation, winding loss, and insulation/isolation design are
+    all real engineering challenges at these power levels and
+    frequencies.
+  how_modeled: >
+    NOT modeled at all. This project has no electromagnetic or magnetics
+    model of any kind.
+  what_ignored: Everything about MFT electromagnetic design (see Level 4).
+  industry_relevance: >
+    MFT design is frequently cited as one of the hardest engineering
+    problems in practical SST development.
+  try_it_scenario: null
+
+- id: modular-power-conversion
+  title: Modular Power Conversion
+  level: 2-sst-architecture
+  what_is_it: >
+    The practice of building a high-power, high-voltage SST from many
+    smaller, series/parallel-connected power-conversion modules, rather
+    than one large monolithic converter.
+  why_it_exists: >
+    Semiconductor device voltage/current ratings are finite; modularity
+    lets an SST reach medium-voltage, multi-megawatt ratings using
+    devices with practical, manufacturable ratings, and improves
+    fault-tolerance (a module can sometimes be bypassed).
+  inputs_outputs: >
+    N/A at this conceptual level -- a modular SST's aggregate
+    input/output behavior is what this project's single-block model
+    approximates.
+  key_physics: >
+    Series/parallel combination of multiple converter cells to reach a
+    target voltage/power rating -- a systems/topology concept, not a new
+    governing equation.
+  key_control_idea: >
+    Coordinated, often distributed control across modules (e.g. voltage
+    balancing between series-connected cells).
+  equations: []
+  what_can_go_wrong: >
+    Module-to-module imbalance (voltage sharing, thermal sharing) is a
+    real design and control challenge at this architecture level.
+  how_modeled: >
+    NOT modeled. This project's single average-value SST block is
+    exactly the kind of aggregate abstraction that stands in for an
+    entire modular SST's combined behavior.
+  what_ignored: Any inter-module behavior, balancing, or fault-tolerance.
+  industry_relevance: >
+    Modular multilevel converter (MMC) architectures are a well-
+    established approach for medium-voltage power conversion generally,
+    and a natural fit for SST designs reaching MV-class ratings.
+  try_it_scenario: null

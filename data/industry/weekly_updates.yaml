@@ -1,0 +1,23 @@
+# Weekly Industry Intelligence updates. V1.1 ships the SCHEMA and one
+# explicit SAMPLE placeholder entry demonstrating it -- no scraping or
+# automatic web browsing is implemented (see CLAUDE.md / V1.1 scope).
+# Real weekly entries are added here by hand after separate external
+# research and verification, each as status: verified with a real
+# source_name/source_url.
+
+- date: "2026-10-04"
+  organization: "[SAMPLE PLACEHOLDER -- not a real organization update]"
+  category: architecture
+  title: "[SAMPLE] This is what a weekly update entry looks like"
+  summary: >
+    This is an illustrative placeholder showing the weekly-update record
+    shape (what changed, why it matters, technical implication,
+    category, organization, source, verification date) before any real
+    weekly update has been curated. It is NOT a real industry event and
+    carries no source -- see data/industry/developments.yaml and
+    standards.yaml for the project's actual verified seed records.
+  technology_area: "N/A (schema demonstration only)"
+  relevance_to_sst: "N/A -- placeholder."
+  relevance_to_ai_data_centers: "N/A -- placeholder."
+  status: sample
+  maturity: architecture_standard
