@@ -5,3 +5,6 @@ pytest
 streamlit
 plotly
 pandas
+fastapi
+uvicorn
+httpx
