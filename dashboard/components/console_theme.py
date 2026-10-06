@@ -63,6 +63,21 @@ _CSS = f"""
     margin-bottom: 0.6rem;
 }}
 
+/* Application identity -- replaces native st.title on the Simulator page.
+   Sized against the panel-header scale below, not web-page convention:
+   the data is the headline here, not the page's own name. */
+.console-app-title {{
+    font-size: 1.3rem;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    color: {CHROME["text_primary"]};
+    /* Streamlit's own fixed top header (Deploy/menu) is ~52.5px tall and
+       sits in a separate, higher-stacked layer -- native st.title's
+       larger height happened to clear it; this smaller title needs
+       explicit top clearance or it renders hidden underneath. */
+    margin: 1.25rem 0 0.15rem 0;
+}}
+
 /* Status chip: filled dot + label, never color alone. */
 .status-chip {{
     display: inline-flex;
@@ -83,25 +98,41 @@ _CSS = f"""
     flex: none;
 }}
 
-/* A single live-value row inside the status panel: label left,
-   tabular value right, left accent bar colored by that value's own
-   status -- never a generic rainbow of panel borders. */
-.console-stat {{
+/* KPI strip: one compact instrument tile per headline telemetry value.
+   Flat by default -- the top border only takes a status color when that
+   value's role is neither "good" nor "neutral" (see kpi_tile_html), so
+   color appears on screen only when it means something, never as
+   decoration on a value that's currently fine. */
+.kpi-tile {{
+    border: 1px solid {CHROME["hairline"]};
+    border-top: 2px solid {CHROME["hairline"]};
+    border-radius: 4px;
+    background: {CHROME["surface"]};
+    padding: 0.5rem 0.65rem;
+}}
+.kpi-label {{
+    font-size: 0.68rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: {CHROME["muted"]};
+    margin-bottom: 0.3rem;
+    white-space: nowrap;
+}}
+.kpi-value-row {{
     display: flex;
-    justify-content: space-between;
     align-items: baseline;
-    padding: 0.4rem 0 0.4rem 0.6rem;
-    border-left: 3px solid {CHROME["hairline"]};
-    margin-bottom: 0.35rem;
+    gap: 0.25rem;
 }}
-.console-stat .label {{
-    font-size: 0.74rem;
-    color: {CHROME["text_secondary"]};
-}}
-.console-stat .value {{
-    font-size: 0.95rem;
+.kpi-value {{
+    font-size: 1.3rem;
     font-weight: 600;
     color: {CHROME["text_primary"]};
+}}
+.kpi-unit {{
+    font-size: 0.68rem;
+    font-weight: 500;
+    color: {CHROME["muted"]};
 }}
 
 /* Power-flow schematic: live dash-flow cue. Only ever applied to a
@@ -134,14 +165,19 @@ def status_chip_html(label: str, status_role: str) -> str:
     )
 
 
-def console_stat_html(label: str, value: str, status_role: str = "good") -> str:
-    """One live-value row for the status panel -- label + tabular value,
-    with a left accent bar colored by `status_role`.
+def kpi_tile_html(label: str, value: str, unit: str, status_role: str = "good") -> str:
+    """One KPI-strip tile: uppercase label, dominant tabular value,
+    subordinate unit. The top border escalates to `status_role`'s color
+    only when that role is neither "good" nor "neutral" -- a value with
+    no pass/fail meaning (e.g. P_load) should use "neutral" so it is
+    never colored as if it were a health signal.
     """
-    color = STATUS.get(status_role, CHROME["hairline"])
+    accent = CHROME["hairline"] if status_role in ("good", "neutral") else STATUS.get(status_role, CHROME["hairline"])
     return (
-        f'<div class="console-stat" style="border-left-color:{color};">'
-        f'<span class="label">{label}</span>'
-        f'<span class="value console-mono">{value}</span>'
-        f"</div>"
+        f'<div class="kpi-tile" style="border-top-color:{accent};">'
+        f'<div class="kpi-label">{label}</div>'
+        f'<div class="kpi-value-row">'
+        f'<span class="kpi-value console-mono">{value}</span>'
+        f'<span class="kpi-unit">{unit}</span>'
+        f"</div></div>"
     )

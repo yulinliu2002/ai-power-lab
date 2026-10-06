@@ -31,6 +31,11 @@ STATUS: dict[str, str] = {
     "warning": "#fab219",
     "serious": "#ec835a",
     "critical": "#d03b3b",
+    # Not a health state -- for values with no pass/fail meaning of their
+    # own (e.g. P_load, an exogenous demand, not a protected entity).
+    # Matches CHROME["muted"] exactly; duplicated here (not referenced)
+    # because this dict is defined before CHROME in this module.
+    "neutral": "#6b7680",
 }
 
 #: Console chrome -- panel surfaces, ink, hairlines. Matches

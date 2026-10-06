@@ -62,11 +62,25 @@ def _mark_events(fig: go.Figure, events: EventMarkers | None) -> None:
         )
 
 
+def _mark_current_time(fig: go.Figure, current_t_s: float | None) -> None:
+    """A restrained solid line at the Simulator hero panel's current scrub
+    position -- visually distinct from `_mark_events`' dotted/muted event
+    markers (ACCENT, solid, no label) so "where the scrubber is" never
+    reads as "something that happened". Presentation-only: this does not
+    re-run on every autoplay tick (see simulator.py), only on a manual
+    scrub, to avoid re-sending a full chart on an animation-frame cadence.
+    """
+    if current_t_s is None:
+        return
+    fig.add_vline(x=current_t_s, line_color=CATS["blue"], line_width=1.5)
+
+
 def plot_voltage(
     telemetry: Telemetry,
     v_ref_v: float = 800.0,
     events: EventMarkers | None = None,
     floor_v: float | None = None,
+    current_t_s: float | None = None,
     title: str = "DC Bus Voltage vs Time",
 ) -> go.Figure:
     """V_dc vs time. If `floor_v` is given, it is marked as a numerical
@@ -88,6 +102,7 @@ def plot_voltage(
             annotation_text="numerical floor (non-physical)", annotation_position="top right",
         )
     _mark_events(fig, events)
+    _mark_current_time(fig, current_t_s)
     return _apply_chrome(fig, title, "time [s]", "DC bus voltage [V]")
 
 
@@ -95,6 +110,7 @@ def plot_power(
     telemetry: Telemetry,
     events: EventMarkers | None = None,
     include_target: bool = False,
+    current_t_s: float | None = None,
     title: str = "Load Power vs SST Delivered Power",
 ) -> go.Figure:
     fig = go.Figure()
@@ -112,6 +128,7 @@ def plot_power(
                        name="P_target", line=dict(color=CATS["violet"], width=1, dash="dash"))
         )
     _mark_events(fig, events)
+    _mark_current_time(fig, current_t_s)
     return _apply_chrome(fig, title, "time [s]", "power [kW]")
 
 
@@ -120,6 +137,7 @@ def plot_temperature(
     derate_start_c: float | None = None,
     trip_c: float | None = None,
     events: EventMarkers | None = None,
+    current_t_s: float | None = None,
     title: str = "SST Temperature vs Time",
 ) -> go.Figure:
     fig = go.Figure()
@@ -130,20 +148,22 @@ def plot_temperature(
     if derate_start_c is not None:
         fig.add_hline(
             y=derate_start_c, line_dash="dash", line_color=STATUS["warning"],
-            annotation_text=f"derate start = {derate_start_c:.0f} degC", annotation_position="bottom right",
+            annotation_text=f"derate start = {derate_start_c:.0f} °C", annotation_position="bottom right",
         )
     if trip_c is not None:
         fig.add_hline(
             y=trip_c, line_dash="dash", line_color=STATUS["critical"],
-            annotation_text=f"trip = {trip_c:.0f} degC", annotation_position="top right",
+            annotation_text=f"trip = {trip_c:.0f} °C", annotation_position="top right",
         )
     _mark_events(fig, events)
-    return _apply_chrome(fig, title, "time [s]", "temperature [degC]")
+    _mark_current_time(fig, current_t_s)
+    return _apply_chrome(fig, title, "time [s]", "temperature [°C]")
 
 
 def plot_protection(
     telemetry: Telemetry,
     events: EventMarkers | None = None,
+    current_t_s: float | None = None,
     title: str = "Derate Factor vs Time",
 ) -> go.Figure:
     fig = go.Figure()
@@ -160,6 +180,7 @@ def plot_protection(
             )
         )
     _mark_events(fig, events)
+    _mark_current_time(fig, current_t_s)
     fig.update_yaxes(range=[-0.05, 1.05])
     return _apply_chrome(fig, title, "time [s]", "derate factor [-]")
 
@@ -167,6 +188,7 @@ def plot_protection(
 def plot_grid_voltage(
     telemetry: Telemetry,
     events: EventMarkers | None = None,
+    current_t_s: float | None = None,
     title: str = "Grid Voltage vs Time",
 ) -> go.Figure:
     fig = go.Figure()
@@ -184,5 +206,6 @@ def plot_grid_voltage(
             )
         )
     _mark_events(fig, events)
+    _mark_current_time(fig, current_t_s)
     fig.update_yaxes(range=[-0.05, 1.2])
     return _apply_chrome(fig, title, "time [s]", "grid voltage [p.u.]")
