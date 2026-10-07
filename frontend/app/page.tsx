@@ -33,22 +33,16 @@ export default function Home() {
     if (requestedRef.current) return;
     requestedRef.current = true;
 
-    let cancelled = false;
     fetchLoadStep()
       .then((data) => {
-        if (!cancelled) setState({ status: "ready", data });
+        setState({ status: "ready", data });
       })
       .catch((error: unknown) => {
-        if (!cancelled) {
-          setState({
-            status: "error",
-            message: error instanceof Error ? error.message : "Unknown error",
-          });
-        }
+        setState({
+          status: "error",
+          message: error instanceof Error ? error.message : "Unknown error",
+        });
       });
-    return () => {
-      cancelled = true;
-    };
   }, []);
 
   return (
