@@ -40,3 +40,22 @@
 body {
   background: var(--color-canvas);
 }
+
+/*
+ * Power-flow line animation -- ported from
+ * dashboard/components/schematic.py's `console-flow` keyframe. Speed
+ * is set per-line via inline `animation-duration`, driven by real
+ * power magnitude (see PowerFlowSchematic.tsx); this keyframe only
+ * defines the motion itself.
+ */
+@keyframes console-flow {
+  to {
+    stroke-dashoffset: -24;
+  }
+}
+
+.flow-line {
+  animation-name: console-flow;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}

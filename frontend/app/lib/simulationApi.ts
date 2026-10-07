@@ -44,6 +44,38 @@ export interface LoadStepResponse {
   timeseries: LoadStepTimeseries;
 }
 
+/** One instant of the run -- every field read from the same index. */
+export interface Sample {
+  t_s: number;
+  v_dc_v: number;
+  p_sst_w: number;
+  p_load_w: number;
+  temperature_c: number;
+  derate_factor: number;
+  operating_state: string;
+  grid_voltage_pu: number;
+  grid_available: boolean;
+}
+
+/**
+ * Selects one instant from an already-loaded run. This is pure index
+ * selection -- no interpolation, no recomputation, no new physics.
+ */
+export function sampleAt(data: LoadStepResponse, index: number): Sample {
+  const t = data.timeseries;
+  return {
+    t_s: t.time_s[index],
+    v_dc_v: t.v_dc_v[index],
+    p_sst_w: t.p_sst_w[index],
+    p_load_w: t.p_load_w[index],
+    temperature_c: t.temperature_c[index],
+    derate_factor: t.derate_factor[index],
+    operating_state: t.operating_state[index],
+    grid_voltage_pu: t.grid_voltage_pu[index],
+    grid_available: t.grid_available[index],
+  };
+}
+
 /** Runs Scenario A (AI load step) with the API's own defaults. */
 export async function fetchLoadStep(): Promise<LoadStepResponse> {
   const response = await fetch(

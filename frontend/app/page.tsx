@@ -3,7 +3,14 @@
 import { useEffect, useState } from "react";
 
 import { KpiTile } from "./components/KpiTile";
-import { fetchLoadStep, type LoadStepResponse } from "./lib/simulationApi";
+import { PowerFlowSchematic } from "./components/PowerFlowSchematic";
+import { TimeScrubber } from "./components/TimeScrubber";
+import {
+  fetchLoadStep,
+  sampleAt,
+  type LoadStepResponse,
+  type Sample,
+} from "./lib/simulationApi";
 import { busStatus, gridStatus, sstStatus } from "./lib/statusRoles";
 
 type LoadState =
@@ -13,6 +20,7 @@ type LoadState =
 
 export default function Home() {
   const [state, setState] = useState<LoadState>({ status: "loading" });
+  const [index, setIndex] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -57,31 +65,81 @@ export default function Home() {
         </p>
       )}
 
-      {state.status === "ready" && <KpiStrip data={state.data} />}
+      {state.status === "ready" && (
+        <Console data={state.data} index={index} onIndexChange={setIndex} />
+      )}
     </main>
   );
 }
 
-function KpiStrip({ data }: { data: LoadStepResponse }) {
-  // One static sample, t=0 -- no time interaction yet (V2 slice #1).
-  const t = data.timeseries;
-  const i = 0;
+function Console({
+  data,
+  index,
+  onIndexChange,
+}: {
+  data: LoadStepResponse;
+  index: number;
+  onIndexChange: (index: number) => void;
+}) {
+  // One index selected from the already-loaded run -- no new
+  // simulation run, no new API request, no interpolation.
+  const sample = sampleAt(data, index);
 
-  const grid = gridStatus(t.grid_voltage_pu[i], t.grid_available[i]);
-  const bus = busStatus(t.v_dc_v[i], data.thresholds.voltage_reference_v);
-  const sst = sstStatus(t.operating_state[i]);
+  return (
+    <div className="flex flex-col gap-4">
+      <KpiStrip sample={sample} voltageReferenceV={data.thresholds.voltage_reference_v} />
+      <PowerFlowSchematic
+        sample={sample}
+        ratedPowerW={data.thresholds.rated_power_w}
+        voltageReferenceV={data.thresholds.voltage_reference_v}
+      />
+      <TimeScrubber timeS={data.timeseries.time_s} index={index} onChange={onIndexChange} />
+    </div>
+  );
+}
 
-  const gridValue = t.grid_available[i] ? t.grid_voltage_pu[i].toFixed(2) : "LOST";
-  const gridUnit = t.grid_available[i] ? "p.u." : "";
+function KpiStrip({
+  sample,
+  voltageReferenceV,
+}: {
+  sample: Sample;
+  voltageReferenceV: number;
+}) {
+  const grid = gridStatus(sample.grid_voltage_pu, sample.grid_available);
+  const bus = busStatus(sample.v_dc_v, voltageReferenceV);
+  const sst = sstStatus(sample.operating_state);
+
+  const gridValue = sample.grid_available ? sample.grid_voltage_pu.toFixed(2) : "LOST";
+  const gridUnit = sample.grid_available ? "p.u." : "";
 
   return (
     <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
-      <KpiTile label="VDC" value={t.v_dc_v[i].toFixed(1)} unit="V" role={bus} />
-      <KpiTile label="P_SST" value={(t.p_sst_w[i] / 1e3).toFixed(1)} unit="kW" role={sst} />
-      <KpiTile label="P_LOAD" value={(t.p_load_w[i] / 1e3).toFixed(1)} unit="kW" role="neutral" />
-      <KpiTile label="TEMPERATURE" value={t.temperature_c[i].toFixed(1)} unit="°C" role={sst} />
-      <KpiTile label="DERATE" value={(t.derate_factor[i] * 100).toFixed(0)} unit="%" role={sst} />
-      <KpiTile label="GRID" value={gridValue} unit={gridUnit} role={grid} />
+      <KpiTile label="VDC" value={sample.v_dc_v.toFixed(1)} unit="V" role={bus.role} />
+      <KpiTile
+        label="P_SST"
+        value={(sample.p_sst_w / 1e3).toFixed(1)}
+        unit="kW"
+        role={sst.role}
+      />
+      <KpiTile
+        label="P_LOAD"
+        value={(sample.p_load_w / 1e3).toFixed(1)}
+        unit="kW"
+        role="neutral"
+      />
+      <KpiTile
+        label="TEMPERATURE"
+        value={sample.temperature_c.toFixed(1)}
+        unit="°C"
+        role={sst.role}
+      />
+      <KpiTile
+        label="DERATE"
+        value={(sample.derate_factor * 100).toFixed(0)}
+        unit="%"
+        role={sst.role}
+      />
+      <KpiTile label="GRID" value={gridValue} unit={gridUnit} role={grid.role} />
     </div>
   );
 }
