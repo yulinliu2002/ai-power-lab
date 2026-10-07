@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { KpiTile } from "./components/KpiTile";
 import { PowerFlowSchematic } from "./components/PowerFlowSchematic";
+import { TelemetryChart } from "./components/TelemetryChart";
 import { TimeScrubber } from "./components/TimeScrubber";
 import {
   fetchLoadStep,
@@ -12,6 +13,7 @@ import {
   type Sample,
 } from "./lib/simulationApi";
 import { busStatus, gridStatus, sstStatus } from "./lib/statusRoles";
+import { SVG_COLOR } from "./lib/theme";
 
 type LoadState =
   | { status: "loading" }
@@ -21,8 +23,16 @@ type LoadState =
 export default function Home() {
   const [state, setState] = useState<LoadState>({ status: "loading" });
   const [index, setIndex] = useState(0);
+  const requestedRef = useRef(false);
 
   useEffect(() => {
+    // Guards against React Strict Mode's dev-only double effect
+    // invocation, which would otherwise dispatch this fetch twice on
+    // a single page load -- the ref persists across that synthetic
+    // mount/cleanup/remount, unlike a plain local variable.
+    if (requestedRef.current) return;
+    requestedRef.current = true;
+
     let cancelled = false;
     fetchLoadStep()
       .then((data) => {
@@ -84,6 +94,8 @@ function Console({
   // One index selected from the already-loaded run -- no new
   // simulation run, no new API request, no interpolation.
   const sample = sampleAt(data, index);
+  const timeS = data.timeseries.time_s;
+  const eventMarkers = data.events.map((e) => ({ time: e.time_s, label: e.label }));
 
   return (
     <div className="flex flex-col gap-4">
@@ -93,7 +105,49 @@ function Console({
         ratedPowerW={data.thresholds.rated_power_w}
         voltageReferenceV={data.thresholds.voltage_reference_v}
       />
-      <TimeScrubber timeS={data.timeseries.time_s} index={index} onChange={onIndexChange} />
+      <TimeScrubber timeS={timeS} index={index} onChange={onIndexChange} />
+
+      <div className="flex flex-col gap-2">
+        <span className="font-sans text-[11.5px] font-semibold uppercase tracking-[0.04em] text-muted">
+          TELEMETRY
+        </span>
+        <div className="grid grid-cols-1 gap-2 lg:grid-cols-2">
+          <TelemetryChart
+            title="DC Bus Voltage vs Time"
+            timeS={timeS}
+            series={[{ label: "V_dc", values: data.timeseries.v_dc_v, color: SVG_COLOR.accent }]}
+            yUnit="V"
+            currentTimeS={sample.t_s}
+            referenceLines={[
+              {
+                value: data.thresholds.voltage_reference_v,
+                label: `V_ref = ${data.thresholds.voltage_reference_v.toFixed(0)} V`,
+              },
+            ]}
+            eventMarkers={eventMarkers}
+          />
+          <TelemetryChart
+            title="AI Load Power vs SST Delivered Power"
+            timeS={timeS}
+            series={[
+              {
+                label: "P_sst",
+                values: data.timeseries.p_sst_w.map((w) => w / 1e3),
+                color: SVG_COLOR.accent,
+              },
+              {
+                label: "P_load",
+                values: data.timeseries.p_load_w.map((w) => w / 1e3),
+                color: SVG_COLOR.neutral,
+                dashed: true,
+              },
+            ]}
+            yUnit="kW"
+            currentTimeS={sample.t_s}
+            eventMarkers={eventMarkers}
+          />
+        </div>
+      </div>
     </div>
   );
 }
