@@ -16,6 +16,7 @@ produces.
 from __future__ import annotations
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from dashboard.adapters import simulation_adapter as adapter
 
@@ -29,6 +30,16 @@ from .schemas import (
 )
 
 app = FastAPI(title="AI Power Lab API", version="0.1.0")
+
+# The Next.js dev server runs on a different origin (localhost:3000)
+# than this API (localhost:8000); the browser enforces CORS between
+# them. Dev-only origins -- this is not a deployment configuration.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_methods=["GET", "POST"],
+    allow_headers=["*"],
+)
 
 
 @app.get("/api/v1/health", response_model=HealthResponse)
