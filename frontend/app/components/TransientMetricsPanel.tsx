@@ -17,7 +17,7 @@ export function TransientMetricsPanel({ metrics, voltageReferenceV }: TransientM
   const hasDeficit = metrics.peakDeficitKw > 0;
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-col gap-1.5">
       <span className="font-sans text-[11.5px] font-semibold uppercase tracking-[0.04em] text-muted">
         TRANSIENT METRICS
       </span>
@@ -71,15 +71,15 @@ function MetricTile({
   caption: string;
 }) {
   return (
-    <div className="flex flex-col gap-1 border border-hairline bg-surface px-3 py-2">
+    <div className="flex flex-col gap-0.5 border border-hairline bg-surface px-3 py-1.5">
       <span className="font-sans text-[10.5px] font-semibold uppercase tracking-[0.04em] text-muted">
         {label}
       </span>
-      <span className="font-mono text-[18px] font-semibold leading-none tabular-nums text-primary">
+      <span className="font-mono text-[16px] font-semibold leading-none tabular-nums text-primary">
         {value}
         <span className="ml-1 text-[11px] font-normal text-muted">{unit}</span>
       </span>
-      <span className="font-mono text-[10px] text-secondary">{caption}</span>
+      <span className="font-mono text-[9.5px] leading-snug text-secondary">{caption}</span>
     </div>
   );
 }

@@ -9,11 +9,12 @@ interface PowerFlowSchematicProps {
 }
 
 const BOX_W = 190;
-const BOX_H = 118;
-const Y = 20;
+const BOX_H = 86;
+const Y = 14;
+const BOTTOM_MARGIN = 14;
 const XS = [20, 280, 540, 800];
 const VIEW_W = XS[3] + BOX_W + 20;
-const VIEW_H = Y + BOX_H + 20;
+const VIEW_H = Y + BOX_H + BOTTOM_MARGIN;
 
 function clamp01(x: number): number {
   return Math.max(0, Math.min(1, x));
@@ -46,7 +47,7 @@ export function PowerFlowSchematic({
   const midY = Y + BOX_H / 2;
 
   return (
-    <section className="flex flex-col gap-2 border border-hairline bg-surface px-4 py-3">
+    <section className="flex flex-col gap-1.5 border border-hairline bg-surface px-4 py-2">
       <span className="font-sans text-[11.5px] font-semibold uppercase tracking-[0.04em] text-muted">
         POWER FLOW
       </span>
@@ -167,7 +168,7 @@ function StageBox({
       />
       <text
         x={x + BOX_W / 2}
-        y={Y + 24}
+        y={Y + 17}
         textAnchor="middle"
         fontSize={12.5}
         fontWeight={600}
@@ -176,15 +177,15 @@ function StageBox({
       >
         {title}
       </text>
-      <circle cx={x + 16} cy={Y + 42} r={4.5} fill={color} />
-      <text x={x + 26} y={Y + 46} fontSize={11} fontWeight={600} fill={color}>
+      <circle cx={x + 16} cy={Y + 32} r={4.5} fill={color} />
+      <text x={x + 26} y={Y + 36} fontSize={11} fontWeight={600} fill={color}>
         {statusLabel}
       </text>
       {lines.map((line, i) => (
         <text
           key={line}
           x={x + BOX_W / 2}
-          y={Y + 70 + i * 20}
+          y={Y + 54 + i * 17}
           textAnchor="middle"
           fontFamily="var(--font-mono)"
           fontSize={14}

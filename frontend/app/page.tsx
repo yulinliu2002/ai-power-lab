@@ -49,15 +49,17 @@ export default function Home() {
   }, []);
 
   return (
-    <main className="flex flex-1 flex-col gap-6 px-6 py-8">
-      <header className="flex flex-col gap-1">
-        <h1 className="text-2xl font-bold tracking-tight text-primary">
-          AI POWER LAB
-        </h1>
-        <p className="font-mono text-xs uppercase tracking-[0.08em] text-secondary">
-          SST / 800 VDC CONTROL CENTER
-        </p>
-        <p className="mt-2 text-[11.5px] font-semibold uppercase tracking-[0.04em] text-muted">
+    <main className="flex flex-1 flex-col gap-3 px-6 py-4">
+      <header className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-hairline pb-2">
+        <div className="flex items-baseline gap-3">
+          <h1 className="text-lg font-bold tracking-tight text-primary">
+            AI POWER LAB
+          </h1>
+          <p className="font-mono text-[10.5px] uppercase tracking-[0.08em] text-secondary">
+            SST / 800 VDC CONTROL CENTER
+          </p>
+        </div>
+        <p className="text-[11px] font-semibold uppercase tracking-[0.04em] text-muted">
           Scenario A &mdash; AI Load Step
         </p>
       </header>
@@ -99,7 +101,7 @@ function Console({
   const metrics = useMemo(() => computeTransientMetrics(data), [data]);
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-3">
       <KpiStrip sample={sample} voltageReferenceV={data.thresholds.voltage_reference_v} />
       <PowerFlowSchematic
         sample={sample}
@@ -108,7 +110,7 @@ function Console({
       />
       <TimeScrubber timeS={timeS} index={index} onChange={onIndexChange} />
 
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-1.5">
         <span className="font-sans text-[11.5px] font-semibold uppercase tracking-[0.04em] text-muted">
           TELEMETRY
         </span>

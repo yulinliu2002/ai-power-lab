@@ -28,8 +28,8 @@ interface TelemetryChartProps {
 }
 
 const W = 600;
-const H = 220;
-const MARGIN = { top: 16, right: 12, bottom: 22, left: 46 };
+const H = 150;
+const MARGIN = { top: 14, right: 12, bottom: 20, left: 44 };
 const PLOT_W = W - MARGIN.left - MARGIN.right;
 const PLOT_H = H - MARGIN.top - MARGIN.bottom;
 
@@ -70,7 +70,7 @@ export function TelemetryChart({
   const xTicks = [xMin, (xMin + xMax) / 2, xMax];
 
   return (
-    <section className="flex flex-col gap-2 border border-hairline bg-surface px-4 py-3">
+    <section className="flex flex-col gap-1.5 border border-hairline bg-surface px-3 py-2">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <span className="font-sans text-[11.5px] font-semibold uppercase tracking-[0.04em] text-muted">
           {title}
