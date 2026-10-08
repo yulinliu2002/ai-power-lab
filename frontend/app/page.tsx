@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { EngineeringInterpretation } from "./components/EngineeringInterpretation";
-import { KpiTile } from "./components/KpiTile";
+import { KpiReadout } from "./components/KpiTile";
 import { PowerFlowSchematic } from "./components/PowerFlowSchematic";
 import { TelemetryChart } from "./components/TelemetryChart";
 import { TimeScrubber } from "./components/TimeScrubber";
@@ -49,7 +49,7 @@ export default function Home() {
   }, []);
 
   return (
-    <main className="flex flex-1 flex-col gap-3 px-6 py-4">
+    <main className="mx-auto flex w-full max-w-[1320px] flex-1 flex-col gap-3 px-6 py-4">
       <header className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-hairline pb-2">
         <div className="flex items-baseline gap-3">
           <h1 className="text-lg font-bold tracking-tight text-primary">
@@ -183,33 +183,33 @@ function KpiStrip({
   const gridUnit = sample.grid_available ? "p.u." : "";
 
   return (
-    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
-      <KpiTile label="VDC" value={sample.v_dc_v.toFixed(1)} unit="V" role={bus.role} />
-      <KpiTile
+    <div className="grid grid-cols-2 gap-x-2 border-y border-hairline sm:grid-cols-3 lg:grid-cols-6 lg:gap-x-0 lg:divide-x lg:divide-hairline">
+      <KpiReadout label="VDC" value={sample.v_dc_v.toFixed(1)} unit="V" role={bus.role} />
+      <KpiReadout
         label="P_SST"
         value={(sample.p_sst_w / 1e3).toFixed(1)}
         unit="kW"
         role={sst.role}
       />
-      <KpiTile
+      <KpiReadout
         label="P_LOAD"
         value={(sample.p_load_w / 1e3).toFixed(1)}
         unit="kW"
         role="neutral"
       />
-      <KpiTile
+      <KpiReadout
         label="TEMPERATURE"
         value={sample.temperature_c.toFixed(1)}
         unit="°C"
         role={sst.role}
       />
-      <KpiTile
+      <KpiReadout
         label="DERATE"
         value={(sample.derate_factor * 100).toFixed(0)}
         unit="%"
         role={sst.role}
       />
-      <KpiTile label="GRID" value={gridValue} unit={gridUnit} role={grid.role} />
+      <KpiReadout label="GRID" value={gridValue} unit={gridUnit} role={grid.role} />
     </div>
   );
 }

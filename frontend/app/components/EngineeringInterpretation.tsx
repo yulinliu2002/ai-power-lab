@@ -11,6 +11,11 @@ interface EngineeringInterpretationProps {
  * `lib/transientMetrics.ts`. No number here is hardcoded; every
  * figure is read from the computed metrics for the run actually
  * fetched.
+ *
+ * Deliberately not a boxed card: a top hairline is enough separation
+ * from the metrics strip above it, consistent with reserving full
+ * bordered panels for places (the schematic, the charts) where
+ * containment genuinely aids comprehension.
  */
 export function EngineeringInterpretation({
   metrics,
@@ -22,7 +27,7 @@ export function EngineeringInterpretation({
       : `recovers to within ±1% of V_ref roughly ${metrics.recoveryElapsedS.toFixed(2)} s after the step`;
 
   return (
-    <section className="flex flex-col gap-1 border border-hairline bg-surface px-4 py-2">
+    <section className="flex flex-col gap-1 border-t border-hairline pt-2">
       <span className="font-sans text-[11.5px] font-semibold uppercase tracking-[0.04em] text-muted">
         ENGINEERING INTERPRETATION
       </span>

@@ -28,7 +28,7 @@ interface TelemetryChartProps {
 }
 
 const W = 600;
-const H = 150;
+const H = 190;
 const MARGIN = { top: 14, right: 12, bottom: 20, left: 44 };
 const PLOT_W = W - MARGIN.left - MARGIN.right;
 const PLOT_H = H - MARGIN.top - MARGIN.bottom;

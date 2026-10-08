@@ -6,12 +6,12 @@ interface TransientMetricsPanelProps {
 }
 
 /**
- * Compact analysis tiles summarizing the Scenario A transient --
- * see `lib/transientMetrics.ts` for the exact definition of each
- * value. Visually these are the same flat instrument tile as
- * `KpiTile`, but they report a fixed analysis result over the whole
- * run rather than a live value at the scrubber position, so they are
- * not wired to `currentIndex` and carry no status-role border.
+ * Compact analysis strip summarizing the Scenario A transient -- see
+ * `lib/transientMetrics.ts` for the exact definition of each value.
+ * These are fixed analysis results over the whole run, not a live
+ * value at the scrubber position, so -- like the KPI strip -- the
+ * four results share one `divide-x` strip (one bordered surface)
+ * instead of four separately boxed cards.
  */
 export function TransientMetricsPanel({ metrics, voltageReferenceV }: TransientMetricsPanelProps) {
   const hasDeficit = metrics.peakDeficitKw > 0;
@@ -21,7 +21,7 @@ export function TransientMetricsPanel({ metrics, voltageReferenceV }: TransientM
       <span className="font-sans text-[11.5px] font-semibold uppercase tracking-[0.04em] text-muted">
         TRANSIENT METRICS
       </span>
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-x-2 border-y border-hairline sm:grid-cols-4 sm:gap-x-0 sm:divide-x sm:divide-hairline">
         <MetricTile
           label="MIN V_DC AFTER STEP"
           value={metrics.minVdcV.toFixed(1)}
@@ -71,7 +71,7 @@ function MetricTile({
   caption: string;
 }) {
   return (
-    <div className="flex flex-col gap-0.5 border border-hairline bg-surface px-3 py-1.5">
+    <div className="flex flex-col gap-0.5 px-3 py-1.5">
       <span className="font-sans text-[10.5px] font-semibold uppercase tracking-[0.04em] text-muted">
         {label}
       </span>

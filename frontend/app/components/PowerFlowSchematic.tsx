@@ -8,12 +8,13 @@ interface PowerFlowSchematicProps {
   voltageReferenceV: number;
 }
 
-const BOX_W = 190;
-const BOX_H = 86;
-const Y = 14;
-const BOTTOM_MARGIN = 14;
-const XS = [20, 280, 540, 800];
-const VIEW_W = XS[3] + BOX_W + 20;
+const BOX_W = 150;
+const BOX_H = 68;
+const GAP = 40;
+const Y = 10;
+const BOTTOM_MARGIN = 10;
+const XS = [16, 16 + BOX_W + GAP, 16 + 2 * (BOX_W + GAP), 16 + 3 * (BOX_W + GAP)];
+const VIEW_W = XS[3] + BOX_W + 16;
 const VIEW_H = Y + BOX_H + BOTTOM_MARGIN;
 
 function clamp01(x: number): number {
@@ -21,7 +22,7 @@ function clamp01(x: number): number {
 }
 
 /**
- * The Simulator's hero visualization -- a one-line power-flow diagram:
+ * The Simulator's power-flow diagram -- a compact one-line schematic:
  * MV GRID -> SST -> 800 VDC BUS -> AI COMPUTE LOAD.
  *
  * Ported from `dashboard/components/schematic.py`'s behavior, not its
@@ -30,6 +31,11 @@ function clamp01(x: number): number {
  * rated power, and the AI load is always `neutral` -- it is an
  * exogenous demand, never a protected/controlled entity. Every value
  * shown is read directly from the selected `Sample`.
+ *
+ * The SVG is rendered at its own intrinsic size (capped at `VIEW_W`
+ * px, centered) rather than stretched to fill the panel -- this is a
+ * topology diagram with four fixed-size nodes, not a chart that
+ * should grow to fill available width.
  */
 export function PowerFlowSchematic({
   sample,
@@ -51,12 +57,8 @@ export function PowerFlowSchematic({
       <span className="font-sans text-[11.5px] font-semibold uppercase tracking-[0.04em] text-muted">
         POWER FLOW
       </span>
-      <div className="overflow-x-auto">
-        <svg
-          viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
-          width="100%"
-          style={{ minWidth: 720 }}
-        >
+      <div className="mx-auto w-full" style={{ maxWidth: VIEW_W }}>
+        <svg viewBox={`0 0 ${VIEW_W} ${VIEW_H}`} width="100%">
           <FlowSegment
             x1={XS[0] + BOX_W}
             x2={XS[1]}
@@ -72,34 +74,30 @@ export function PowerFlowSchematic({
             title="MV GRID"
             color={STATUS_SVG_COLOR[grid.role]}
             statusLabel={grid.label}
-            lines={[`${sample.grid_voltage_pu.toFixed(2)} p.u.`]}
+            primaryLine={`${sample.grid_voltage_pu.toFixed(2)} p.u.`}
           />
           <StageBox
             x={XS[1]}
             title="SST"
             color={STATUS_SVG_COLOR[sst.role]}
             statusLabel={sst.label}
-            lines={[
-              `P ${(sample.p_sst_w / 1e3).toFixed(1)} kW`,
-              `T ${sample.temperature_c.toFixed(1)} °C · derate ${(sample.derate_factor * 100).toFixed(0)}%`,
-            ]}
+            primaryLine={`P ${(sample.p_sst_w / 1e3).toFixed(1)} kW`}
+            secondaryLine={`${sample.temperature_c.toFixed(1)}°C · ${(sample.derate_factor * 100).toFixed(0)}% derate`}
           />
           <StageBox
             x={XS[2]}
             title="800 VDC BUS"
             color={STATUS_SVG_COLOR[bus.role]}
             statusLabel={bus.label}
-            lines={[
-              `${sample.v_dc_v.toFixed(1)} V`,
-              `ref ${voltageReferenceV.toFixed(0)} V`,
-            ]}
+            primaryLine={`${sample.v_dc_v.toFixed(1)} V`}
+            secondaryLine={`ref ${voltageReferenceV.toFixed(0)} V`}
           />
           <StageBox
             x={XS[3]}
             title="AI COMPUTE LOAD"
             color={SVG_COLOR.accent}
             statusLabel="DEMAND"
-            lines={[`P ${(sample.p_load_w / 1e3).toFixed(1)} kW`]}
+            primaryLine={`P ${(sample.p_load_w / 1e3).toFixed(1)} kW`}
           />
         </svg>
       </div>
@@ -146,13 +144,15 @@ function StageBox({
   title,
   color,
   statusLabel,
-  lines,
+  primaryLine,
+  secondaryLine,
 }: {
   x: number;
   title: string;
   color: string;
   statusLabel: string;
-  lines: string[];
+  primaryLine: string;
+  secondaryLine?: string;
 }) {
   return (
     <g>
@@ -168,32 +168,41 @@ function StageBox({
       />
       <text
         x={x + BOX_W / 2}
-        y={Y + 17}
+        y={Y + 13}
         textAnchor="middle"
-        fontSize={12.5}
+        fontSize={10.5}
         fontWeight={600}
-        letterSpacing="0.03em"
+        letterSpacing="0.02em"
         fill={SVG_COLOR.textSecondary}
       >
         {title}
       </text>
-      <circle cx={x + 16} cy={Y + 32} r={4.5} fill={color} />
-      <text x={x + 26} y={Y + 36} fontSize={11} fontWeight={600} fill={color}>
+      <circle cx={x + 14} cy={Y + 25} r={3.5} fill={color} />
+      <text x={x + 22} y={Y + 28} fontSize={9.5} fontWeight={600} fill={color}>
         {statusLabel}
       </text>
-      {lines.map((line, i) => (
+      <text
+        x={x + BOX_W / 2}
+        y={Y + 47}
+        textAnchor="middle"
+        fontFamily="var(--font-mono)"
+        fontSize={14}
+        fill={SVG_COLOR.textPrimary}
+      >
+        {primaryLine}
+      </text>
+      {secondaryLine && (
         <text
-          key={line}
           x={x + BOX_W / 2}
-          y={Y + 54 + i * 17}
+          y={Y + 60}
           textAnchor="middle"
           fontFamily="var(--font-mono)"
-          fontSize={14}
-          fill={SVG_COLOR.textPrimary}
+          fontSize={9.5}
+          fill={SVG_COLOR.textSecondary}
         >
-          {line}
+          {secondaryLine}
         </text>
-      ))}
+      )}
     </g>
   );
 }
