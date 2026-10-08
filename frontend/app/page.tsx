@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
+import { EngineeringInterpretation } from "./components/EngineeringInterpretation";
 import { KpiTile } from "./components/KpiTile";
 import { PowerFlowSchematic } from "./components/PowerFlowSchematic";
 import { TelemetryChart } from "./components/TelemetryChart";
 import { TimeScrubber } from "./components/TimeScrubber";
+import { TransientMetricsPanel } from "./components/TransientMetricsPanel";
 import {
   fetchLoadStep,
   sampleAt,
@@ -14,6 +16,7 @@ import {
 } from "./lib/simulationApi";
 import { busStatus, gridStatus, sstStatus } from "./lib/statusRoles";
 import { SVG_COLOR } from "./lib/theme";
+import { computeTransientMetrics } from "./lib/transientMetrics";
 
 type LoadState =
   | { status: "loading" }
@@ -91,6 +94,10 @@ function Console({
   const timeS = data.timeseries.time_s;
   const eventMarkers = data.events.map((e) => ({ time: e.time_s, label: e.label }));
 
+  // Fixed analysis over the whole run, computed once per fetched
+  // response -- not recomputed on every scrubber move.
+  const metrics = useMemo(() => computeTransientMetrics(data), [data]);
+
   return (
     <div className="flex flex-col gap-4">
       <KpiStrip sample={sample} voltageReferenceV={data.thresholds.voltage_reference_v} />
@@ -142,6 +149,19 @@ function Console({
           />
         </div>
       </div>
+
+      {metrics && (
+        <>
+          <TransientMetricsPanel
+            metrics={metrics}
+            voltageReferenceV={data.thresholds.voltage_reference_v}
+          />
+          <EngineeringInterpretation
+            metrics={metrics}
+            voltageReferenceV={data.thresholds.voltage_reference_v}
+          />
+        </>
+      )}
     </div>
   );
 }
