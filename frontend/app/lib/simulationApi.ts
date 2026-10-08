@@ -76,14 +76,33 @@ export function sampleAt(data: LoadStepResponse, index: number): Sample {
   };
 }
 
-/** Runs Scenario A (AI load step) with the API's own defaults. */
-export async function fetchLoadStep(): Promise<LoadStepResponse> {
+/**
+ * The three Scenario A experiment variables Engineering Study #1
+ * identified as governing transient severity. Field names match
+ * `backend/schemas.py: LoadStepRequest` exactly -- this is a request
+ * body, not a second copy of the physics.
+ */
+export interface LoadStepOverrides {
+  final_fraction?: number;
+  capacitance_f?: number;
+  time_constant_s?: number;
+}
+
+/**
+ * Runs Scenario A (AI load step). With no argument, uses the API's
+ * own defaults (the baseline run). `overrides` is sent verbatim as
+ * the request body -- no value is computed or validated here; the
+ * backend (and ultimately `src/`) is the only place that happens.
+ */
+export async function fetchLoadStep(
+  overrides: LoadStepOverrides = {},
+): Promise<LoadStepResponse> {
   const response = await fetch(
     `${API_BASE_URL}/api/v1/simulations/load-step`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({}),
+      body: JSON.stringify(overrides),
     },
   );
 

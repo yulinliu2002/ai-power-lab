@@ -1,8 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { EngineeringInterpretation } from "./components/EngineeringInterpretation";
+import {
+  BASELINE_EXPERIMENT_PARAMS,
+  ExperimentPanel,
+  type ExperimentParams,
+} from "./components/ExperimentPanel";
 import { KpiReadout } from "./components/KpiTile";
 import { PowerFlowSchematic } from "./components/PowerFlowSchematic";
 import { TelemetryChart } from "./components/TelemetryChart";
@@ -18,6 +23,12 @@ import { busStatus, gridStatus, sstStatus } from "./lib/statusRoles";
 import { SVG_COLOR } from "./lib/theme";
 import { computeTransientMetrics } from "./lib/transientMetrics";
 
+// The initial AI load fraction (before the step) is fixed in V1 --
+// Scenario A always starts at 40% rated load, matching
+// `backend/schemas.py: LoadStepRequest.initial_fraction`'s own
+// default. Only the final (post-step) load is an experiment variable.
+const INITIAL_FRACTION = 0.4;
+
 type LoadState =
   | { status: "loading" }
   | { status: "error"; message: string }
@@ -26,7 +37,34 @@ type LoadState =
 export default function Home() {
   const [state, setState] = useState<LoadState>({ status: "loading" });
   const [index, setIndex] = useState(0);
+  const [draftParams, setDraftParams] = useState<ExperimentParams>(BASELINE_EXPERIMENT_PARAMS);
+  const [isRunning, setIsRunning] = useState(false);
+  const [runError, setRunError] = useState<string | null>(null);
   const requestedRef = useRef(false);
+
+  // Shared by the initial load and every later RUN EXPERIMENT /
+  // RESET click -- one fetch, one returned dataset, one place that
+  // replaces `state`. No component below this ever fetches on its
+  // own.
+  const runExperiment = useCallback((params: ExperimentParams) => {
+    setIsRunning(true);
+    setRunError(null);
+    fetchLoadStep({
+      final_fraction: params.finalFraction,
+      capacitance_f: params.capacitanceF,
+      time_constant_s: params.timeConstantS,
+    })
+      .then((data) => {
+        setState({ status: "ready", data });
+        setIndex(0);
+      })
+      .catch((error: unknown) => {
+        setRunError(error instanceof Error ? error.message : "Unknown error");
+      })
+      .finally(() => {
+        setIsRunning(false);
+      });
+  }, []);
 
   useEffect(() => {
     // Guards against React Strict Mode's dev-only double effect
@@ -47,6 +85,11 @@ export default function Home() {
         });
       });
   }, []);
+
+  const handleReset = useCallback(() => {
+    setDraftParams(BASELINE_EXPERIMENT_PARAMS);
+    runExperiment(BASELINE_EXPERIMENT_PARAMS);
+  }, [runExperiment]);
 
   return (
     <main className="mx-auto flex w-full max-w-[1320px] flex-1 flex-col gap-3 px-6 py-4">
@@ -75,7 +118,17 @@ export default function Home() {
       )}
 
       {state.status === "ready" && (
-        <Console data={state.data} index={index} onIndexChange={setIndex} />
+        <Console
+          data={state.data}
+          index={index}
+          onIndexChange={setIndex}
+          draftParams={draftParams}
+          onDraftChange={setDraftParams}
+          onRun={() => runExperiment(draftParams)}
+          onReset={handleReset}
+          isRunning={isRunning}
+          runError={runError}
+        />
       )}
     </main>
   );
@@ -85,10 +138,22 @@ function Console({
   data,
   index,
   onIndexChange,
+  draftParams,
+  onDraftChange,
+  onRun,
+  onReset,
+  isRunning,
+  runError,
 }: {
   data: LoadStepResponse;
   index: number;
   onIndexChange: (index: number) => void;
+  draftParams: ExperimentParams;
+  onDraftChange: (params: ExperimentParams) => void;
+  onRun: () => void;
+  onReset: () => void;
+  isRunning: boolean;
+  runError: string | null;
 }) {
   // One index selected from the already-loaded run -- no new
   // simulation run, no new API request, no interpolation.
@@ -100,9 +165,26 @@ function Console({
   // response -- not recomputed on every scrubber move.
   const metrics = useMemo(() => computeTransientMetrics(data), [data]);
 
+  // The initial (pre-step) P_load sample is always real engine
+  // output, never a hardcoded "160" -- and since INITIAL_FRACTION is
+  // fixed, dividing it back out gives the load's rated power without
+  // the frontend ever hardcoding that config value either.
+  const initialPLoadKw = data.timeseries.p_load_w[0] / 1e3;
+  const loadRatedPowerW = data.timeseries.p_load_w[0] / INITIAL_FRACTION;
+
   return (
     <div className="flex flex-col gap-3">
       <KpiStrip sample={sample} voltageReferenceV={data.thresholds.voltage_reference_v} />
+      <ExperimentPanel
+        draft={draftParams}
+        onDraftChange={onDraftChange}
+        onRun={onRun}
+        onReset={onReset}
+        isRunning={isRunning}
+        initialPLoadKw={initialPLoadKw}
+        loadRatedPowerW={loadRatedPowerW}
+        error={runError}
+      />
       <PowerFlowSchematic
         sample={sample}
         ratedPowerW={data.thresholds.rated_power_w}

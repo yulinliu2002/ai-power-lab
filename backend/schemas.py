@@ -43,6 +43,24 @@ class LoadStepRequest(BaseModel):
     voltage_reference_v: float | None = Field(
         default=None, gt=0.0, description="DC bus voltage reference override [V]. Omit to use config/default.yaml.",
     )
+    capacitance_f: float | None = Field(
+        default=None, ge=0.005, le=0.08,
+        description=(
+            "DC-link capacitance override [F]. Omit to use config/default.yaml "
+            "(0.02 F). Bounds match the range exercised in Engineering Study #1; "
+            "this is an educational energy-buffering parameter, not a claim about "
+            "any commercial SST's DC-link design."
+        ),
+    )
+    time_constant_s: float | None = Field(
+        default=None, ge=0.005, le=0.08,
+        description=(
+            "SST first-order power-response time constant override, tau_sst [s]. "
+            "Omit to use config/default.yaml (0.02 s). Bounds match the range "
+            "exercised in Engineering Study #1; this is the simplified average-value "
+            "power-response lag, not a switching frequency or communication latency."
+        ),
+    )
 
 
 class EventMarker(BaseModel):

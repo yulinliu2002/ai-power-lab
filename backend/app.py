@@ -60,6 +60,8 @@ def simulate_load_step(request: LoadStepRequest) -> LoadStepResponse:
         duration_s=request.duration_s,
         rated_power_w=request.rated_power_w,
         voltage_reference_v=request.voltage_reference_v,
+        capacitance_f=request.capacitance_f,
+        time_constant_s=request.time_constant_s,
     )
     telemetry = result.telemetry
     config = result.config

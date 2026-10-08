@@ -54,23 +54,38 @@ def _base_config(
     voltage_reference_v: float | None = None,
     timestep_s: float | None = None,
     duration_s: float | None = None,
+    capacitance_f: float | None = None,
+    time_constant_s: float | None = None,
 ) -> Config:
-    """Load default.yaml, applying only the overrides a demo exposes."""
+    """Load default.yaml, applying only the overrides a demo exposes.
+
+    `load_config` re-reads the YAML file fresh on every call and
+    `dataclasses.replace` returns a new frozen instance, so this never
+    mutates a shared/global Config -- each call produces its own
+    isolated configuration object.
+    """
     config = load_config(config_path)
     sst = config.sst
     controller = config.controller
     simulation = config.simulation
+    dc_bus = config.dc_bus
     if rated_power_w is not None:
         sst = dataclasses.replace(sst, rated_power_w=rated_power_w)
+    if time_constant_s is not None:
+        sst = dataclasses.replace(sst, time_constant_s=time_constant_s)
     if voltage_reference_v is not None:
         controller = dataclasses.replace(controller, voltage_reference_v=voltage_reference_v)
+    if capacitance_f is not None:
+        dc_bus = dataclasses.replace(dc_bus, capacitance_f=capacitance_f)
     if timestep_s is not None or duration_s is not None:
         simulation = dataclasses.replace(
             simulation,
             timestep_s=timestep_s if timestep_s is not None else simulation.timestep_s,
             duration_s=duration_s if duration_s is not None else simulation.duration_s,
         )
-    return dataclasses.replace(config, sst=sst, controller=controller, simulation=simulation)
+    return dataclasses.replace(
+        config, sst=sst, controller=controller, simulation=simulation, dc_bus=dc_bus
+    )
 
 
 def run_load_step(
@@ -81,16 +96,26 @@ def run_load_step(
     duration_s: float = 0.6,
     rated_power_w: float | None = None,
     voltage_reference_v: float | None = None,
+    capacitance_f: float | None = None,
+    time_constant_s: float | None = None,
 ) -> ScenarioResult:
     """Scenario A -- AI load step (the flagship demo).
 
     Mirrors scenarios/load_step.py with initial/final load fraction,
-    step time, duration, SST rating, and voltage reference exposed.
+    step time, duration, SST rating, voltage reference, DC-link
+    capacitance, and SST response time constant exposed -- the three
+    additional parameters (`capacitance_f`, `time_constant_s`, plus
+    `final_fraction` which already existed) are exactly the three
+    variables Engineering Study #1 found governed transient severity:
+    energy buffering (C_dc), power-response dynamics (tau_sst), and
+    the disturbance magnitude itself (the load step).
     """
     config = _base_config(
         rated_power_w=rated_power_w,
         voltage_reference_v=voltage_reference_v,
         duration_s=duration_s,
+        capacitance_f=capacitance_f,
+        time_constant_s=time_constant_s,
     )
     load_fn = make_step_load_profile(
         rated_power_w=config.load.rated_power_w,
