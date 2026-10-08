@@ -17,6 +17,37 @@ export interface EventMarker {
   label: string;
 }
 
+/** Highlights one already-computed point on the curve (e.g. the
+ * voltage minimum) -- never a recomputation, just a label on a value
+ * the caller already has. */
+export interface MarkerPoint {
+  time: number;
+  value: number;
+  label: string;
+}
+
+/**
+ * Shades the region where one named series exceeds another -- e.g.
+ * "where P_load > P_sst", the energy-deficit interval. The polygon is
+ * built so its band collapses to zero width wherever `above` does not
+ * exceed `baseline`, so the filled area is never present where the
+ * condition doesn't hold, and its area is literally proportional to
+ * the real (power x time) deficit -- not a decorative fill.
+ *
+ * `windowEndS`, if given, stops the shading at that time even if the
+ * condition holds again later (e.g. during later ripple of a damped
+ * oscillation) -- used so the shaded region matches exactly the
+ * window a caller's own quoted energy figure was computed over,
+ * rather than silently covering more area than that number accounts
+ * for.
+ */
+export interface DeficitFill {
+  aboveLabel: string;
+  baselineLabel: string;
+  label: string;
+  windowEndS?: number;
+}
+
 interface TelemetryChartProps {
   title: string;
   timeS: number[];
@@ -25,6 +56,8 @@ interface TelemetryChartProps {
   currentTimeS: number;
   referenceLines?: ReferenceLine[];
   eventMarkers?: EventMarker[];
+  markerPoint?: MarkerPoint;
+  deficitFill?: DeficitFill;
 }
 
 const W = 600;
@@ -52,6 +85,8 @@ export function TelemetryChart({
   currentTimeS,
   referenceLines = [],
   eventMarkers = [],
+  markerPoint,
+  deficitFill,
 }: TelemetryChartProps) {
   const xMin = timeS[0];
   const xMax = timeS[timeS.length - 1];
@@ -68,6 +103,27 @@ export function TelemetryChart({
 
   const yTicks = [yMin + (yMax - yMin) * 0.0, yMin + (yMax - yMin) * 0.5, yMax];
   const xTicks = [xMin, (xMin + xMax) / 2, xMax];
+
+  const deficitPolygon = (() => {
+    if (!deficitFill) return null;
+    const above = series.find((s) => s.label === deficitFill.aboveLabel);
+    const baseline = series.find((s) => s.label === deficitFill.baselineLabel);
+    if (!above || !baseline) return null;
+
+    const windowEndS = deficitFill.windowEndS ?? Infinity;
+    const indices = timeS
+      .map((t, i) => i)
+      .filter((i) => timeS[i] <= windowEndS);
+    if (indices.length === 0) return null;
+
+    const top = indices.map((i) => [timeS[i], Math.max(above.values[i], baseline.values[i])] as const);
+    const bottom = indices.map((i) => [timeS[i], baseline.values[i]] as const);
+    const points = [...top, ...bottom.slice().reverse()]
+      .map(([t, v]) => `${scaleX(t)},${scaleY(v)}`)
+      .join(" ");
+    const hasDeficit = indices.some((i) => above.values[i] > baseline.values[i]);
+    return hasDeficit ? points : null;
+  })();
 
   return (
     <section className="flex flex-col gap-1.5 border border-hairline bg-surface px-3 py-2">
@@ -183,6 +239,10 @@ export function TelemetryChart({
           </g>
         ))}
 
+        {deficitPolygon && (
+          <polygon points={deficitPolygon} fill={SVG_COLOR.accent} opacity={0.14} />
+        )}
+
         {series.map((s) => (
           <polyline
             key={s.label}
@@ -194,6 +254,29 @@ export function TelemetryChart({
           />
         ))}
 
+        {markerPoint && (
+          <g>
+            <circle
+              cx={scaleX(markerPoint.time)}
+              cy={scaleY(markerPoint.value)}
+              r={3}
+              fill={SVG_COLOR.surface}
+              stroke={SVG_COLOR.textPrimary}
+              strokeWidth={1.5}
+            />
+            <text
+              x={scaleX(markerPoint.time) + 6}
+              y={scaleY(markerPoint.value) - 6}
+              fontFamily="var(--font-mono)"
+              fontSize={9.5}
+              fontWeight={600}
+              fill={SVG_COLOR.textPrimary}
+            >
+              {markerPoint.label}
+            </text>
+          </g>
+        )}
+
         <line
           x1={scaleX(currentTimeS)}
           x2={scaleX(currentTimeS)}
@@ -203,6 +286,12 @@ export function TelemetryChart({
           strokeWidth={1.5}
         />
       </svg>
+      {deficitPolygon && (
+        <span className="flex items-center gap-1.5 font-mono text-[9.5px] text-secondary">
+          <span className="inline-block h-2.5 w-2.5" style={{ backgroundColor: SVG_COLOR.accent, opacity: 0.3 }} />
+          {deficitFill!.label}
+        </span>
+      )}
     </section>
   );
 }

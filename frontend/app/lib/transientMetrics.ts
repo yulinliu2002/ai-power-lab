@@ -21,10 +21,20 @@ export interface TransientMetrics {
   minVdcV: number;
   /** Time at which that minimum occurs [s]. */
   minVdcTimeS: number;
-  /** Largest |V_dc - V_ref| observed from the event onward [V]. */
+  /** Largest |V_dc - V_ref| observed from the event onward [V]. This
+   *  is the largest deviation in EITHER direction -- the initial sag
+   *  or a later recovery overshoot, whichever is bigger -- so it is
+   *  not assumed to coincide with `minVdcTimeS`. */
   maxDeviationV: number;
   /** Same deviation, as a percentage of V_ref [%]. */
   maxDeviationPercent: number;
+  /** Time at which that largest deviation occurs [s] -- may differ
+   *  from `minVdcTimeS` if a recovery overshoot exceeds the sag. */
+  maxDeviationTimeS: number;
+  /** Whether the largest deviation is above V_ref (an overshoot) as
+   *  opposed to below it (a sag) -- lets the UI say "above"/"below"
+   *  correctly instead of assuming "below". */
+  maxDeviationIsAbove: boolean;
   /** Largest (P_load - P_sst) observed from the event onward [kW].
    *  Positive means load momentarily exceeds delivered power (a
    *  deficit the bus must supply); zero or negative means the SST
@@ -32,6 +42,18 @@ export interface TransientMetrics {
   peakDeficitKw: number;
   /** Time at which the peak deficit occurs [s]. */
   peakDeficitTimeS: number;
+  /**
+   * Energy drawn from the DC-bus capacitor between the event and the
+   * voltage minimum [kJ], computed directly from the same equation
+   * shown in the UI: E_dc = 0.5 * C_dc * V_dc^2, evaluated at V_ref
+   * and at minVdcV using `thresholds.capacitance_f` (the capacitance
+   * this specific run actually used). This is deliberately NOT a
+   * numerical integral of the power-mismatch series -- across a
+   * ringing transient that would also sum up later, smaller
+   * ripple-deficit sub-intervals and silently stop matching the one
+   * equation a reader can check by hand.
+   */
+  energyDeficitKj: number;
   /**
    * First time at/after the event such that V_dc stays within
    * ±1% of V_ref for the remainder of the run [s], or `null` if the
@@ -71,6 +93,8 @@ export function computeTransientMetrics(data: LoadStepResponse): TransientMetric
   let minVdcV = Infinity;
   let minVdcTimeS = event.time_s;
   let maxDeviationV = 0;
+  let maxDeviationTimeS = event.time_s;
+  let maxDeviationIsAbove = false;
   let peakDeficitW = -Infinity;
   let peakDeficitTimeS = event.time_s;
 
@@ -83,6 +107,8 @@ export function computeTransientMetrics(data: LoadStepResponse): TransientMetric
     const deviation = Math.abs(v - vRef);
     if (deviation > maxDeviationV) {
       maxDeviationV = deviation;
+      maxDeviationTimeS = t.time_s[i];
+      maxDeviationIsAbove = v > vRef;
     }
     const deficitW = t.p_load_w[i] - t.p_sst_w[i];
     if (deficitW > peakDeficitW) {
@@ -90,6 +116,9 @@ export function computeTransientMetrics(data: LoadStepResponse): TransientMetric
       peakDeficitTimeS = t.time_s[i];
     }
   }
+
+  const capacitanceF = data.thresholds.capacitance_f;
+  const energyDeficitJ = Math.max(0, 0.5 * capacitanceF * (vRef * vRef - minVdcV * minVdcV));
 
   let lastBreachIndex = -1;
   for (let i = eventIndex; i < n; i++) {
@@ -117,8 +146,11 @@ export function computeTransientMetrics(data: LoadStepResponse): TransientMetric
     minVdcTimeS,
     maxDeviationV,
     maxDeviationPercent: (maxDeviationV / vRef) * 100,
+    maxDeviationTimeS,
+    maxDeviationIsAbove,
     peakDeficitKw: peakDeficitW / 1e3,
     peakDeficitTimeS,
+    energyDeficitKj: energyDeficitJ / 1e3,
     recoveryTimeS,
     recoveryElapsedS: recoveryTimeS === null ? null : recoveryTimeS - event.time_s,
   };

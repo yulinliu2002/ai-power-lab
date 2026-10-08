@@ -80,6 +80,7 @@ class ScenarioThresholds(BaseModel):
     rated_power_w: float
     thermal_derate_start_c: float
     thermal_trip_c: float
+    capacitance_f: float
 
 
 class LoadStepTimeseries(BaseModel):

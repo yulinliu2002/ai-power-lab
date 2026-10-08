@@ -39,6 +39,7 @@ def test_load_step_response_schema_shape() -> None:
     assert set(body.keys()) == {"scenario", "thresholds", "events", "timeseries"}
     assert set(body["thresholds"].keys()) == {
         "voltage_reference_v", "rated_power_w", "thermal_derate_start_c", "thermal_trip_c",
+        "capacitance_f",
     }
     timeseries_fields = {
         "time_s", "v_dc_v", "p_sst_w", "p_load_w", "p_target_w",
@@ -80,6 +81,19 @@ def test_load_step_baseline_reproduces_default_adapter_result() -> None:
     body = response.json()
     assert body["timeseries"]["v_dc_v"] == baseline.telemetry.v_dc_v.tolist()
     assert body["timeseries"]["p_sst_w"] == baseline.telemetry.p_sst_w.tolist()
+
+
+def test_thresholds_echo_the_capacitance_actually_used() -> None:
+    """The frontend computes an energy figure from thresholds.capacitance_f
+    (see lib/transientMetrics.ts) -- it must reflect the override actually
+    applied to the run, not always the config/default.yaml value."""
+    baseline = client.post("/api/v1/simulations/load-step", json={}).json()
+    assert baseline["thresholds"]["capacitance_f"] == 0.02
+
+    overridden = client.post(
+        "/api/v1/simulations/load-step", json={"capacitance_f": 0.05}
+    ).json()
+    assert overridden["thresholds"]["capacitance_f"] == 0.05
 
 
 def test_higher_capacitance_reduces_voltage_droop() -> None:
@@ -207,6 +221,7 @@ def test_load_step_parity_with_source_of_truth() -> None:
     assert api_thresholds["rated_power_w"] == direct.config.sst.rated_power_w
     assert api_thresholds["thermal_derate_start_c"] == direct.config.protection.thermal_derate_start_c
     assert api_thresholds["thermal_trip_c"] == direct.config.protection.thermal_trip_c
+    assert api_thresholds["capacitance_f"] == direct.config.dc_bus.capacitance_f
 
     api_events = response.json()["events"]
     assert [(e["time_s"], e["label"]) for e in api_events] == direct.events

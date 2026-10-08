@@ -72,6 +72,7 @@ def simulate_load_step(request: LoadStepRequest) -> LoadStepResponse:
             rated_power_w=config.sst.rated_power_w,
             thermal_derate_start_c=config.protection.thermal_derate_start_c,
             thermal_trip_c=config.protection.thermal_trip_c,
+            capacitance_f=config.dc_bus.capacitance_f,
         ),
         events=[EventMarker(time_s=t, label=label) for t, label in result.events],
         timeseries=LoadStepTimeseries(

@@ -12,13 +12,30 @@ const BOX_W = 150;
 const BOX_H = 68;
 const GAP = 40;
 const Y = 10;
-const BOTTOM_MARGIN = 10;
+const MISMATCH_ROW_H = 20;
+const BOTTOM_MARGIN = 8;
 const XS = [16, 16 + BOX_W + GAP, 16 + 2 * (BOX_W + GAP), 16 + 3 * (BOX_W + GAP)];
 const VIEW_W = XS[3] + BOX_W + 16;
-const VIEW_H = Y + BOX_H + BOTTOM_MARGIN;
+const VIEW_H = Y + BOX_H + MISMATCH_ROW_H + BOTTOM_MARGIN;
 
 function clamp01(x: number): number {
   return Math.max(0, Math.min(1, x));
+}
+
+/**
+ * Describes the instantaneous power mismatch between SST delivery and
+ * AI demand -- pure arithmetic on two already-returned samples
+ * (deficitW = p_load_w - p_sst_w), not a new modeled quantity. Below
+ * ~0.5% of rated power is reported as "balanced" rather than a noisy
+ * near-zero figure. Always rendered in the accent (process) color,
+ * never a status color -- this is the system doing exactly what it
+ * should during a normal transient, not a fault.
+ */
+function describeMismatch(deficitW: number, ratedPowerW: number): string {
+  const threshold = ratedPowerW * 0.005;
+  if (Math.abs(deficitW) < threshold) return "balanced — P_sst ≈ P_load";
+  if (deficitW > 0) return `bus supplying ${(deficitW / 1e3).toFixed(1)} kW deficit`;
+  return `bus absorbing ${(-deficitW / 1e3).toFixed(1)} kW surplus`;
 }
 
 /**
@@ -49,6 +66,7 @@ export function PowerFlowSchematic({
   const rated = Math.max(ratedPowerW, 1);
   const sstFrac = clamp01(sample.p_sst_w / rated);
   const loadFrac = clamp01(sample.p_load_w / rated);
+  const deficitW = sample.p_load_w - sample.p_sst_w;
 
   const midY = Y + BOX_H / 2;
 
@@ -69,6 +87,18 @@ export function PowerFlowSchematic({
           <FlowSegment x1={XS[1] + BOX_W} x2={XS[2]} y={midY} frac={sstFrac} />
           <FlowSegment x1={XS[2] + BOX_W} x2={XS[3]} y={midY} frac={loadFrac} />
 
+          <text
+            x={VIEW_W / 2}
+            y={Y + BOX_H + 15}
+            textAnchor="middle"
+            fontFamily="var(--font-mono)"
+            fontSize={10.5}
+            fontWeight={600}
+            fill={SVG_COLOR.accent}
+          >
+            {describeMismatch(deficitW, rated)}
+          </text>
+
           <StageBox
             x={XS[0]}
             title="MV GRID"
@@ -81,8 +111,7 @@ export function PowerFlowSchematic({
             title="SST"
             color={STATUS_SVG_COLOR[sst.role]}
             statusLabel={sst.label}
-            primaryLine={`P ${(sample.p_sst_w / 1e3).toFixed(1)} kW`}
-            secondaryLine={`${sample.temperature_c.toFixed(1)}°C · ${(sample.derate_factor * 100).toFixed(0)}% derate`}
+            primaryLine={`Delivering ${(sample.p_sst_w / 1e3).toFixed(1)} kW`}
           />
           <StageBox
             x={XS[2]}
@@ -97,7 +126,7 @@ export function PowerFlowSchematic({
             title="AI COMPUTE LOAD"
             color={SVG_COLOR.accent}
             statusLabel="DEMAND"
-            primaryLine={`P ${(sample.p_load_w / 1e3).toFixed(1)} kW`}
+            primaryLine={`Drawing ${(sample.p_load_w / 1e3).toFixed(1)} kW`}
           />
         </svg>
       </div>

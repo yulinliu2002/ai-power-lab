@@ -16,6 +16,7 @@ export interface ScenarioThresholds {
   rated_power_w: number;
   thermal_derate_start_c: number;
   thermal_trip_c: number;
+  capacitance_f: number;
 }
 
 export interface EventMarker {
