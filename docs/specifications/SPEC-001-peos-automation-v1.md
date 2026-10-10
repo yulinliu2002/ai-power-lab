@@ -1,6 +1,6 @@
 # SPEC-001 — PEOS Automation V1
 
-Status: Draft  
+Status: Approved  
 Owner: Human Engineering Lead  
 Project: AI Power Lab / Personal Engineering Operating System
 
