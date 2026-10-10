@@ -32,6 +32,7 @@ against the isolated workspace at each verification point:
 from __future__ import annotations
 
 import json
+import os
 import re
 import shlex
 import sys
@@ -39,7 +40,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 
-from peos.sandbox import IsolatedWorkspace, SandboxUnavailableError, sandboxed_env, sandboxed_verification_command
+from peos.sandbox import (
+    CODEX_AUTH_HOME_ENV_VAR,
+    IsolatedWorkspace,
+    SandboxUnavailableError,
+    sandboxed_env,
+    sandboxed_verification_command,
+)
 from peos.verify import CommandResult, VerificationReport, run_command
 
 CommandRunner = Callable[..., CommandResult]
@@ -265,6 +272,8 @@ def execute_plan(
     sandbox_profile_dir: Path,
     command_runner: CommandRunner = run_command,
     sandbox_wrapper: SandboxWrapper = sandboxed_verification_command,
+    environ: dict | None = None,
+    extra_deny_read_paths: tuple[Path, ...] = (),
 ) -> VerificationReport:
     """Execute a previously frozen `plan` against `workspace.path`, with
     every command confined by the verification sandbox (Finding 1) and
@@ -278,8 +287,30 @@ def execute_plan(
     tests/test_peos_verification_plan.py) -- the real sandbox boundary
     itself is exercised for real, platform-gated, in
     tests/test_peos_sandbox.py.
+
+    SPEC-003 remediation Finding 2 (MAJOR): `environ` is the
+    orchestrator's own environment (defaulting to `os.environ`, exactly
+    like `sandboxed_env()`'s own `base_env` default) -- `sandboxed_env`
+    already strips `PEOS_CODEX_AUTH_HOME`/`CODEX_HOME`/every other
+    agent-auth variable from the environment this builds, so
+    verification never *inherits* either agent's credential or
+    configuration. `extra_deny_read_paths` additionally denies
+    verification *filesystem reads* of the resolved Codex authentication
+    directory (when `PEOS_CODEX_AUTH_HOME` is configured in `environ`),
+    closing the complementary gap: an environment variable can be
+    stripped, but the directory it would have pointed to is still a real
+    path on disk that untrusted verification code could otherwise open
+    directly. Neither the accepted-residual-risk carve-out for Codex's
+    own shell tool (SPEC-003 Known Limitations) nor anything else
+    widens this -- verification has no legitimate reason to read that
+    directory at all.
     """
-    env = sandboxed_env(workspace.home_dir)
+    environ = environ if environ is not None else os.environ
+    env = sandboxed_env(workspace.home_dir, base_env=environ)
+    codex_auth_home_value = environ.get(CODEX_AUTH_HOME_ENV_VAR)
+    deny_read_paths = tuple(extra_deny_read_paths) + (
+        (Path(codex_auth_home_value),) if codex_auth_home_value else ()
+    )
     results = []
     for step in plan.steps:
         step_cwd = workspace.path / step.cwd_relative
@@ -305,7 +336,10 @@ def execute_plan(
             continue
 
         try:
-            sandboxed_command = sandbox_wrapper(list(step.command), workspace, repo_root, sandbox_profile_dir)
+            sandboxed_command = sandbox_wrapper(
+                list(step.command), workspace, repo_root, sandbox_profile_dir,
+                extra_deny_read_paths=deny_read_paths,
+            )
         except SandboxUnavailableError as exc:
             results.append(_hard_failure(step, step_cwd, str(exc)))
             continue

@@ -28,10 +28,33 @@ than guessing and continuing. Enumerated Human Gates (SPEC-001 Section 7)
 proceeds past either state on its own, and an unexpected exception
 anywhere in this function is itself caught and converted to a FAILED
 outcome (Finding 11) rather than propagating as a traceback.
+
+SPEC-003 (PEOS Agent Authentication Bridge), implementing
+docs/decisions/0002: each agent's authentication precondition is checked
+immediately before that agent's *first* invocation of a run, not both
+checked together up front -- Claude's check (and the workspace creation
+it gates) happens before Phase 2; Codex's check happens inside
+`_codex_phase` on its first call only (guarded by `_codex_env`/
+`_codex_preflight_checked`), so a run whose Claude credential is fine but
+whose Codex credential is missing still completes the Claude
+implementation phase before failing closed at the Codex phase, and
+Codex's remediation re-review does not redundantly repeat a check that
+already passed earlier in the same run. Claude and Codex each get their
+own subprocess environment (`claude_env`/`codex_env`), both built from
+the same credential-free common base (`peos.sandbox.sandboxed_env`), so
+neither agent's environment ever carries the other's credential.
+Local verification (Finding 2 remediation) is built from that identical
+base too -- via `_default_verifier`'s `environ` parameter, bound to this
+run's resolved `environ` below -- so verification never inherits either
+agent's credential/configuration, and the resolved Codex authentication
+directory is additionally denied at the filesystem level by the
+verification sandbox (see `peos/sandbox.py`).
 """
 
 from __future__ import annotations
 
+import functools
+import os
 import sys
 import uuid
 from dataclasses import dataclass, field
@@ -54,9 +77,15 @@ from peos.prompts import (
     build_review_prompt,
 )
 from peos.sandbox import (
+    CLAUDE_AUTH_ENV_VAR,
+    CODEX_AUTH_HOME_ENV_VAR,
     IsolatedWorkspace,
     ReconciliationResult,
     WorkspaceError,
+    check_claude_auth_preflight,
+    check_codex_auth_preflight,
+    claude_sandboxed_env,
+    codex_sandboxed_env,
     create_isolated_workspace,
     ensure_spec_in_workspace,
     reconcile_workspace_to_repo,
@@ -100,8 +129,25 @@ class RunResult:
     reconciliation_error: str | None = None
 
 
-def _default_verifier(workspace: IsolatedWorkspace, repo_root: Path, plan: VerificationPlan) -> VerificationReport:
-    return execute_plan(plan, workspace, repo_root, sandbox_profile_dir=workspace.path.parent / "sandbox-profiles")
+def _default_verifier(
+    workspace: IsolatedWorkspace, repo_root: Path, plan: VerificationPlan, environ: dict | None = None,
+) -> VerificationReport:
+    """SPEC-003 remediation Finding 2 (MAJOR): `environ` -- the same
+    orchestrator environment `_run_workflow` resolves its own agent
+    preconditions from, not a second independent read of `os.environ` --
+    is threaded through to `execute_plan` so verification's subprocess
+    environment is built from (and stripped via) that same environment,
+    and so the resolved `PEOS_CODEX_AUTH_HOME` directory (if configured)
+    is added to the verification sandbox's filesystem read-deny list.
+    Defaults to `os.environ` (via `execute_plan`'s own default) only
+    when no `environ` is supplied, matching every other default in this
+    module.
+    """
+    return execute_plan(
+        plan, workspace, repo_root,
+        sandbox_profile_dir=workspace.path.parent / "sandbox-profiles",
+        environ=environ,
+    )
 
 
 # Human Gate IDs, matching SPEC-001 Section 7 verbatim.
@@ -136,11 +182,12 @@ def run_workflow(
     codex_runner: CodexRunner = run_codex_review,
     verifier: Verifier = _default_verifier,
     workspace_factory: WorkspaceFactory = create_isolated_workspace,
+    environ: dict | None = None,
 ) -> RunResult:
     try:
         return _run_workflow(
             task, repo_root, explicit_spec, specs_dir, log,
-            spec_resolver, claude_runner, codex_runner, verifier, workspace_factory,
+            spec_resolver, claude_runner, codex_runner, verifier, workspace_factory, environ,
         )
     except Exception as exc:  # noqa: BLE001 -- SPEC-001 Finding 11: never propagate a traceback
         log(f"[PEOS ERROR] Unhandled exception: {exc}")
@@ -162,7 +209,27 @@ def _run_workflow(
     codex_runner: CodexRunner,
     verifier: Verifier,
     workspace_factory: WorkspaceFactory,
+    environ: dict | None = None,
 ) -> RunResult:
+    # SPEC-003: the orchestrator's own ambient environment is where both
+    # agents' authentication preconditions are checked and where their
+    # credential material is read from -- defaulting to `os.environ`
+    # exactly like `sandboxed_env()` already defaults its own `base_env`,
+    # and injectable here for the same reason every other external effect
+    # in this function is injectable (tests never touch process-wide
+    # `os.environ`).
+    environ = environ if environ is not None else os.environ
+    # SPEC-003 remediation Finding 2: when the caller did not override
+    # `verifier` (the real, default path every actual `peos` run takes),
+    # bind this run's already-resolved `environ` into it so
+    # `_default_verifier` builds verification's environment from the
+    # same source `environ` everything else in this function uses --
+    # never a second, independent `os.environ` read that could diverge
+    # from an injected test `environ`. Callers that inject their own
+    # `verifier` (every routing test in tests/test_peos_workflow.py) are
+    # unaffected: this only ever substitutes the real default.
+    if verifier is _default_verifier:
+        verifier = functools.partial(_default_verifier, environ=environ)
     specs_dir = specs_dir or (repo_root / "docs" / "specifications")
     phases: list[PhaseLog] = []
     claude_runs: list[ClaudeRunResult] = []
@@ -173,6 +240,9 @@ def _run_workflow(
     baseline_hashes: dict[str, str] = {}
     vplan: VerificationPlan | None = None
     current_spec: object | None = None
+    base_env: dict | None = None
+    codex_env: dict | None = None
+    codex_preflight_checked = False
 
     def stage(name: str) -> None:
         log(f"[PEOS] {name}")
@@ -299,12 +369,28 @@ def _run_workflow(
         # like the default pytest/npm steps.
         vplan = resolve_verification_plan(repo_root, resolution.spec.path)
 
+        # SPEC-003 Requirement 3a/3e: Claude's authentication precondition
+        # is checked immediately before Claude's first invocation of this
+        # run, and before `create_isolated_workspace` runs -- workspace
+        # creation is unrelated to credentials and not worth its cost
+        # ahead of a precondition that is already known to be checkable.
+        stage("Claude authentication preflight")
+        claude_auth = check_claude_auth_preflight(environ)
+        if not claude_auth.ok:
+            return fail(f"Claude Code authentication preflight failed: {claude_auth.reason}")
+
         try:
             workspace = workspace_factory(repo_root, uuid.uuid4().hex[:12])
         except WorkspaceError as exc:
             return fail(f"Could not create isolated implementation workspace: {exc}")
         log(f"[PEOS] Isolated workspace: {workspace.path}")
-        env = sandboxed_env(workspace.home_dir)
+        # `base_env` carries neither agent's credential (peos.sandbox.
+        # sandboxed_env strips both); `claude_env` adds back only
+        # Claude's, and `_codex_phase` below builds `codex_env` from this
+        # same `base_env`, never from `claude_env` -- so Codex's
+        # subprocess environment can never carry Claude's token.
+        base_env = sandboxed_env(workspace.home_dir, base_env=environ)
+        claude_env = claude_sandboxed_env(base_env, environ[CLAUDE_AUTH_ENV_VAR])
 
         # Finding 6: the governing spec must be readable from *inside* the
         # workspace at a relative path, since Claude/Codex run with
@@ -337,10 +423,25 @@ def _run_workflow(
             (full diff text + untracked-file content hashes, not just names/
             status -- see peos/gitutil.py), so it also catches a mutation to a
             file that was already dirty/untracked going in.
+
+            SPEC-003 Requirement 3b/3c: Codex's authentication precondition
+            is checked once, on this function's first call in the run (the
+            independent-review phase) -- not before Phase 2, and not
+            redundantly repeated on the re-review call later in the same
+            run once it has already passed.
             """
+            nonlocal codex_env, codex_preflight_checked
+            if not codex_preflight_checked:
+                stage("Codex authentication preflight")
+                codex_auth = check_codex_auth_preflight(environ)
+                if not codex_auth.ok:
+                    return None, fail(f"Codex authentication preflight failed: {codex_auth.reason}")
+                codex_env = codex_sandboxed_env(base_env, environ[CODEX_AUTH_HOME_ENV_VAR])
+                codex_preflight_checked = True
+
             pre_repo = repo_state_fingerprint(repo_root)
             pre_workspace = repo_state_fingerprint(workspace.path)
-            result = codex_runner(prompt, workspace.path, env=env)
+            result = codex_runner(prompt, workspace.path, env=codex_env)
             if repo_state_fingerprint(repo_root) != pre_repo:
                 return None, fail(
                     f"Codex's {name} appears to have changed the authoritative repository "
@@ -357,7 +458,7 @@ def _run_workflow(
 
         # Phase 2 -- Implementation
         stage("Claude implementation")
-        impl_result = claude_runner(build_implementation_prompt(task, spec_path), workspace.path, env=env)
+        impl_result = claude_runner(build_implementation_prompt(task, spec_path), workspace.path, env=claude_env)
         claude_runs.append(impl_result)
         if impl_result.status == "HUMAN_GATE":
             gate_id = _CLAUDE_GATE_CATEGORY_TO_ID.get(impl_result.gate_category or "", GATE_HUMAN_OWNED_FINDING)
@@ -410,7 +511,7 @@ def _run_workflow(
         remediation_performed = True
         stage("Claude remediation")
         remediation_result = claude_runner(
-            build_remediation_prompt(task, spec_path, review.findings), workspace.path, env=env,
+            build_remediation_prompt(task, spec_path, review.findings), workspace.path, env=claude_env,
         )
         claude_runs.append(remediation_result)
         if remediation_result.status == "HUMAN_GATE":

@@ -15,16 +15,16 @@ import json
 import sys
 from pathlib import Path
 
-from peos.sandbox import IsolatedWorkspace, SandboxUnavailableError
+from peos.sandbox import CLAUDE_AUTH_ENV_VAR, CODEX_AUTH_HOME_ENV_VAR, IsolatedWorkspace, SandboxUnavailableError
 from peos.verification_plan import execute_plan, resolve_verification_plan
 from peos.verify import CommandResult
 
 
-def _identity_sandbox_wrapper(command, workspace, repo_root, sandbox_profile_dir):
+def _identity_sandbox_wrapper(command, workspace, repo_root, sandbox_profile_dir, **kwargs):
     return list(command)
 
 
-def _unavailable_sandbox_wrapper(command, workspace, repo_root, sandbox_profile_dir):
+def _unavailable_sandbox_wrapper(command, workspace, repo_root, sandbox_profile_dir, **kwargs):
     raise SandboxUnavailableError("sandbox not available in this test")
 
 
@@ -90,6 +90,88 @@ def test_execute_plan_passes_sandboxed_env_to_command_runner(tmp_path):
     )
     assert seen_envs[0] is not None
     assert seen_envs[0]["HOME"] == str(workspace.home_dir)
+
+
+def test_execute_plan_strips_agent_auth_configuration_from_verification_env(tmp_path):
+    """Focused Codex review remediation, Finding 2 (MAJOR): local
+    verification must not inherit either agent's credential/config,
+    including PEOS_CODEX_AUTH_HOME itself -- proven here by seeding the
+    injected `environ` with both and asserting neither key survives
+    into the environment the command runner actually sees.
+    """
+    (tmp_path / "tests").mkdir()
+    plan = resolve_verification_plan(tmp_path)
+    workspace = _workspace_for(tmp_path)
+    seen_envs = []
+
+    def runner(name, command, cwd, env=None):
+        seen_envs.append(env)
+        return _ok(name, command, cwd)
+
+    fake_environ = {
+        "PATH": "/usr/bin",
+        CLAUDE_AUTH_ENV_VAR: "fake-claude-token",
+        CODEX_AUTH_HOME_ENV_VAR: str(tmp_path / "codex-auth-home"),
+    }
+    execute_plan(
+        plan, workspace, tmp_path, tmp_path / "sandbox-profiles",
+        command_runner=runner, sandbox_wrapper=_identity_sandbox_wrapper,
+        environ=fake_environ,
+    )
+    assert seen_envs[0] is not None
+    assert CLAUDE_AUTH_ENV_VAR not in seen_envs[0]
+    assert CODEX_AUTH_HOME_ENV_VAR not in seen_envs[0]
+    assert "CODEX_HOME" not in seen_envs[0]
+
+
+def test_execute_plan_adds_the_resolved_codex_auth_home_to_the_sandbox_deny_read_list(tmp_path):
+    """Finding 2 (continued): the resolved PEOS_CODEX_AUTH_HOME
+    directory, when configured in `environ`, must be forwarded to the
+    sandbox wrapper as an `extra_deny_read_paths` entry -- this is the
+    routing-level proof that execute_plan actually wires the path
+    through; the real OS-level denial is exercised separately, against
+    the real sandbox, in tests/test_peos_sandbox.py.
+    """
+    (tmp_path / "tests").mkdir()
+    plan = resolve_verification_plan(tmp_path)
+    workspace = _workspace_for(tmp_path)
+    codex_auth_home = tmp_path / "codex-auth-home"
+    seen_kwargs = []
+
+    def capturing_sandbox_wrapper(command, workspace, repo_root, sandbox_profile_dir, **kwargs):
+        seen_kwargs.append(kwargs)
+        return list(command)
+
+    execute_plan(
+        plan, workspace, tmp_path, tmp_path / "sandbox-profiles",
+        command_runner=lambda name, command, cwd, env=None: _ok(name, command, cwd),
+        sandbox_wrapper=capturing_sandbox_wrapper,
+        environ={"PATH": "/usr/bin", CODEX_AUTH_HOME_ENV_VAR: str(codex_auth_home)},
+    )
+    assert len(seen_kwargs) == 1
+    assert Path(codex_auth_home) in seen_kwargs[0]["extra_deny_read_paths"]
+
+
+def test_execute_plan_adds_no_codex_deny_path_when_not_configured(tmp_path):
+    """Companion case: when PEOS_CODEX_AUTH_HOME is not set at all,
+    execute_plan must not fabricate a deny-read entry for it.
+    """
+    (tmp_path / "tests").mkdir()
+    plan = resolve_verification_plan(tmp_path)
+    workspace = _workspace_for(tmp_path)
+    seen_kwargs = []
+
+    def capturing_sandbox_wrapper(command, workspace, repo_root, sandbox_profile_dir, **kwargs):
+        seen_kwargs.append(kwargs)
+        return list(command)
+
+    execute_plan(
+        plan, workspace, tmp_path, tmp_path / "sandbox-profiles",
+        command_runner=lambda name, command, cwd, env=None: _ok(name, command, cwd),
+        sandbox_wrapper=capturing_sandbox_wrapper,
+        environ={"PATH": "/usr/bin"},
+    )
+    assert seen_kwargs[0]["extra_deny_read_paths"] == ()
 
 
 def test_plan_cannot_be_silently_weakened_after_a_required_input_disappears(tmp_path):

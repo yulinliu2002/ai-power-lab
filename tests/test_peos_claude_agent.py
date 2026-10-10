@@ -305,6 +305,133 @@ def test_run_claude_missing_required_keys_is_rejected_not_treated_as_null():
     assert "gate_reason" in result.error
 
 
+def test_run_claude_nonzero_exit_prefers_structured_result_message():
+    """SPEC-003 AC-8a: on a non-zero exit, when `stdout` is valid JSON
+    with `is_error`/`result`, the CLI's own structured error message is
+    used -- not a raw-text tail -- and is classified `authentication`.
+    This is the exact incident this spec fixes: a bare "claude exited
+    with status 1" previously hid the actionable "Not logged in" text.
+    """
+    payload = json.dumps({"is_error": True, "result": "Not logged in · Please run /login"})
+
+    def runner(command, **kwargs):
+        return _completed(1, stdout=payload, stderr="")
+
+    result = run_claude("task", Path("."), runner=runner)
+    assert not result.ok
+    assert "[authentication]" in result.error
+    assert "Not logged in" in result.error
+
+
+def test_run_claude_nonzero_exit_falls_back_to_raw_tail_when_stdout_is_not_json():
+    """SPEC-003 AC-8b: when `stdout` is not parseable JSON, the bounded
+    raw-text fallback is still classified correctly from its content.
+    """
+    def runner(command, **kwargs):
+        return _completed(1, stdout="", stderr="Not logged in · Please run /login")
+
+    result = run_claude("task", Path("."), runner=runner)
+    assert not result.ok
+    assert "[authentication]" in result.error
+    assert "Not logged in" in result.error
+
+
+def test_run_claude_nonzero_exit_redacts_a_secret_shaped_string():
+    """SPEC-003 AC-9: a token-shaped substring in captured output must
+    not appear verbatim in `.error`.
+    """
+    secret = "sk-liveAbCdEfGhIjKlMnOpQrSt"
+
+    def runner(command, **kwargs):
+        return _completed(1, stdout="", stderr=f"request failed, key={secret} was rejected")
+
+    result = run_claude("task", Path("."), runner=runner)
+    assert not result.ok
+    assert secret not in result.error
+    assert "[REDACTED]" in result.error
+
+
+def test_run_claude_zero_exit_structured_is_error_retains_authentication_classification():
+    """Focused Codex review remediation, Finding 6 (MINOR): a zero-
+    returncode response whose structured payload is `is_error: true`
+    with an actionable `result` message (e.g. the literal "Not logged
+    in · Please run /login" from the dogfood incident SPEC-003 fixes)
+    must fail closed with `authentication` classification and that
+    phrase retained -- not collapse to the generic, unclassified
+    "[schema] Claude Code reported is_error=true" this previously always
+    produced regardless of what the CLI actually said.
+    """
+    payload = json.dumps({"is_error": True, "result": "Not logged in · Please run /login"})
+
+    def runner(command, **kwargs):
+        return _completed(0, stdout=payload)
+
+    result = run_claude("task", Path("."), runner=runner)
+    assert not result.ok
+    assert "[authentication]" in result.error
+    assert "Not logged in" in result.error
+
+
+def test_run_claude_zero_exit_structured_is_error_without_result_field_falls_back_closed():
+    """Companion case: is_error=true with no usable `result` string must
+    still fail closed (never ok=True), falling back to the raw-text
+    path rather than crashing or guessing a success.
+    """
+    payload = json.dumps({"is_error": True})
+
+    def runner(command, **kwargs):
+        return _completed(0, stdout=payload)
+
+    result = run_claude("task", Path("."), runner=runner)
+    assert not result.ok
+    assert result.error
+
+
+def test_run_claude_completed_summary_is_redacted_of_a_secret_shaped_string():
+    """Focused Codex review remediation, Finding 3 (MAJOR): `summary` is
+    agent-controlled free text that flows straight into workflow.py's
+    logs and report.py's rendered output -- unlike `.error`, it
+    previously never passed through the shared redaction mechanism at
+    all.
+    """
+    secret = "sk-liveAbCdEfGhIjKlMnOpQrSt"
+    payload = _wrap({
+        "status": "COMPLETED", "gate_category": None, "gate_reason": None,
+        "summary": f"Implemented the thing using key={secret} for testing",
+    })
+
+    def runner(command, **kwargs):
+        return _completed(0, stdout=payload)
+
+    result = run_claude("task", Path("."), runner=runner)
+    assert result.ok
+    assert secret not in result.summary
+    assert "[REDACTED]" in result.summary
+
+
+def test_run_claude_human_gate_reason_is_redacted_of_a_secret_shaped_string():
+    """Finding 3 (continued): same requirement for `gate_reason`, the
+    exact string peos/workflow.py embeds verbatim into its human-gate
+    log message and report.py then renders under "## Human gate".
+    """
+    secret = "sk-liveAbCdEfGhIjKlMnOpQrSt"
+    payload = _wrap({
+        "status": "HUMAN_GATE", "gate_category": "architecture",
+        "gate_reason": f"found hardcoded credential key={secret} in config, needs a human decision",
+        "summary": "stopped",
+    })
+
+    def runner(command, **kwargs):
+        return _completed(0, stdout=payload)
+
+    result = run_claude("task", Path("."), runner=runner)
+    assert not result.ok
+    assert result.human_gate
+    assert secret not in result.gate_reason
+    assert "[REDACTED]" in result.gate_reason
+    assert secret not in (result.error or "")
+
+
 def test_run_claude_missing_summary_key_is_rejected():
     payload = json.dumps({
         "is_error": False,
