@@ -123,6 +123,47 @@ their content changed inside the workspace; that is reported as a
 blocked mutation instead (see peos/preflight.py), because an
 implementation agent must not be able to silently rewrite the rules it
 is being held to.
+
+SPEC-003 (PEOS Agent Authentication Bridge), implementing
+docs/decisions/0002: redirecting `HOME` to a disposable directory, as
+`sandboxed_env()` always has, also deletes both CLIs' own login state --
+Claude's OAuth session (resolved from `~/.claude.json`/the macOS
+Keychain) and Codex's (`$CODEX_HOME/auth.json`, defaulting to
+`$HOME/.codex`) -- which is what produced the "Not logged in" dogfood
+failure this spec fixes. Decision 0002's governing rule is that
+authentication is an *explicit, named exception* to that isolation, not
+a side effect of what happens not to be stripped, and that neither
+agent's subprocess environment may ever carry the *other* agent's
+credential. `sandboxed_env()` therefore now also strips
+`CLAUDE_AUTH_ENV_VAR`, `CODEX_AUTH_HOME_ENV_VAR`, and every entry of
+`AMBIENT_AGENT_AUTH_DENYLIST` (`CODEX_HOME`, `ANTHROPIC_API_KEY`,
+`ANTHROPIC_AUTH_TOKEN`, `OPENAI_API_KEY`) from its common, shared output
+(on top of the pre-existing `CREDENTIAL_ENV_DENYLIST` stripping) --
+making "neither agent sees a credential it doesn't need, and neither
+sees a competing *ambient* auth variable it never asked for either"
+true by construction rather than by every caller remembering not to
+pass the wrong one through (focused Codex review remediation, Finding
+1: an unstripped ambient `CODEX_HOME`/`ANTHROPIC_API_KEY`/etc. in the
+orchestrator's own shell previously survived into whichever agent's
+environment happened to be built from this common base). `claude_
+sandboxed_env()` and `codex_sandboxed_env()` each take that common,
+secret-free base and add back exactly one agent's own material: Claude's
+token re-added as an environment variable, or Codex's `CODEX_HOME`
+pointed at a dedicated, human-provisioned directory holding only
+`auth.json` -- never the real `HOME`/`~/.codex`. `check_claude_
+auth_preflight()`/`check_codex_auth_preflight()` are presence/existence
+checks only (never read secret contents) that `peos/workflow.py` calls
+immediately before each agent's first invocation of a run, failing
+closed before any subprocess launches if the configured bridge is
+missing or unusable -- never by falling back to a broader credential
+source. This same common base, with no bridge ever added back, is also
+what local verification's environment is built from directly (Finding 2
+remediation: verification must never inherit either agent's credential
+or configuration, including `PEOS_CODEX_AUTH_HOME` itself) --
+`build_verification_sandbox_profile()` additionally denies verification
+*filesystem reads* of the resolved Codex authentication directory, so
+neither the environment variable nor a direct path read can disclose
+it; see that function's docstring.
 """
 
 from __future__ import annotations
@@ -151,6 +192,79 @@ CREDENTIAL_ENV_DENYLIST = (
     "GIT_SSH",
     "GIT_CREDENTIAL_HELPER",
     "NETRC",
+)
+
+# SPEC-003 Requirement 1a: the one, named, auditable exception to HOME
+# isolation for Claude's officially supported non-interactive auth
+# mechanism (claude setup-token / CLAUDE_CODE_OAUTH_TOKEN -- confirmed
+# against Anthropic's own docs, authenticates against the existing
+# Claude subscription, not pay-per-token API billing). Named here, not
+# merely absent from CREDENTIAL_ENV_DENYLIST, so the exception is
+# visible in code rather than an accident of what the denylist omits.
+CLAUDE_AUTH_ENV_VAR = "CLAUDE_CODE_OAUTH_TOKEN"
+
+# SPEC-003 Requirement 2a: the one, named configuration source for
+# Codex's dedicated authentication directory. Set by the Human
+# Engineering Lead outside PEOS; PEOS only ever reads it, never creates,
+# populates, or defaults it to the real `$HOME/.codex`.
+CODEX_AUTH_HOME_ENV_VAR = "PEOS_CODEX_AUTH_HOME"
+
+# Focused Codex review remediation (Finding 1, MAJOR): named, auditable
+# list of *competing/ambient* agent-authentication environment variables
+# that `sandboxed_env()`'s common base must also strip, on top of
+# `CREDENTIAL_ENV_DENYLIST` and `CLAUDE_AUTH_ENV_VAR`. These are a
+# distinct class from the Git/SSH push-credential denylist above: each
+# one is itself a *different, unapproved* way either CLI could resolve
+# authentication, and if the orchestrator's own ambient shell happens to
+# have one set (e.g. a developer's personal `CODEX_HOME` from using the
+# `codex` CLI outside PEOS, or a stray `ANTHROPIC_API_KEY`/
+# `ANTHROPIC_AUTH_TOKEN`/`OPENAI_API_KEY`), neither Claude's nor Codex's
+# subprocess environment must inherit it:
+#   - `CODEX_HOME`: Codex's own real auth-resolution variable. Must
+#     never reach Claude (which has no use for it) and must never reach
+#     Codex *ambiently* either -- Codex only ever gets a `CODEX_HOME`
+#     that `codex_sandboxed_env()` sets explicitly, from the validated
+#     `PEOS_CODEX_AUTH_HOME`, never from whatever happened to already be
+#     in the orchestrator's shell.
+#   - `ANTHROPIC_API_KEY` / `ANTHROPIC_AUTH_TOKEN`: both outrank
+#     `CLAUDE_CODE_OAUTH_TOKEN` in Claude Code's own documented
+#     precedence order (Requirement 1b); letting either survive
+#     ambiently would silently change which credential Claude actually
+#     authenticates with.
+#   - `OPENAI_API_KEY`: not a credential kind this spec adopts for Codex
+#     at all (Out of Scope: "Migrating Codex to an OpenAI API key ...
+#     explicitly deferred") -- an ambient one must not silently enable a
+#     different Codex auth mode than the one this bridge is designed
+#     around.
+AMBIENT_AGENT_AUTH_DENYLIST = (
+    "CODEX_HOME",
+    "ANTHROPIC_API_KEY",
+    "ANTHROPIC_AUTH_TOKEN",
+    "OPENAI_API_KEY",
+)
+
+# The one file PEOS requires to exist under PEOS_CODEX_AUTH_HOME --
+# confirmed against OpenAI's own Codex CLI docs: `$CODEX_HOME/auth.json`
+# is where Codex's credential lives under the `file` credentials store.
+CODEX_AUTH_FILENAME = "auth.json"
+
+assert CLAUDE_AUTH_ENV_VAR not in CREDENTIAL_ENV_DENYLIST, (
+    "CLAUDE_AUTH_ENV_VAR cannot also be a CREDENTIAL_ENV_DENYLIST entry -- "
+    "that would make the explicit auth exception and the credential "
+    "stripping rule contradict each other."
+)
+
+assert CLAUDE_AUTH_ENV_VAR not in AMBIENT_AGENT_AUTH_DENYLIST, (
+    "CLAUDE_AUTH_ENV_VAR cannot also be an AMBIENT_AGENT_AUTH_DENYLIST "
+    "entry -- it is re-added explicitly for Claude by claude_sandboxed_env(), "
+    "so stripping it from the common base is correct, but it must not also "
+    "be in the *ambient-only* denylist, which exists for variables no "
+    "bridge ever re-adds to the common base."
+)
+assert "CODEX_HOME" not in CREDENTIAL_ENV_DENYLIST, (
+    "CODEX_HOME belongs in AMBIENT_AGENT_AUTH_DENYLIST (re-added explicitly "
+    "by codex_sandboxed_env()), not CREDENTIAL_ENV_DENYLIST (never re-added "
+    "by anything)."
 )
 
 GOVERNANCE_ARTIFACTS = ("CLAUDE.md", "AGENTS.md", "ENGINEERING.md")
@@ -196,14 +310,34 @@ class ReconciliationResult:
 
 
 def sandboxed_env(home_dir: Path, base_env: dict | None = None) -> dict:
-    """Build the subprocess environment used for every Claude/Codex
-    invocation against an isolated workspace: the real process
-    environment, minus `CREDENTIAL_ENV_DENYLIST`, with HOME redirected
-    to an empty directory and Git told never to prompt or fall back to
-    global/system config.
+    """Build the *common* subprocess environment shared by every Claude/
+    Codex invocation (and local verification) against an isolated
+    workspace: the real process environment, minus
+    `CREDENTIAL_ENV_DENYLIST`, with HOME redirected to an empty
+    directory and Git told never to prompt or fall back to global/system
+    config.
+
+    SPEC-003: this common base also strips `CLAUDE_AUTH_ENV_VAR`,
+    `CODEX_AUTH_HOME_ENV_VAR` (the `PEOS_CODEX_AUTH_HOME` *configuration*
+    variable itself, not just the `CODEX_HOME` it resolves to), and
+    every entry of `AMBIENT_AGENT_AUTH_DENYLIST` -- it deliberately
+    carries *no* agent authentication material and *no* ambient,
+    competing agent-auth configuration at all (Finding 1/Finding 2
+    remediation: this base is also what local verification's
+    environment is built from, directly, with no bridge ever added
+    back -- see `peos/verification_plan.py::execute_plan` -- so anything
+    left un-stripped here would otherwise be readable by whatever code
+    verification happens to run). Callers add exactly one agent's own
+    credential back via `claude_sandboxed_env()`/`codex_sandboxed_env()`,
+    never by passing this function's output directly to a subprocess
+    that needs auth.
     """
     env = dict(base_env if base_env is not None else os.environ)
     for key in CREDENTIAL_ENV_DENYLIST:
+        env.pop(key, None)
+    env.pop(CLAUDE_AUTH_ENV_VAR, None)
+    env.pop(CODEX_AUTH_HOME_ENV_VAR, None)
+    for key in AMBIENT_AGENT_AUTH_DENYLIST:
         env.pop(key, None)
     env["HOME"] = str(home_dir)
     env["GIT_TERMINAL_PROMPT"] = "0"
@@ -211,6 +345,88 @@ def sandboxed_env(home_dir: Path, base_env: dict | None = None) -> dict:
     env["GIT_CONFIG_NOSYSTEM"] = "1"
     env["GIT_CONFIG_GLOBAL"] = "/dev/null"
     return env
+
+
+def claude_sandboxed_env(env: dict, claude_token: str) -> dict:
+    """Return a copy of the common `sandboxed_env()` base with
+    `CLAUDE_AUTH_ENV_VAR` explicitly re-added -- the one named,
+    auditable exception to HOME isolation for Claude (SPEC-003
+    Requirement 1a). Must only be used to build Claude's subprocess
+    environment; the result must never be handed to the Codex
+    subprocess (Codex has no use for this token, and giving it one
+    anyway would let Codex's shell read a credential that is not its
+    own to read).
+    """
+    claude_env = dict(env)
+    claude_env[CLAUDE_AUTH_ENV_VAR] = claude_token
+    return claude_env
+
+
+def codex_sandboxed_env(env: dict, codex_auth_home: str) -> dict:
+    """Return a copy of the common `sandboxed_env()` base with
+    `CODEX_HOME` pointed at `codex_auth_home` -- the dedicated, minimal,
+    human-provisioned directory holding only `auth.json` (SPEC-003
+    Requirement 2b). Never the real `HOME`/`~/.codex`, and never
+    carrying Claude's token (the base this copies has none). Must only
+    be used to build Codex's subprocess environment.
+    """
+    codex_env = dict(env)
+    codex_env["CODEX_HOME"] = codex_auth_home
+    return codex_env
+
+
+@dataclass(frozen=True)
+class AuthPreflightResult:
+    ok: bool
+    reason: str | None = None
+
+
+def check_claude_auth_preflight(environ: dict) -> AuthPreflightResult:
+    """Presence/non-emptiness check only (SPEC-003 Requirement 3a/3d) --
+    never reads, logs, or returns the token's value. Called by
+    `peos/workflow.py` immediately before Claude's first invocation of a
+    run, before any subprocess is launched.
+    """
+    token = environ.get(CLAUDE_AUTH_ENV_VAR, "")
+    if not token:
+        return AuthPreflightResult(
+            False,
+            f"{CLAUDE_AUTH_ENV_VAR} is not set (or is empty) in the orchestrator's "
+            "environment. PEOS fails closed rather than falling back to the real "
+            "HOME, the macOS Keychain, or any broader credential source.",
+        )
+    return AuthPreflightResult(True)
+
+
+def check_codex_auth_preflight(environ: dict) -> AuthPreflightResult:
+    """Presence/existence/non-emptiness checks only (SPEC-003 Requirement
+    3b/3d) -- never reads or parses `auth.json`'s contents. Called by
+    `peos/workflow.py` immediately before Codex's first invocation of a
+    run, before any subprocess is launched.
+    """
+    auth_home_value = environ.get(CODEX_AUTH_HOME_ENV_VAR, "")
+    if not auth_home_value:
+        return AuthPreflightResult(
+            False,
+            f"{CODEX_AUTH_HOME_ENV_VAR} is not set in the orchestrator's "
+            "environment. PEOS fails closed rather than defaulting to the real "
+            "$HOME/.codex.",
+        )
+    auth_home = Path(auth_home_value)
+    if not auth_home.is_dir():
+        return AuthPreflightResult(
+            False, f"Configured Codex authentication directory does not exist: {auth_home}",
+        )
+    auth_file = auth_home / CODEX_AUTH_FILENAME
+    try:
+        is_usable = auth_file.is_file() and auth_file.stat().st_size > 0
+    except OSError:
+        is_usable = False
+    if not is_usable:
+        return AuthPreflightResult(
+            False, f"Configured Codex authentication file is missing or empty: {auth_file}",
+        )
+    return AuthPreflightResult(True)
 
 
 def _run_git(args: list[str], cwd: Path, check: bool = True, input_text: str | None = None) -> subprocess.CompletedProcess:
@@ -436,7 +652,11 @@ def ensure_spec_in_workspace(workspace: IsolatedWorkspace, repo_root: Path, spec
     return dst.relative_to(workspace.path).as_posix()
 
 
-def build_verification_sandbox_profile(workspace: IsolatedWorkspace, repo_root: Path) -> str:
+def build_verification_sandbox_profile(
+    workspace: IsolatedWorkspace,
+    repo_root: Path,
+    extra_deny_read_paths: tuple[Path, ...] = (),
+) -> str:
     """Build the macOS Seatbelt (`sandbox-exec`) profile text that confines
     a deterministic verification command (SPEC-001 remediation Finding 1,
     BLOCKER -- see the module docstring for the full rationale and the live
@@ -448,6 +668,20 @@ def build_verification_sandbox_profile(workspace: IsolatedWorkspace, repo_root: 
     paths. Everything else keeps its default (`allow default`) so the
     orchestrator's own installed Python/Node toolchain -- which commonly
     lives under `repo_root` (e.g. a `.venv`) -- remains importable.
+
+    `extra_deny_read_paths` (SPEC-003 remediation Finding 2, MAJOR): the
+    resolved Codex authentication directory (`PEOS_CODEX_AUTH_HOME`),
+    when configured, is passed here by `peos/verification_plan.py` so
+    verification cannot read it even though it is not under the real
+    `$HOME` (`CREDENTIAL_PATH_DENYLIST` only covers well-known paths
+    under the real `$HOME`; the Codex auth directory is an independently
+    configured, arbitrary path). The accepted V1 residual risk in
+    `docs/specifications/SPEC-003-peos-agent-auth-bridge.md`'s Known
+    Limitations is scoped to Codex's *own* shell tool reading its *own*
+    scoped `auth.json` during a Codex invocation -- it does not extend
+    to local verification, which runs untrusted implementation-agent
+    code and must not be able to read a credential it has no business
+    touching at all.
     """
     real_home = Path(os.environ.get("HOME", str(Path.home())))
     credential_paths = [real_home / p for p in CREDENTIAL_PATH_DENYLIST]
@@ -474,6 +708,7 @@ def build_verification_sandbox_profile(workspace: IsolatedWorkspace, repo_root: 
         f'(subpath "{p}")' for p in (
             str((repo_root / ".git").resolve()) if (repo_root / ".git").exists() else str(repo_root / ".git"),
             *[str(p) for p in credential_paths],
+            *[str(Path(p).resolve()) if Path(p).exists() else str(p) for p in extra_deny_read_paths],
         )
     )
     # repo_root must never be writable, even when it happens to be located
@@ -520,11 +755,15 @@ def sandboxed_verification_command(
     workspace: IsolatedWorkspace,
     repo_root: Path,
     profile_dir: Path,
+    extra_deny_read_paths: tuple[Path, ...] = (),
 ) -> list[str]:
     """Wrap `command` with the verification sandbox (Finding 1). Fails
     closed with `SandboxUnavailableError` if `sandbox-exec` is not
     available on this platform -- callers must treat that as a reason to
     refuse running verification, never as a reason to run it unconfined.
+
+    `extra_deny_read_paths`: forwarded verbatim to
+    `build_verification_sandbox_profile` (SPEC-003 remediation Finding 2).
     """
     if sys.platform != "darwin" or shutil.which("sandbox-exec") is None:
         raise SandboxUnavailableError(
@@ -536,5 +775,8 @@ def sandboxed_verification_command(
         )
     profile_dir.mkdir(parents=True, exist_ok=True)
     profile_path = profile_dir / "verification.sb"
-    profile_path.write_text(build_verification_sandbox_profile(workspace, repo_root), encoding="utf-8")
+    profile_path.write_text(
+        build_verification_sandbox_profile(workspace, repo_root, extra_deny_read_paths=extra_deny_read_paths),
+        encoding="utf-8",
+    )
     return ["sandbox-exec", "-f", str(profile_path), *command]

@@ -38,6 +38,17 @@ enum value, and any internally contradictory APPROVE (a finding with
 acceptance-criteria item with `met=false`) as fail-closed parse errors --
 `ok=False, verdict=None` -- never a guessed APPROVE and never an
 uncaught `AttributeError`/`TypeError`.
+
+SPEC-003 (Failure Diagnostics, Requirement 4): every `error` string this
+module builds is routed through `peos.diagnostics.build_diagnostic` --
+bounded, redacted, and classified -- rather than built as an ad hoc
+f-string. On a non-zero exit, `_extract_codex_error_message` makes a
+best-effort attempt to parse `stdout` as JSON for a structured error
+field before falling back to a raw-text tail; unlike Claude's
+`--output-format json`, `codex exec`'s non-interactive stdout is not
+guaranteed to be JSON on a CLI-level failure, so this degrades to the
+raw-text fallback in practice -- which is itself the behavior SPEC-003
+Requirement 4a specifies for exactly this case.
 """
 
 from __future__ import annotations
@@ -48,6 +59,8 @@ import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
+
+from peos.diagnostics import build_diagnostic, sanitize_human_text
 
 Runner = Callable[..., subprocess.CompletedProcess]
 
@@ -164,6 +177,27 @@ def _fail(returncode: int, error: str, stdout: str = "", stderr: str = "") -> Co
     )
 
 
+def _extract_codex_error_message(stdout: str) -> str | None:
+    """Best-effort extraction of Codex's own structured error message
+    (SPEC-003 Requirement 4a). Returns None (never raises) if `stdout`
+    is not parseable JSON, is not an object, or has no non-empty
+    `error`/`message` string field -- callers fall back to a raw-text
+    tail of stdout/stderr in that case, which is the expected, common
+    case for Codex (see module docstring).
+    """
+    try:
+        data = json.loads(stdout)
+    except (json.JSONDecodeError, TypeError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    for field_name in ("error", "message"):
+        value = data.get(field_name)
+        if isinstance(value, str) and value.strip():
+            return value
+    return None
+
+
 _FINDING_KEYS = {"severity", "category", "description", "requires_human_decision"}
 _AC_KEYS = {"id", "met", "note"}
 
@@ -196,6 +230,12 @@ def _validate_finding(raw: object) -> Finding | None:
         return None
     if not isinstance(requires, bool):
         return None
+    # SPEC-003 remediation Finding 3 (MAJOR): `description` is
+    # agent-controlled free text that flows into workflow.py's gate
+    # reasons and report.py's rendered output -- sanitized once here,
+    # at validation time, via the same shared redaction mechanism
+    # `build_diagnostic` already uses for `.error`.
+    description = sanitize_human_text(description)
     return Finding(severity=severity, category=category, description=description, requires_human_decision=requires)
 
 
@@ -231,7 +271,21 @@ def _validate_acceptance_criteria(raw: object) -> tuple[dict, ...] | None:
         # through as a well-formed (if unhelpfully blank-noted) result.
         if note is not None and not isinstance(note, str):
             return None
-        result.append({"id": ac_id, "met": met, "note": note if isinstance(note, str) else ""})
+        # Finding 3 (continued): acceptance-criteria `note` is the same
+        # class of agent-controlled free text as `description` above.
+        #
+        # Focused closure review, Finding 3 (remaining disclosure path):
+        # unlike `description`/`note`/`summary`, `id` is not free text --
+        # it is also a machine-matched key (reconciliation/validation
+        # against the specification's own AC numbering), so it must stay
+        # exactly as Codex returned it for that purpose. `display_id`
+        # carries the sanitized form for human-facing rendering only
+        # (peos/report.py); `id` itself is never redacted or bounded.
+        result.append({
+            "id": ac_id, "met": met,
+            "note": sanitize_human_text(note) if isinstance(note, str) else "",
+            "display_id": sanitize_human_text(ac_id),
+        })
     return tuple(result)
 
 
@@ -244,15 +298,23 @@ def _validate_review_payload(data: object) -> CodexReviewResult:
     verdict=APPROVE) all yield `ok=False`.
     """
     if not isinstance(data, dict):
-        return _fail(0, f"Codex top-level output was not a JSON object (got {type(data).__name__})")
+        return _fail(0, build_diagnostic(
+            structured_message=f"Codex top-level output was not a JSON object (got {type(data).__name__})",
+            category_override="schema",
+        ))
 
     _TOP_LEVEL_KEYS = {"verdict", "summary", "findings", "acceptance_criteria"}
     unexpected_keys = set(data.keys()) - _TOP_LEVEL_KEYS
     if unexpected_keys:
         return _fail(
             0,
-            f"Codex top-level output contains unexpected field(s) not in the "
-            f"schema: {sorted(unexpected_keys)!r}",
+            build_diagnostic(
+                structured_message=(
+                    f"Codex top-level output contains unexpected field(s) not in the "
+                    f"schema: {sorted(unexpected_keys)!r}"
+                ),
+                category_override="schema",
+            ),
         )
 
     # Final acceptance review: all four top-level keys are schema-required
@@ -263,41 +325,69 @@ def _validate_review_payload(data: object) -> CodexReviewResult:
     if missing_keys:
         return _fail(
             0,
-            f"Codex top-level output is missing required field(s): {sorted(missing_keys)!r}",
+            build_diagnostic(
+                structured_message=f"Codex top-level output is missing required field(s): {sorted(missing_keys)!r}",
+                category_override="schema",
+            ),
         )
 
     verdict = data.get("verdict")
     if verdict not in ("APPROVE", "CHANGES_REQUIRED"):
-        return _fail(0, f"Codex returned an uninterpretable verdict: {verdict!r}")
+        return _fail(0, build_diagnostic(
+            structured_message=f"Codex returned an uninterpretable verdict: {verdict!r}",
+            category_override="schema",
+        ))
 
     summary = data.get("summary")
     if not isinstance(summary, str):
-        return _fail(0, "Codex output is missing a string `summary` field")
+        return _fail(0, build_diagnostic(
+            structured_message="Codex output is missing a string `summary` field",
+            category_override="schema",
+        ))
+    # Finding 3 (continued): `summary` is used verbatim by
+    # peos/workflow.py as a gate-reason fallback (`rereview.summary`)
+    # when no finding descriptions are present, and is agent-controlled
+    # free text like the fields above.
+    summary = sanitize_human_text(summary)
 
     raw_findings = data.get("findings")
     if not isinstance(raw_findings, list):
-        return _fail(0, f"Codex `findings` field must be a list, got {type(raw_findings).__name__}")
+        return _fail(0, build_diagnostic(
+            structured_message=f"Codex `findings` field must be a list, got {type(raw_findings).__name__}",
+            category_override="schema",
+        ))
 
     findings = []
     for raw in raw_findings:
         finding = _validate_finding(raw)
         if finding is None:
-            return _fail(0, f"Codex returned a malformed finding object: {raw!r}")
+            return _fail(0, build_diagnostic(
+                structured_message=f"Codex returned a malformed finding object: {raw!r}",
+                category_override="schema",
+            ))
         findings.append(finding)
     findings = tuple(findings)
 
     acceptance_criteria = _validate_acceptance_criteria(data.get("acceptance_criteria"))
     if acceptance_criteria is None:
-        return _fail(0, f"Codex `acceptance_criteria` field is malformed: {data.get('acceptance_criteria')!r}")
+        return _fail(0, build_diagnostic(
+            structured_message=f"Codex `acceptance_criteria` field is malformed: {data.get('acceptance_criteria')!r}",
+            category_override="schema",
+        ))
 
     if verdict == "APPROVE":
         contradicting = [f for f in findings if f.severity in _BLOCKING_SEVERITIES or f.requires_human_decision]
         if contradicting:
             return _fail(
                 0,
-                "Codex returned a contradictory APPROVE: verdict=APPROVE but "
-                f"{len(contradicting)} finding(s) are blocking/major or require a "
-                "human decision. Failing closed rather than trusting the verdict field alone.",
+                build_diagnostic(
+                    structured_message=(
+                        "Codex returned a contradictory APPROVE: verdict=APPROVE but "
+                        f"{len(contradicting)} finding(s) are blocking/major or require a "
+                        "human decision. Failing closed rather than trusting the verdict field alone."
+                    ),
+                    category_override="schema",
+                ),
             )
         # SPEC-001 remediation Finding 2 (second pass): an APPROVE accepted
         # alongside a null/empty acceptance_criteria was reproduced as a
@@ -309,19 +399,29 @@ def _validate_review_payload(data: object) -> CodexReviewResult:
         if data.get("acceptance_criteria") is None or not acceptance_criteria:
             return _fail(
                 0,
-                "Codex returned a contradictory APPROVE: verdict=APPROVE but no "
-                "acceptance_criteria evidence was provided. APPROVE requires a "
-                "non-empty acceptance-criteria assessment; failing closed rather "
-                "than trusting the verdict field alone.",
+                build_diagnostic(
+                    structured_message=(
+                        "Codex returned a contradictory APPROVE: verdict=APPROVE but no "
+                        "acceptance_criteria evidence was provided. APPROVE requires a "
+                        "non-empty acceptance-criteria assessment; failing closed rather "
+                        "than trusting the verdict field alone."
+                    ),
+                    category_override="schema",
+                ),
             )
         unmet = [ac for ac in acceptance_criteria if not ac["met"]]
         if unmet:
             ids = ", ".join(ac["id"] for ac in unmet)
             return _fail(
                 0,
-                f"Codex returned a contradictory APPROVE: verdict=APPROVE but "
-                f"acceptance criteria not met: {ids}. Failing closed rather than "
-                "trusting the verdict field alone.",
+                build_diagnostic(
+                    structured_message=(
+                        f"Codex returned a contradictory APPROVE: verdict=APPROVE but "
+                        f"acceptance criteria not met: {ids}. Failing closed rather than "
+                        "trusting the verdict field alone."
+                    ),
+                    category_override="schema",
+                ),
             )
 
     return CodexReviewResult(
@@ -358,19 +458,28 @@ def run_codex_review(
                 timeout=timeout, env=env, stdin=subprocess.DEVNULL,
             )
         except (subprocess.TimeoutExpired, FileNotFoundError, OSError) as exc:
-            return _fail(-1, f"Codex subprocess failed to run: {exc}")
+            return _fail(-1, build_diagnostic(
+                structured_message=f"Codex subprocess failed to run: {exc}",
+                category_override="cli_invocation",
+            ))
 
         if proc.returncode != 0:
-            return _fail(
-                proc.returncode, f"codex exec exited with status {proc.returncode}",
+            structured_message = _extract_codex_error_message(proc.stdout)
+            diagnostic = build_diagnostic(
                 stdout=proc.stdout, stderr=proc.stderr,
+                structured_message=structured_message, exit_code=proc.returncode,
             )
+            return _fail(proc.returncode, diagnostic, stdout=proc.stdout, stderr=proc.stderr)
 
         try:
             last_message = last_message_path.read_text(encoding="utf-8")
         except OSError as exc:
             return _fail(
-                proc.returncode, f"could not read Codex last-message file: {exc}",
+                proc.returncode,
+                build_diagnostic(
+                    structured_message=f"could not read Codex last-message file: {exc}",
+                    category_override="schema",
+                ),
                 stdout=proc.stdout, stderr=proc.stderr,
             )
 
@@ -378,7 +487,11 @@ def run_codex_review(
             data = json.loads(last_message)
         except json.JSONDecodeError as exc:
             return _fail(
-                proc.returncode, f"could not parse Codex JSON output: {exc}",
+                proc.returncode,
+                build_diagnostic(
+                    structured_message=f"could not parse Codex JSON output: {exc}",
+                    category_override="schema",
+                ),
                 stdout=proc.stdout, stderr=proc.stderr,
             )
 

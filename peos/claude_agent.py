@@ -41,6 +41,17 @@ immediately, never advance past.
 Residual trust boundary: see peos/sandbox.py's module docstring and
 peos/report.py's KNOWN_LIMITATIONS for what this does and does not
 guarantee.
+
+SPEC-003 (Failure Diagnostics, Requirement 4): every `error` string this
+module builds on a failure path is routed through
+`peos.diagnostics.build_diagnostic` -- bounded, redacted, and classified
+-- rather than built as an ad hoc f-string. The one failure branch where
+this matters most is a non-zero exit: `_extract_claude_result_message`
+attempts to parse `stdout` as JSON and use Claude's own `result` field
+(the CLI's structured statement of what went wrong, e.g. the literal
+"Not logged in - Please run /login" from the incident this spec fixes)
+before falling back to a raw-text tail -- "prefer structured/known error
+classification where available" (decision 0002).
 """
 
 from __future__ import annotations
@@ -50,6 +61,8 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
+
+from peos.diagnostics import build_diagnostic, sanitize_human_text
 
 ALLOWED_TOOLS = "Read Edit Write Grep Glob"
 
@@ -108,6 +121,25 @@ def _uninterpretable(error: str, returncode: int = -1, stdout: str = "", stderr:
     )
 
 
+def _extract_claude_result_message(stdout: str) -> str | None:
+    """Best-effort extraction of Claude's own structured error message
+    even though the process exited non-zero (SPEC-003 Requirement 4a):
+    `--output-format json` wraps a failure as `{"is_error": true,
+    "result": "<message>", ...}`, which this attempts to parse. Returns
+    None (never raises) if `stdout` is not parseable JSON, is not an
+    object, or has no non-empty `is_error`+`result` pair -- callers fall
+    back to a raw-text tail of stdout/stderr in that case.
+    """
+    try:
+        data = json.loads(stdout)
+    except (json.JSONDecodeError, TypeError):
+        return None
+    if not isinstance(data, dict) or not data.get("is_error"):
+        return None
+    result = data.get("result")
+    return result if isinstance(result, str) and result.strip() else None
+
+
 def build_claude_command(prompt: str) -> list[str]:
     return [
         "claude",
@@ -148,39 +180,71 @@ def run_claude(
             timeout=timeout, env=env, stdin=subprocess.DEVNULL,
         )
     except (subprocess.TimeoutExpired, FileNotFoundError, OSError) as exc:
-        return _uninterpretable(f"Claude Code subprocess failed to run: {exc}")
+        return _uninterpretable(
+            build_diagnostic(
+                structured_message=f"Claude Code subprocess failed to run: {exc}",
+                category_override="cli_invocation",
+            )
+        )
 
     if proc.returncode != 0:
+        structured_message = _extract_claude_result_message(proc.stdout)
+        diagnostic = build_diagnostic(
+            stdout=proc.stdout, stderr=proc.stderr,
+            structured_message=structured_message, exit_code=proc.returncode,
+        )
         return _uninterpretable(
-            f"claude exited with status {proc.returncode}",
-            returncode=proc.returncode, stdout=proc.stdout, stderr=proc.stderr,
+            diagnostic, returncode=proc.returncode, stdout=proc.stdout, stderr=proc.stderr,
         )
 
     try:
         data = json.loads(proc.stdout)
     except json.JSONDecodeError as exc:
         return _uninterpretable(
-            f"could not parse Claude Code JSON output: {exc}",
+            build_diagnostic(
+                structured_message=f"could not parse Claude Code JSON output: {exc}",
+                category_override="schema",
+            ),
             returncode=proc.returncode, stdout=proc.stdout, stderr=proc.stderr,
         )
 
     if not isinstance(data, dict):
         return _uninterpretable(
-            f"Claude Code top-level output was not a JSON object (got {type(data).__name__})",
+            build_diagnostic(
+                structured_message=f"Claude Code top-level output was not a JSON object (got {type(data).__name__})",
+                category_override="schema",
+            ),
             returncode=proc.returncode, stdout=proc.stdout, stderr=proc.stderr,
         )
 
     if bool(data.get("is_error", False)):
+        # SPEC-003 remediation Finding 6: a zero-returncode is_error=true
+        # response previously always collapsed to a generic
+        # "[schema] Claude Code reported is_error=true" diagnostic, which
+        # threw away the CLI's own actionable statement (e.g. the literal
+        # "Not logged in - Please run /login" from the incident this spec
+        # fixes) and its classification. Reuse the same structured-field
+        # extraction and unforced classification the non-zero-exit path
+        # already uses below, instead of a hardcoded category_override.
+        structured_message = _extract_claude_result_message(proc.stdout)
         return _uninterpretable(
-            "Claude Code reported is_error=true",
+            build_diagnostic(
+                stdout=proc.stdout, stderr=proc.stderr,
+                structured_message=structured_message,
+            ),
             returncode=proc.returncode, stdout=proc.stdout, stderr=proc.stderr,
         )
 
     structured = data.get("structured_output")
     if not isinstance(structured, dict):
         return _uninterpretable(
-            "Claude Code did not return a structured result (structured_output "
-            "missing or not a JSON object); cannot determine status",
+            build_diagnostic(
+                structured_message=(
+                    "Claude Code did not return a structured result (structured_output "
+                    "missing or not a JSON object); cannot determine status"
+                ),
+                category_override="schema",
+            ),
             returncode=proc.returncode, stdout=proc.stdout, stderr=proc.stderr,
         )
 
@@ -192,8 +256,13 @@ def run_claude(
     unexpected_keys = set(structured.keys()) - {"status", "gate_category", "gate_reason", "summary"}
     if unexpected_keys:
         return _uninterpretable(
-            f"Claude Code structured result contains unexpected field(s) not in "
-            f"the schema: {sorted(unexpected_keys)!r}",
+            build_diagnostic(
+                structured_message=(
+                    f"Claude Code structured result contains unexpected field(s) not in "
+                    f"the schema: {sorted(unexpected_keys)!r}"
+                ),
+                category_override="schema",
+            ),
             returncode=proc.returncode, stdout=proc.stdout, stderr=proc.stderr,
         )
 
@@ -207,24 +276,43 @@ def run_claude(
     missing_keys = set(CLAUDE_RESULT_SCHEMA["required"]) - set(structured.keys())
     if missing_keys:
         return _uninterpretable(
-            f"Claude Code structured result is missing required field(s): "
-            f"{sorted(missing_keys)!r}",
+            build_diagnostic(
+                structured_message=(
+                    f"Claude Code structured result is missing required field(s): "
+                    f"{sorted(missing_keys)!r}"
+                ),
+                category_override="schema",
+            ),
             returncode=proc.returncode, stdout=proc.stdout, stderr=proc.stderr,
         )
 
     status = structured.get("status")
     if status not in VALID_STATUSES:
         return _uninterpretable(
-            f"Claude Code returned an uninterpretable status: {status!r}",
+            build_diagnostic(
+                structured_message=f"Claude Code returned an uninterpretable status: {status!r}",
+                category_override="schema",
+            ),
             returncode=proc.returncode, stdout=proc.stdout, stderr=proc.stderr,
         )
 
     summary = structured.get("summary")
     if not isinstance(summary, str) or not summary.strip():
         return _uninterpretable(
-            "Claude Code structured result is missing a non-empty summary",
+            build_diagnostic(
+                structured_message="Claude Code structured result is missing a non-empty summary",
+                category_override="schema",
+            ),
             returncode=proc.returncode, stdout=proc.stdout, stderr=proc.stderr,
         )
+    # SPEC-003 remediation Finding 3 (MAJOR): `summary` is agent-controlled
+    # free text that flows straight into workflow.py's logs and
+    # report.py's rendered output -- unlike `.error`, it never passed
+    # through the shared redaction mechanism. Sanitized here, once, at
+    # the point the field is extracted and validated, so every
+    # downstream reader (including this function's own `error=` fallback
+    # below) gets the already-sanitized value automatically.
+    summary = sanitize_human_text(summary)
 
     raw_gate_category = structured.get("gate_category")
     raw_gate_reason = structured.get("gate_reason")
@@ -239,12 +327,23 @@ def run_claude(
     # coercion, or the coercion IS the silent-acceptance bug.
     if raw_gate_reason is not None and not isinstance(raw_gate_reason, str):
         return _uninterpretable(
-            f"Claude Code structured result has an invalid gate_reason type "
-            f"(expected string or null, got {type(raw_gate_reason).__name__}): "
-            f"{raw_gate_reason!r}",
+            build_diagnostic(
+                structured_message=(
+                    f"Claude Code structured result has an invalid gate_reason type "
+                    f"(expected string or null, got {type(raw_gate_reason).__name__}): "
+                    f"{raw_gate_reason!r}"
+                ),
+                category_override="schema",
+            ),
             returncode=proc.returncode, stdout=proc.stdout, stderr=proc.stderr,
         )
     gate_reason = raw_gate_reason if isinstance(raw_gate_reason, str) and raw_gate_reason.strip() else None
+    # Finding 3 (continued): same reasoning as `summary` above -- this is
+    # the exact string peos/workflow.py embeds verbatim into its gate()
+    # log/message (e.g. "Claude escalated during implementation [...]: "
+    # + gate_reason) and report.py then renders under "## Human gate".
+    if gate_reason is not None:
+        gate_reason = sanitize_human_text(gate_reason)
 
     # SPEC-001 remediation Finding 2 (second pass): status and the gate
     # fields must be internally consistent, not independently validated.
@@ -255,22 +354,35 @@ def run_claude(
     if status == "HUMAN_GATE":
         if raw_gate_category not in VALID_GATE_CATEGORIES:
             return _uninterpretable(
-                f"Claude Code returned status=HUMAN_GATE with a missing or invalid "
-                f"gate_category: {raw_gate_category!r}",
+                build_diagnostic(
+                    structured_message=(
+                        f"Claude Code returned status=HUMAN_GATE with a missing or invalid "
+                        f"gate_category: {raw_gate_category!r}"
+                    ),
+                    category_override="schema",
+                ),
                 returncode=proc.returncode, stdout=proc.stdout, stderr=proc.stderr,
             )
         if gate_reason is None:
             return _uninterpretable(
-                "Claude Code returned status=HUMAN_GATE without a non-empty gate_reason",
+                build_diagnostic(
+                    structured_message="Claude Code returned status=HUMAN_GATE without a non-empty gate_reason",
+                    category_override="schema",
+                ),
                 returncode=proc.returncode, stdout=proc.stdout, stderr=proc.stderr,
             )
         gate_category = raw_gate_category
     else:
         if raw_gate_category is not None or gate_reason is not None:
             return _uninterpretable(
-                f"Claude Code returned status={status!r} but also set a human-gate "
-                f"gate_category/gate_reason ({raw_gate_category!r}/{raw_gate_reason!r}); "
-                "this is internally inconsistent and is rejected rather than guessed at",
+                build_diagnostic(
+                    structured_message=(
+                        f"Claude Code returned status={status!r} but also set a human-gate "
+                        f"gate_category/gate_reason ({raw_gate_category!r}/{raw_gate_reason!r}); "
+                        "this is internally inconsistent and is rejected rather than guessed at"
+                    ),
+                    category_override="schema",
+                ),
                 returncode=proc.returncode, stdout=proc.stdout, stderr=proc.stderr,
             )
         gate_category = None

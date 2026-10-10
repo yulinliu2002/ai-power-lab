@@ -123,7 +123,6 @@ def test_isolated_workspace_is_a_separate_directory_from_repo_root(repo_root):
 
 def test_sandboxed_env_strips_credential_vars_and_redirects_home(tmp_path):
     base_env = {name: "secret-value" for name in CREDENTIAL_ENV_DENYLIST}
-    base_env["ANTHROPIC_API_KEY"] = "do-not-strip-this-one"
     base_env["PATH"] = "/usr/bin"
 
     home_dir = tmp_path / "isolated-home"
@@ -135,7 +134,15 @@ def test_sandboxed_env_strips_credential_vars_and_redirects_home(tmp_path):
             assert env["GIT_ASKPASS"] == "/bin/false"
         else:
             assert name not in env
-    assert env["ANTHROPIC_API_KEY"] == "do-not-strip-this-one"
+    # Focused Codex review remediation, Finding 1 (MAJOR): ANTHROPIC_API_KEY
+    # is NOT a Git/SSH push credential (CREDENTIAL_ENV_DENYLIST's own
+    # concern), but it IS a competing/ambient Claude-auth variable that
+    # outranks CLAUDE_CODE_OAUTH_TOKEN in Claude Code's own precedence
+    # order -- it must also be stripped from this common base (see
+    # AMBIENT_AGENT_AUTH_DENYLIST and tests/test_peos_auth_bridge.py's
+    # dedicated coverage), reversing this test's previous assertion that
+    # it survived unchanged.
+    assert "ANTHROPIC_API_KEY" not in env
     assert env["PATH"] == "/usr/bin"
     assert env["HOME"] == str(home_dir)
     assert env["GIT_TERMINAL_PROMPT"] == "0"
@@ -195,6 +202,42 @@ def test_reconcile_with_no_changes_is_a_noop(repo_root):
         assert result.copied == ()
         assert result.deleted == ()
         assert result.blocked_governance_changes == ()
+    finally:
+        discard_workspace(workspace)
+
+
+def test_isolated_workspace_and_reconciliation_never_carry_the_codex_auth_directorys_content(repo_root, tmp_path):
+    """Focused Codex review remediation, Finding 2 (MAJOR): the dedicated
+    Codex authentication directory (PEOS_CODEX_AUTH_HOME) lives entirely
+    outside repo_root -- nothing in create_isolated_workspace or
+    reconcile_workspace_to_repo ever reads from it, so a synthetic
+    credential value placed there must not appear anywhere in the
+    isolated workspace's file tree, nor be introduced into repo_root by
+    reconciliation.
+    """
+    secret = "codex-auth-secret-should-never-be-copied-anywhere"
+    codex_auth_dir = tmp_path / "codex-auth-home-outside-repo"
+    codex_auth_dir.mkdir()
+    (codex_auth_dir / "auth.json").write_text(f'{{"token": "{secret}"}}', encoding="utf-8")
+
+    workspace = create_isolated_workspace(repo_root, "testrun-codexauth")
+    try:
+        for path in workspace.path.rglob("*"):
+            if path.is_file():
+                try:
+                    content = path.read_bytes()
+                except OSError:
+                    continue
+                assert secret.encode() not in content, f"secret leaked into workspace file {path}"
+
+        reconcile_workspace_to_repo(workspace, repo_root)
+        for path in repo_root.rglob("*"):
+            if path.is_file():
+                try:
+                    content = path.read_bytes()
+                except OSError:
+                    continue
+                assert secret.encode() not in content, f"secret leaked into repo_root file {path}"
     finally:
         discard_workspace(workspace)
 
@@ -339,6 +382,38 @@ class TestVerificationSandboxEnforcement:
             )
             proc = subprocess.run(command, cwd=str(workspace.path), capture_output=True, text=True, timeout=30)
             assert "authoritative-secret" not in proc.stdout
+            assert proc.returncode != 0
+        finally:
+            discard_workspace(workspace)
+
+    def test_malicious_command_cannot_read_the_dedicated_codex_auth_directory(self, real_repo_root, tmp_path):
+        """Focused Codex review remediation, Finding 2 (MAJOR): a
+        verification command must not be able to read the resolved
+        Codex authentication directory, even when it is passed in as an
+        `extra_deny_read_paths` entry (exactly how
+        peos/verification_plan.py::execute_plan wires in the resolved
+        PEOS_CODEX_AUTH_HOME). This is a real OS-level denial, not a
+        routing test -- the accepted V1 residual risk (Codex's own shell
+        tool reading its own auth.json) is explicitly scoped to Codex's
+        own invocation, never to verification, which runs untrusted
+        implementation-agent code.
+        """
+        secret = "codex-auth-secret-should-never-be-readable-by-verification"
+        codex_auth_dir = tmp_path / "codex-auth-home"
+        codex_auth_dir.mkdir()
+        auth_file = codex_auth_dir / "auth.json"
+        auth_file.write_text(f'{{"token": "{secret}"}}', encoding="utf-8")
+
+        workspace = create_isolated_workspace(real_repo_root, "sbx-codexauth")
+        try:
+            profile_dir = tmp_path / "profiles"
+            command = sandboxed_verification_command(
+                ["python3", "-c", f"print(open({str(auth_file)!r}).read())"],
+                workspace, real_repo_root, profile_dir,
+                extra_deny_read_paths=(codex_auth_dir,),
+            )
+            proc = subprocess.run(command, cwd=str(workspace.path), capture_output=True, text=True, timeout=30)
+            assert secret not in proc.stdout
             assert proc.returncode != 0
         finally:
             discard_workspace(workspace)

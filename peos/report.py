@@ -160,7 +160,12 @@ def _format_reviews(reviews) -> str:
             flag = " [HUMAN DECISION]" if finding.requires_human_decision else ""
             lines.append(f"  - [{finding.severity}/{finding.category}]{flag} {finding.description}")
         for ac in review.acceptance_criteria:
-            lines.append(f"  - {ac.get('id', '?')}: {'met' if ac.get('met') else 'NOT MET'} {ac.get('note', '')}")
+            # Focused closure review, Finding 3 (remaining disclosure path):
+            # render the sanitized `display_id`, never the internal `id`,
+            # which Codex controls and which may contain a credential-shaped
+            # value -- `peos/codex_agent.py::_validate_acceptance_criteria`
+            # is the only producer of this dict and always sets both keys.
+            lines.append(f"  - {ac.get('display_id', '?')}: {'met' if ac.get('met') else 'NOT MET'} {ac.get('note', '')}")
     return "\n".join(lines)
 
 

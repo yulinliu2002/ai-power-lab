@@ -15,17 +15,37 @@ tests/test_peos_sandbox.py; real CLI contract behavior (actual `claude`/
 tests/test_peos_real_cli_contract.py.
 """
 
+import os
 import subprocess
 from pathlib import Path
 
 from peos.claude_agent import ClaudeRunResult
 from peos.codex_agent import CodexReviewResult, Finding
-from peos.sandbox import IsolatedWorkspace
+from peos.sandbox import CLAUDE_AUTH_ENV_VAR, CODEX_AUTH_HOME_ENV_VAR, CODEX_AUTH_FILENAME, IsolatedWorkspace
 from peos.spec import SpecCandidate, SpecResolution
 from peos.verify import CommandResult, VerificationReport
 from peos.workflow import run_workflow
 
 from tests._peos_fixtures import make_minimal_repo
+
+
+def _valid_environ(tmp_path: Path, *, with_claude: bool = True, with_codex: bool = True) -> dict:
+    """A fake orchestrator environment with both agents' authentication
+    preconditions satisfied (SPEC-003) -- the default every pre-existing
+    routing test in this file now passes, since none of them are testing
+    the *absence* of a credential. Tests that specifically exercise a
+    missing/unusable bridge (SPEC-003 AC-3/AC-5) pass `with_claude=False`
+    or `with_codex=False` instead of building their own environ by hand.
+    """
+    environ = {"PATH": "/usr/bin"}
+    if with_claude:
+        environ[CLAUDE_AUTH_ENV_VAR] = "fake-test-token"
+    if with_codex:
+        auth_dir = tmp_path / "codex-auth-home"
+        auth_dir.mkdir(exist_ok=True)
+        (auth_dir / CODEX_AUTH_FILENAME).write_text('{"fake": "auth"}', encoding="utf-8")
+        environ[CODEX_AUTH_HOME_ENV_VAR] = str(auth_dir)
+    return environ
 
 
 def _spec_for(repo_root: Path) -> SpecCandidate:
@@ -124,6 +144,7 @@ def test_happy_path_single_approve(tmp_path):
         verifier=lambda workspace, repo_root, plan: _pass_verification(),
         codex_runner=lambda prompt, cwd, env=None: (codex_calls.append(prompt), _approve_review())[1],
         workspace_factory=_fake_workspace_factory,
+        environ=_valid_environ(tmp_path),
     )
 
     assert result.outcome == "APPROVED"
@@ -153,6 +174,7 @@ def test_preflight_failure_stops_before_intake(tmp_path):
         verifier=lambda workspace, repo_root, plan: _pass_verification(),
         codex_runner=lambda prompt, cwd, env=None: _approve_review(),
         workspace_factory=_fake_workspace_factory,
+        environ=_valid_environ(tmp_path),
     )
 
     assert result.outcome == "FAILED"
@@ -172,6 +194,7 @@ def test_preflight_failure_on_missing_governance_file(tmp_path):
         verifier=lambda workspace, repo_root, plan: _pass_verification(),
         codex_runner=lambda prompt, cwd, env=None: _approve_review(),
         workspace_factory=_fake_workspace_factory,
+        environ=_valid_environ(tmp_path),
     )
 
     assert result.outcome == "FAILED"
@@ -190,6 +213,7 @@ def test_intake_gate_when_no_spec_found(tmp_path):
         verifier=lambda workspace, repo_root, plan: _pass_verification(),
         codex_runner=lambda prompt, cwd, env=None: _approve_review(),
         workspace_factory=_fake_workspace_factory,
+        environ=_valid_environ(tmp_path),
     )
 
     assert result.outcome == "HUMAN_GATE"
@@ -207,6 +231,7 @@ def test_intake_gate_id_for_ambiguous_match(tmp_path):
         verifier=lambda workspace, repo_root, plan: _pass_verification(),
         codex_runner=lambda prompt, cwd, env=None: _approve_review(),
         workspace_factory=_fake_workspace_factory,
+        environ=_valid_environ(tmp_path),
     )
     assert result.outcome == "HUMAN_GATE"
     assert result.gate_id == "2"
@@ -224,6 +249,7 @@ def test_claude_implementation_failure_stops_before_verification(tmp_path):
         verifier=lambda workspace, repo_root, plan: (verifier_calls.append(1), _pass_verification())[1],
         codex_runner=lambda prompt, cwd, env=None: _approve_review(),
         workspace_factory=_fake_workspace_factory,
+        environ=_valid_environ(tmp_path),
     )
 
     assert result.outcome == "FAILED"
@@ -242,6 +268,7 @@ def test_claude_human_gate_during_implementation_maps_gate_category(tmp_path):
         verifier=lambda workspace, repo_root, plan: (verifier_calls.append(1), _pass_verification())[1],
         codex_runner=lambda prompt, cwd, env=None: _approve_review(),
         workspace_factory=_fake_workspace_factory,
+        environ=_valid_environ(tmp_path),
     )
 
     assert result.outcome == "HUMAN_GATE"
@@ -259,6 +286,7 @@ def test_claude_human_gate_unmapped_category_falls_back_to_gate_6(tmp_path):
         verifier=lambda workspace, repo_root, plan: _pass_verification(),
         codex_runner=lambda prompt, cwd, env=None: _approve_review(),
         workspace_factory=_fake_workspace_factory,
+        environ=_valid_environ(tmp_path),
     )
     assert result.outcome == "HUMAN_GATE"
     assert result.gate_id == "6"
@@ -276,6 +304,7 @@ def test_verification_failure_stops_before_review(tmp_path):
         verifier=lambda workspace, repo_root, plan: _fail_verification(),
         codex_runner=lambda prompt, cwd, env=None: (codex_calls.append(prompt), _approve_review())[1],
         workspace_factory=_fake_workspace_factory,
+        environ=_valid_environ(tmp_path),
     )
 
     assert result.outcome == "FAILED"
@@ -293,6 +322,7 @@ def test_codex_uninterpretable_output_fails_closed(tmp_path):
         verifier=lambda workspace, repo_root, plan: _pass_verification(),
         codex_runner=lambda prompt, cwd, env=None: _uninterpretable_review(),
         workspace_factory=_fake_workspace_factory,
+        environ=_valid_environ(tmp_path),
     )
     assert result.outcome == "FAILED"
 
@@ -314,6 +344,7 @@ def test_codex_mutating_repo_root_fails_closed(tmp_path):
         verifier=lambda workspace, repo_root, plan: _pass_verification(),
         codex_runner=sneaky_codex_runner,
         workspace_factory=_fake_workspace_factory,
+        environ=_valid_environ(tmp_path),
     )
     assert result.outcome == "FAILED"
     assert "read-only reviewer boundary" in result.gate_reason
@@ -331,6 +362,7 @@ def test_human_owned_finding_gates_without_remediation(tmp_path):
         verifier=lambda workspace, repo_root, plan: _pass_verification(),
         codex_runner=lambda prompt, cwd, env=None: _changes_required_review(human_decision=True),
         workspace_factory=_fake_workspace_factory,
+        environ=_valid_environ(tmp_path),
     )
 
     assert result.outcome == "HUMAN_GATE"
@@ -357,6 +389,7 @@ def test_remediation_cycle_then_approve(tmp_path):
         verifier=lambda workspace, repo_root, plan: _pass_verification(),
         codex_runner=codex_runner,
         workspace_factory=_fake_workspace_factory,
+        environ=_valid_environ(tmp_path),
     )
 
     assert result.outcome == "APPROVED"
@@ -378,6 +411,7 @@ def test_bounded_remediation_still_changes_required_gates(tmp_path):
         verifier=lambda workspace, repo_root, plan: _pass_verification(),
         codex_runner=lambda prompt, cwd, env=None: (codex_calls.append(prompt), _changes_required_review())[1],
         workspace_factory=_fake_workspace_factory,
+        environ=_valid_environ(tmp_path),
     )
 
     assert result.outcome == "HUMAN_GATE"
@@ -404,6 +438,7 @@ def test_remediation_failure_stops_before_rereview(tmp_path):
         verifier=lambda workspace, repo_root, plan: _pass_verification(),
         codex_runner=lambda prompt, cwd, env=None: (codex_calls.append(prompt), _changes_required_review())[1],
         workspace_factory=_fake_workspace_factory,
+        environ=_valid_environ(tmp_path),
     )
 
     assert result.outcome == "FAILED"
@@ -428,6 +463,7 @@ def test_remediation_human_gate_maps_gate_category(tmp_path):
         verifier=lambda workspace, repo_root, plan: _pass_verification(),
         codex_runner=lambda prompt, cwd, env=None: _changes_required_review(),
         workspace_factory=_fake_workspace_factory,
+        environ=_valid_environ(tmp_path),
     )
 
     assert result.outcome == "HUMAN_GATE"
@@ -449,6 +485,7 @@ def test_governance_mutation_during_implementation_fails_closed(tmp_path):
         verifier=lambda workspace, repo_root, plan: _pass_verification(),
         codex_runner=lambda prompt, cwd, env=None: _approve_review(),
         workspace_factory=_fake_workspace_factory,
+        environ=_valid_environ(tmp_path),
     )
 
     assert result.outcome == "FAILED"
@@ -503,6 +540,7 @@ def test_approved_run_spec_path_in_prompts_is_workspace_relative_not_absolute(tm
         verifier=lambda workspace, repo_root, plan: _pass_verification(),
         codex_runner=lambda prompt, cwd, env=None: _approve_review(),
         workspace_factory=real_ish_workspace_factory,
+        environ=_valid_environ(tmp_path),
     )
 
     assert result.outcome == "APPROVED"
@@ -526,6 +564,7 @@ def test_failed_outcome_still_carries_the_resolved_spec(tmp_path):
         verifier=lambda workspace, repo_root, plan: _fail_verification(),
         codex_runner=lambda prompt, cwd, env=None: _approve_review(),
         workspace_factory=_fake_workspace_factory,
+        environ=_valid_environ(tmp_path),
     )
     assert result.outcome == "FAILED"
     assert result.spec is not None
@@ -542,6 +581,7 @@ def test_human_gate_outcome_still_carries_the_resolved_spec(tmp_path):
         verifier=lambda workspace, repo_root, plan: _pass_verification(),
         codex_runner=lambda prompt, cwd, env=None: _changes_required_review(human_decision=True),
         workspace_factory=_fake_workspace_factory,
+        environ=_valid_environ(tmp_path),
     )
     assert result.outcome == "HUMAN_GATE"
     assert result.spec is not None
@@ -571,6 +611,7 @@ def test_unhandled_exception_after_implementation_still_carries_accumulated_evid
         verifier=lambda workspace, repo_root, plan: _pass_verification(),
         codex_runner=exploding_codex_runner,
         workspace_factory=_fake_workspace_factory,
+        environ=_valid_environ(tmp_path),
     )
     assert result.outcome == "FAILED"
     assert "simulated unexpected failure" in result.gate_reason
@@ -602,6 +643,7 @@ def test_governance_mutation_detected_after_verification_not_just_after_claude(t
         verifier=mutating_verifier,
         codex_runner=lambda prompt, cwd, env=None: _approve_review(),
         workspace_factory=_fake_workspace_factory,
+        environ=_valid_environ(tmp_path),
     )
     assert result.outcome == "FAILED"
     assert "CLAUDE.md" in result.gate_reason
@@ -628,6 +670,7 @@ def test_codex_mutating_the_isolated_workspace_itself_fails_closed(tmp_path):
         verifier=lambda workspace, repo_root, plan: _pass_verification(),
         codex_runner=sneaky_codex_runner,
         workspace_factory=_fake_workspace_factory,
+        environ=_valid_environ(tmp_path),
     )
     assert result.outcome == "FAILED"
     assert "read-only reviewer boundary" in result.gate_reason
@@ -656,6 +699,7 @@ def test_reconciliation_failure_never_produces_approved(tmp_path, monkeypatch):
         verifier=lambda workspace, repo_root, plan: _pass_verification(),
         codex_runner=lambda prompt, cwd, env=None: _approve_review(),
         workspace_factory=_fake_workspace_factory,
+        environ=_valid_environ(tmp_path),
     )
 
     assert result.outcome == "FAILED"
@@ -688,6 +732,7 @@ def test_reconciliation_failure_during_a_gate_is_reported_but_keeps_the_gate_out
         verifier=lambda workspace, repo_root, plan: _pass_verification(),
         codex_runner=lambda prompt, cwd, env=None: _changes_required_review(human_decision=True),
         workspace_factory=_fake_workspace_factory,
+        environ=_valid_environ(tmp_path),
     )
 
     assert result.outcome == "HUMAN_GATE"
@@ -708,7 +753,224 @@ def test_unhandled_exception_is_caught_and_reported_as_failed(tmp_path):
         verifier=lambda workspace, repo_root, plan: _pass_verification(),
         codex_runner=lambda prompt, cwd, env=None: _approve_review(),
         workspace_factory=_fake_workspace_factory,
+        environ=_valid_environ(tmp_path),
     )
 
     assert result.outcome == "FAILED"
     assert "boom" in result.gate_reason
+
+
+# --- SPEC-003: per-agent authentication preflight -----------------------
+
+def test_claude_auth_preflight_failure_stops_before_workspace_creation(tmp_path):
+    """AC-3: a missing Claude credential fails closed before the isolated
+    workspace is even created, and before claude_runner is ever called.
+    """
+    repo_root = make_minimal_repo(tmp_path)
+    workspace_calls = []
+    claude_calls = []
+
+    def tracking_workspace_factory(repo_root, run_id):
+        workspace_calls.append(1)
+        return _fake_workspace_factory(repo_root, run_id)
+
+    result = run_workflow(
+        "task", repo_root,
+        log=lambda msg: None,
+        spec_resolver=_resolver_returns(_spec_for(repo_root)),
+        claude_runner=lambda prompt, cwd, env=None: (claude_calls.append(prompt), _ok_claude())[1],
+        verifier=lambda workspace, repo_root, plan: _pass_verification(),
+        codex_runner=lambda prompt, cwd, env=None: _approve_review(),
+        workspace_factory=tracking_workspace_factory,
+        environ=_valid_environ(tmp_path, with_claude=False),
+    )
+
+    assert result.outcome == "FAILED"
+    assert CLAUDE_AUTH_ENV_VAR in result.gate_reason
+    assert workspace_calls == []
+    assert claude_calls == []
+
+
+def test_codex_auth_preflight_failure_stops_before_codex_call_but_after_claude_phase(tmp_path):
+    """AC-5a: Claude's phase is never blocked or pre-checked against
+    Codex's credential state -- a run with a valid Claude credential but
+    a missing Codex one must still complete implementation and local
+    verification before failing closed at the Codex phase.
+    """
+    repo_root = make_minimal_repo(tmp_path)
+    claude_calls = []
+    verifier_calls = []
+    codex_calls = []
+
+    result = run_workflow(
+        "task", repo_root,
+        log=lambda msg: None,
+        spec_resolver=_resolver_returns(_spec_for(repo_root)),
+        claude_runner=lambda prompt, cwd, env=None: (claude_calls.append(prompt), _ok_claude())[1],
+        verifier=lambda workspace, repo_root, plan: (verifier_calls.append(1), _pass_verification())[1],
+        codex_runner=lambda prompt, cwd, env=None: (codex_calls.append(prompt), _approve_review())[1],
+        workspace_factory=_fake_workspace_factory,
+        environ=_valid_environ(tmp_path, with_codex=False),
+    )
+
+    assert result.outcome == "FAILED"
+    assert CODEX_AUTH_HOME_ENV_VAR in result.gate_reason
+    assert len(claude_calls) == 1  # Claude's phase was allowed to run
+    assert len(verifier_calls) == 1  # local verification was allowed to run
+    assert codex_calls == []  # Codex was never actually invoked
+
+
+def test_codex_auth_preflight_is_not_redundantly_rechecked_on_rereview(tmp_path, monkeypatch):
+    """AC-5b: once Codex's precondition has passed once in a run, it is
+    not re-checked before the re-review call, even though a bounded
+    remediation cycle invokes Codex a second time.
+    """
+    import peos.workflow as workflow_module
+
+    repo_root = make_minimal_repo(tmp_path)
+    preflight_calls = []
+    real_check = workflow_module.check_codex_auth_preflight
+
+    def counting_check(environ):
+        preflight_calls.append(1)
+        return real_check(environ)
+
+    monkeypatch.setattr(workflow_module, "check_codex_auth_preflight", counting_check)
+
+    claude_calls = []
+    codex_calls = []
+    review_sequence = [_changes_required_review(human_decision=False), _approve_review()]
+
+    def codex_runner(prompt, cwd, env=None):
+        codex_calls.append(prompt)
+        return review_sequence[len(codex_calls) - 1]
+
+    result = run_workflow(
+        "task", repo_root,
+        log=lambda msg: None,
+        spec_resolver=_resolver_returns(_spec_for(repo_root)),
+        claude_runner=lambda prompt, cwd, env=None: (claude_calls.append(prompt), _ok_claude())[1],
+        verifier=lambda workspace, repo_root, plan: _pass_verification(),
+        codex_runner=codex_runner,
+        workspace_factory=_fake_workspace_factory,
+        environ=_valid_environ(tmp_path),
+    )
+
+    assert result.outcome == "APPROVED"
+    assert len(codex_calls) == 2  # review + re-review
+    assert len(preflight_calls) == 1  # but the preflight check ran only once
+
+
+def test_claude_env_carries_the_token_and_never_codex_home(tmp_path):
+    """AC-2/AC-4 at the workflow wiring level."""
+    repo_root = make_minimal_repo(tmp_path)
+    captured_envs = []
+
+    result = run_workflow(
+        "task", repo_root,
+        log=lambda msg: None,
+        spec_resolver=_resolver_returns(_spec_for(repo_root)),
+        claude_runner=lambda prompt, cwd, env=None: (captured_envs.append(env), _ok_claude())[1],
+        verifier=lambda workspace, repo_root, plan: _pass_verification(),
+        codex_runner=lambda prompt, cwd, env=None: _approve_review(),
+        workspace_factory=_fake_workspace_factory,
+        environ=_valid_environ(tmp_path),
+    )
+
+    assert result.outcome == "APPROVED"
+    assert len(captured_envs) == 1
+    assert captured_envs[0][CLAUDE_AUTH_ENV_VAR] == "fake-test-token"
+    assert "CODEX_HOME" not in captured_envs[0]
+
+
+def test_codex_env_carries_codex_home_and_never_the_claude_token(tmp_path):
+    """AC-4/AC-6 at the workflow wiring level: Codex's subprocess
+    environment has CODEX_HOME pointed at the dedicated auth directory
+    and never carries Claude's own token.
+    """
+    repo_root = make_minimal_repo(tmp_path)
+    environ = _valid_environ(tmp_path)
+    captured_envs = []
+
+    result = run_workflow(
+        "task", repo_root,
+        log=lambda msg: None,
+        spec_resolver=_resolver_returns(_spec_for(repo_root)),
+        claude_runner=lambda prompt, cwd, env=None: _ok_claude(),
+        verifier=lambda workspace, repo_root, plan: _pass_verification(),
+        codex_runner=lambda prompt, cwd, env=None: (captured_envs.append(env), _approve_review())[1],
+        workspace_factory=_fake_workspace_factory,
+        environ=environ,
+    )
+
+    assert result.outcome == "APPROVED"
+    assert len(captured_envs) == 1
+    assert captured_envs[0]["CODEX_HOME"] == environ[CODEX_AUTH_HOME_ENV_VAR]
+    assert CLAUDE_AUTH_ENV_VAR not in captured_envs[0]
+
+
+def test_no_real_home_or_credential_denylist_var_ever_reaches_either_agent_even_on_failure(tmp_path, monkeypatch):
+    """AC-6: neither agent's environment ever carries the real HOME or a
+    CREDENTIAL_ENV_DENYLIST variable, including on a failure path (here,
+    Codex's auth preflight failing after Claude's phase already ran).
+    """
+    import peos.workflow as workflow_module
+
+    repo_root = make_minimal_repo(tmp_path)
+    monkeypatch.setenv("SSH_AUTH_SOCK", "/tmp/should-never-leak.sock")
+    environ = dict(os.environ)
+    environ.update(_valid_environ(tmp_path, with_codex=False))
+    captured_claude_envs = []
+
+    result = run_workflow(
+        "task", repo_root,
+        log=lambda msg: None,
+        spec_resolver=_resolver_returns(_spec_for(repo_root)),
+        claude_runner=lambda prompt, cwd, env=None: (captured_claude_envs.append(env), _ok_claude())[1],
+        verifier=lambda workspace, repo_root, plan: _pass_verification(),
+        codex_runner=lambda prompt, cwd, env=None: _approve_review(),
+        workspace_factory=_fake_workspace_factory,
+        environ=environ,
+    )
+
+    assert result.outcome == "FAILED"
+    assert "SSH_AUTH_SOCK" not in captured_claude_envs[0]
+    assert captured_claude_envs[0]["HOME"] != os.environ.get("HOME")
+
+
+def test_default_verifier_is_bound_to_this_runs_resolved_environ(tmp_path, monkeypatch):
+    """Focused Codex review remediation, Finding 2 (MAJOR): when the
+    caller does not override `verifier`, `_run_workflow` must bind this
+    run's own already-resolved `environ` into the real default verifier
+    -- not a second, independent `os.environ` read that could diverge
+    from an injected/test environ -- so verification's environment and
+    sandbox deny-list are built from the same source everything else in
+    this run uses.
+    """
+    import peos.workflow as workflow_module
+
+    repo_root = make_minimal_repo(tmp_path)
+    fake_environ = _valid_environ(tmp_path)
+    captured = {}
+
+    def fake_execute_plan(plan, workspace, repo_root_arg, sandbox_profile_dir, environ=None, **kwargs):
+        captured["environ"] = environ
+        return _pass_verification()
+
+    monkeypatch.setattr(workflow_module, "execute_plan", fake_execute_plan)
+
+    result = run_workflow(
+        "task", repo_root,
+        log=lambda msg: None,
+        spec_resolver=_resolver_returns(_spec_for(repo_root)),
+        claude_runner=lambda prompt, cwd, env=None: _ok_claude(),
+        codex_runner=lambda prompt, cwd, env=None: _approve_review(),
+        workspace_factory=_fake_workspace_factory,
+        environ=fake_environ,
+        # `verifier` deliberately left at its default (_default_verifier)
+        # -- this is specifically testing that real default path, not a
+        # routing fake.
+    )
+
+    assert result.outcome == "APPROVED"
+    assert captured["environ"] is fake_environ

@@ -285,10 +285,17 @@ a. `run_claude`'s and `run_codex_review`'s non-zero-returncode (and
       length exceeds the bound).
    Whichever basis is used, the resulting text is then, in order:
    - passed through a short, fixed list of regex redactions for
-     token-shaped substrings (e.g. `Bearer\s+\S+`, a 20+ character run
-     of `[A-Za-z0-9_\-\.]`, a `sk-`-prefixed run), replacing each match
-     with a fixed placeholder (e.g. `[REDACTED]`), not merely a
-     per-character mask;
+     token-shaped substrings — `Bearer\s+\S+`, a `sk-`-prefixed run, and
+     a generic run of **32+** characters of `[A-Za-z0-9_\-\.]`
+     (V1-approved generic threshold, superseding this requirement's
+     original 20+ illustrative example: a literal 20-character generic
+     threshold false-positives on this codebase's own non-secret
+     diagnostic/schema vocabulary, e.g. `acceptance_criteria` (20
+     chars) and `missing_validation_evidence` (28 chars); 32 is a
+     conservative V1 generic fallback chosen to avoid that, while the
+     `Bearer`/`sk-` patterns remain independently, specifically
+     redacted regardless of length) — replacing each match with a fixed
+     placeholder (e.g. `[REDACTED]`), not merely a per-character mask;
    - classified into one of a small fixed set of categories by matching
      known literal, non-secret CLI phrases (case-insensitive):
      `authentication` (e.g. "not logged in", "please run /login",

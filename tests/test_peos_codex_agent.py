@@ -15,8 +15,8 @@ from pathlib import Path
 from peos.codex_agent import REVIEW_SCHEMA, build_codex_command, run_codex_review
 
 
-def _completed(returncode=0):
-    return subprocess.CompletedProcess(args=["codex"], returncode=returncode, stdout="", stderr="")
+def _completed(returncode=0, stdout="", stderr=""):
+    return subprocess.CompletedProcess(args=["codex"], returncode=returncode, stdout=stdout, stderr=stderr)
 
 
 def _runner_writing_last_message(payload):
@@ -126,6 +126,49 @@ def test_run_codex_review_nonzero_exit_fails_closed():
 
     result = run_codex_review("prompt", Path("."), runner=runner)
     assert not result.ok
+
+
+def test_run_codex_review_nonzero_exit_prefers_structured_error_message():
+    """SPEC-003 AC-8a: when `stdout` happens to be valid JSON with an
+    `error`/`message` field, that structured message is used instead of
+    a raw-text tail.
+    """
+    payload = json.dumps({"error": "Not logged in · Please run /login"})
+
+    def runner(command, **kwargs):
+        return _completed(1, stdout=payload)
+
+    result = run_codex_review("prompt", Path("."), runner=runner)
+    assert not result.ok
+    assert "[authentication]" in result.error
+    assert "Not logged in" in result.error
+
+
+def test_run_codex_review_nonzero_exit_falls_back_to_raw_tail_when_stdout_is_not_json():
+    """SPEC-003 AC-8b: Codex's non-interactive stdout is not guaranteed
+    to be JSON on a CLI-level failure -- the common case -- and the
+    bounded raw-text fallback must still classify correctly.
+    """
+    def runner(command, **kwargs):
+        return _completed(1, stderr="Not logged in · Please run /login")
+
+    result = run_codex_review("prompt", Path("."), runner=runner)
+    assert not result.ok
+    assert "[authentication]" in result.error
+    assert "Not logged in" in result.error
+
+
+def test_run_codex_review_nonzero_exit_redacts_a_secret_shaped_string():
+    """SPEC-003 AC-9."""
+    secret = "sk-liveAbCdEfGhIjKlMnOpQrSt"
+
+    def runner(command, **kwargs):
+        return _completed(1, stderr=f"request failed, key={secret} was rejected")
+
+    result = run_codex_review("prompt", Path("."), runner=runner)
+    assert not result.ok
+    assert secret not in result.error
+    assert "[REDACTED]" in result.error
 
 
 def test_run_codex_review_subprocess_error_fails_closed():
@@ -382,6 +425,110 @@ def test_top_level_payload_missing_acceptance_criteria_key_is_rejected():
     assert not result.ok
     assert result.verdict is None
     assert "missing required field" in result.error.lower()
+
+
+def test_run_codex_review_finding_description_is_redacted_of_a_secret_shaped_string():
+    """Focused Codex review remediation, Finding 3 (MAJOR): a finding's
+    `description` is agent-controlled free text that flows into
+    workflow.py's gate reasons and report.py's rendered output -- it
+    must pass through the same shared redaction mechanism `.error`
+    already used.
+    """
+    secret = "sk-liveAbCdEfGhIjKlMnOpQrSt"
+    runner = _runner_writing_last_message({
+        "verdict": "CHANGES_REQUIRED",
+        "summary": "issues found",
+        "findings": [{
+            "severity": "major", "category": "implementation_defect",
+            "description": f"hardcoded credential key={secret} found in source",
+            "requires_human_decision": False,
+        }],
+        "acceptance_criteria": None,
+    })
+    result = run_codex_review("prompt", Path("."), runner=runner)
+    assert result.ok
+    assert secret not in result.findings[0].description
+    assert "[REDACTED]" in result.findings[0].description
+
+
+def test_run_codex_review_acceptance_criteria_note_is_redacted_of_a_secret_shaped_string():
+    """Finding 3 (continued): same requirement for an acceptance-
+    criteria `note`."""
+    secret = "sk-liveAbCdEfGhIjKlMnOpQrSt"
+    runner = _runner_writing_last_message({
+        "verdict": "CHANGES_REQUIRED",
+        "summary": "issues found",
+        "findings": [],
+        "acceptance_criteria": [{"id": "AC-001", "met": False, "note": f"blocked by key={secret}"}],
+    })
+    result = run_codex_review("prompt", Path("."), runner=runner)
+    assert result.ok
+    assert secret not in result.acceptance_criteria[0]["note"]
+    assert "[REDACTED]" in result.acceptance_criteria[0]["note"]
+
+
+def test_run_codex_review_acceptance_criteria_id_display_form_is_redacted_but_internal_id_is_unchanged():
+    """Focused closure review, Finding 3 (remaining disclosure path):
+    unlike `note`/`description`/`summary`, an acceptance-criterion `id`
+    is also a machine-matched key (reconciliation/validation against the
+    specification's own AC numbering), so it must NOT be mutated by
+    redaction -- `result.acceptance_criteria[i]["id"]` must come back
+    byte-for-byte identical to what Codex returned, including a
+    credential-shaped value, so matching semantics are unaffected. The
+    sanitized form is carried separately in `display_id`, which is what
+    peos/report.py renders (see
+    test_report_never_surfaces_a_secret_from_an_acceptance_criterion_id_
+    end_to_end in tests/test_peos_report.py for the human-facing-output
+    proof).
+    """
+    sk_secret = "sk-liveAbCdEfGhIjKlMnOpQrSt"
+    generic_secret = "A" * 32  # the other supported credential-shaped pattern (GENERIC_TOKEN_MIN_LEN)
+    runner = _runner_writing_last_message({
+        "verdict": "APPROVE",
+        "summary": "ok",
+        "findings": [],
+        "acceptance_criteria": [
+            {"id": f"AC-001-{sk_secret}", "met": True, "note": "covered"},
+            # Space (not in the generic pattern's `[A-Za-z0-9_\-\.]` class)
+            # separates the AC label from the token run so only the token
+            # itself -- not the whole id -- is swallowed by the match.
+            {"id": f"AC-002 {generic_secret}", "met": True, "note": "covered"},
+        ],
+    })
+    result = run_codex_review("prompt", Path("."), runner=runner)
+    assert result.ok
+    assert result.approved
+
+    ac_sk, ac_generic = result.acceptance_criteria
+
+    # Internal `id`: unchanged, verbatim, for machine semantics.
+    assert ac_sk["id"] == f"AC-001-{sk_secret}"
+    assert ac_generic["id"] == f"AC-002 {generic_secret}"
+
+    # Human-facing `display_id`: sanitized, secret never appears.
+    assert sk_secret not in ac_sk["display_id"]
+    assert "[REDACTED]" in ac_sk["display_id"]
+    assert ac_sk["display_id"].startswith("AC-001-")
+    assert generic_secret not in ac_generic["display_id"]
+    assert "[REDACTED]" in ac_generic["display_id"]
+    assert ac_generic["display_id"].startswith("AC-002 ")
+
+
+def test_run_codex_review_summary_is_redacted_of_a_secret_shaped_string():
+    """Finding 3 (continued): same requirement for the top-level
+    `summary`, which peos/workflow.py also uses verbatim as a
+    gate-reason fallback when no finding descriptions are present."""
+    secret = "sk-liveAbCdEfGhIjKlMnOpQrSt"
+    runner = _runner_writing_last_message({
+        "verdict": "CHANGES_REQUIRED",
+        "summary": f"found hardcoded key={secret} during review",
+        "findings": [],
+        "acceptance_criteria": None,
+    })
+    result = run_codex_review("prompt", Path("."), runner=runner)
+    assert result.ok
+    assert secret not in result.summary
+    assert "[REDACTED]" in result.summary
 
 
 def test_finding_missing_requires_human_decision_key_is_rejected():
