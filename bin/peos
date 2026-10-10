@@ -1,0 +1,14 @@
+#!/usr/bin/env python3
+"""Single local entry point: `peos "<engineering task>"`.
+
+See docs/specifications/SPEC-001-peos-automation-v1.md.
+"""
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from peos.cli import main  # noqa: E402
+
+if __name__ == "__main__":
+    sys.exit(main())
