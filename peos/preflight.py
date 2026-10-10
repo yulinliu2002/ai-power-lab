@@ -32,9 +32,12 @@ gate applies, PEOS must stop").
 from __future__ import annotations
 
 import hashlib
+import importlib.util
 import subprocess
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Callable
 
 from peos.sandbox import GOVERNANCE_ARTIFACTS
 
@@ -55,6 +58,12 @@ class PreflightResult:
     head_commit: str | None = None
     dirty: bool = False
     missing_governance_files: tuple[str, ...] = field(default_factory=tuple)
+
+
+@dataclass(frozen=True)
+class InterpreterPreflightResult:
+    ok: bool
+    reason: str | None = None
 
 
 def _run_git(args: list[str], repo_root: Path) -> subprocess.CompletedProcess | None:
@@ -123,6 +132,46 @@ def check_repository_safety(repo_root: Path) -> PreflightResult:
         )
 
     return PreflightResult(ok=True, head_commit=head_commit, dirty=dirty)
+
+
+def check_verification_interpreter(
+    find_spec: Callable[[str], object | None] = importlib.util.find_spec,
+) -> InterpreterPreflightResult:
+    """Phase-0 check (PEOS infrastructure maintenance -- dogfooding
+    finding, not from any SPEC-00x document): can the interpreter
+    currently running PEOS (`sys.executable`) satisfy the Python
+    verification step the frozen plan will later run --
+    `sys.executable -m pytest -q`, see
+    `peos/verification_plan.py::resolve_verification_plan`?
+
+    Checked in-process via `find_spec` rather than by spawning
+    `sys.executable` as a subprocess: this process already *is*
+    `sys.executable`, so "can this interpreter import pytest" is
+    answered directly, with no extra process. Deliberately does not
+    fall back to, or auto-select, any other interpreter (e.g. a
+    repository `.venv`) -- it only ever reports on the interpreter
+    already running this process, and leaves choosing that interpreter
+    to whoever invokes `peos`.
+
+    Failing here, before Intake/Claude/workspace creation, turns a
+    pytest step that would otherwise fail deep inside a later
+    `CommandResult` with a bare `ModuleNotFoundError` into an early,
+    actionable, fail-closed PEOS result (SPEC-001 Section 11).
+    """
+    if find_spec("pytest") is not None:
+        return InterpreterPreflightResult(ok=True)
+    return InterpreterPreflightResult(
+        ok=False,
+        reason=(
+            f"The interpreter currently running PEOS ({sys.executable}) does not "
+            "have pytest installed, so the frozen verification plan's "
+            f"`{sys.executable} -m pytest -q` step cannot run. Activate the "
+            "project virtual environment before running `peos` (e.g. `source "
+            ".venv/bin/activate`), or otherwise invoke `peos` with an interpreter "
+            "that already has the project's dependencies installed "
+            "(`pip install -r requirements.txt`)."
+        ),
+    )
 
 
 def _sha256_file(path: Path) -> str:

@@ -65,8 +65,10 @@ from peos.claude_agent import ClaudeRunResult, run_claude
 from peos.codex_agent import CodexReviewResult, run_codex_review
 from peos.gitutil import repo_state_fingerprint
 from peos.preflight import (
+    InterpreterPreflightResult,
     PreflightResult,
     check_repository_safety,
+    check_verification_interpreter,
     detect_mutations,
     hash_governance_artifacts,
 )
@@ -352,6 +354,19 @@ def _run_workflow(
             return fail(f"Repository preflight failed: {preflight.reason}")
         if preflight.dirty:
             log("[PEOS] Repository working tree is dirty; the isolated workspace will carry that state over faithfully.")
+
+        # Phase 0b -- Verification interpreter preflight (PEOS infrastructure
+        # maintenance, dogfooding finding): the frozen verification plan's
+        # pytest step always runs as `sys.executable -m pytest -q`, so if
+        # this process's own interpreter cannot import pytest (e.g. `peos`
+        # was invoked from a shell that never activated the project venv),
+        # fail closed here -- before Intake, Claude, or workspace creation
+        # -- rather than letting that step fail later with a bare
+        # ModuleNotFoundError.
+        stage("Verification interpreter preflight")
+        interpreter_preflight: InterpreterPreflightResult = check_verification_interpreter()
+        if not interpreter_preflight.ok:
+            return fail(f"Verification interpreter preflight failed: {interpreter_preflight.reason}")
 
         # Phase 1 -- Intake
         stage("Intake")
