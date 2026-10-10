@@ -1,0 +1,115 @@
+/**
+ * Typed client for the FastAPI V2 boundary (backend/app.py).
+ *
+ * This module performs no physics and no derived-physics computation.
+ * Every type here mirrors a field already returned by
+ * `backend/schemas.py` -- see DESIGN.md's Implementation Contract:
+ * the frontend must never recompute or approximate a value the engine
+ * already produces.
+ */
+
+export const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
+
+export interface ScenarioThresholds {
+  voltage_reference_v: number;
+  rated_power_w: number;
+  thermal_derate_start_c: number;
+  thermal_trip_c: number;
+  capacitance_f: number;
+}
+
+export interface EventMarker {
+  time_s: number;
+  label: string;
+}
+
+export interface LoadStepTimeseries {
+  time_s: number[];
+  v_dc_v: number[];
+  p_sst_w: number[];
+  p_load_w: number[];
+  p_target_w: number[];
+  temperature_c: number[];
+  derate_factor: number[];
+  trip_active: boolean[];
+  operating_state: string[];
+  grid_voltage_pu: number[];
+  grid_available: boolean[];
+}
+
+export interface LoadStepResponse {
+  scenario: string;
+  thresholds: ScenarioThresholds;
+  events: EventMarker[];
+  timeseries: LoadStepTimeseries;
+}
+
+/** One instant of the run -- every field read from the same index. */
+export interface Sample {
+  t_s: number;
+  v_dc_v: number;
+  p_sst_w: number;
+  p_load_w: number;
+  temperature_c: number;
+  derate_factor: number;
+  operating_state: string;
+  grid_voltage_pu: number;
+  grid_available: boolean;
+}
+
+/**
+ * Selects one instant from an already-loaded run. This is pure index
+ * selection -- no interpolation, no recomputation, no new physics.
+ */
+export function sampleAt(data: LoadStepResponse, index: number): Sample {
+  const t = data.timeseries;
+  return {
+    t_s: t.time_s[index],
+    v_dc_v: t.v_dc_v[index],
+    p_sst_w: t.p_sst_w[index],
+    p_load_w: t.p_load_w[index],
+    temperature_c: t.temperature_c[index],
+    derate_factor: t.derate_factor[index],
+    operating_state: t.operating_state[index],
+    grid_voltage_pu: t.grid_voltage_pu[index],
+    grid_available: t.grid_available[index],
+  };
+}
+
+/**
+ * The three Scenario A experiment variables Engineering Study #1
+ * identified as governing transient severity. Field names match
+ * `backend/schemas.py: LoadStepRequest` exactly -- this is a request
+ * body, not a second copy of the physics.
+ */
+export interface LoadStepOverrides {
+  final_fraction?: number;
+  capacitance_f?: number;
+  time_constant_s?: number;
+}
+
+/**
+ * Runs Scenario A (AI load step). With no argument, uses the API's
+ * own defaults (the baseline run). `overrides` is sent verbatim as
+ * the request body -- no value is computed or validated here; the
+ * backend (and ultimately `src/`) is the only place that happens.
+ */
+export async function fetchLoadStep(
+  overrides: LoadStepOverrides = {},
+): Promise<LoadStepResponse> {
+  const response = await fetch(
+    `${API_BASE_URL}/api/v1/simulations/load-step`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(overrides),
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(`Simulation request failed: HTTP ${response.status}`);
+  }
+
+  return response.json();
+}

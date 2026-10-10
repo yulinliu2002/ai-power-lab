@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  python:
+    # Covers the simulation engine, the dashboard adapter, and the
+    # FastAPI boundary (backend/) + its source-of-truth parity tests --
+    # all discovered by one pytest run, since they all live under the
+    # same test suite (see tests/test_api.py).
+    name: Python (engine + API + parity tests)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Run test suite
+        run: pytest -q
+
+  frontend:
+    name: Frontend (lint, typecheck, build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: Lint
+        run: npm run lint
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Build
+        run: npm run build
+
+  # Deferred until the layers they'd validate exist (see DESIGN.md's
+  # Implementation Contract): frontend <-> API integration tests, React
+  # unit/component tests, Playwright E2E, and deployment checks. The
+  # API/parity layer itself is covered above now that backend/ exists.

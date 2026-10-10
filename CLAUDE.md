@@ -71,3 +71,32 @@ Do not expand project scope automatically. If a task seems to require something 
 - When in doubt about whether something fits the rules above, ask before implementing.
 - Prefer deleting complexity over adding it.
 - If a proposed change would make a subsystem harder for the user to personally explain, flag it.
+
+## Engineering Workflow (PEOS)
+
+This repository is developed under PEOS (Personal Engineering OS), a
+human-orchestrated workflow for engineering with multiple AI agents. See
+`ENGINEERING.md` for the workflow and `AGENTS.md` for the full role
+definitions; this section states Claude Code's implementation authority
+and constraints specifically.
+
+As **Implementation Owner**, Claude Code may implement approved
+specifications, modify repository code, integrate frontend/backend
+systems, add or update tests, run local verification, and report changed
+files and limitations — within the Modeling Rules, V1 Scope, and Out of
+Scope sections above.
+
+Claude Code must not:
+
+- silently change an approved engineering requirement, physics
+  assumption, acceptance criterion, or API contract merely to make an
+  implementation or test pass,
+- treat its own claim of "done," "working," or "looks correct" as
+  verification evidence — evidence comes from tests, calculations, or
+  documented reasoning,
+- autonomously create agent-to-agent execution loops.
+
+If a specification appears incorrect, incomplete, or contradictory,
+Claude Code must stop and report the conflict rather than guess or
+silently resolve it. See `ENGINEERING.md`'s Source-of-Truth Hierarchy for
+how to resolve disagreements between artifacts.

@@ -1,0 +1,61 @@
+@import "tailwindcss";
+
+/*
+ * Token values mirror dashboard/components/palette.py (CHROME/STATUS) and
+ * DESIGN.md section 3 exactly. This frontend is a skeleton, not a
+ * restyle -- color values are not reinvented per platform.
+ */
+:root {
+  --color-canvas: #0a0e14;
+  --color-surface: #121820;
+  --color-surface-raised: #1a232e;
+  --color-text-primary: #e7edf3;
+  --color-text-secondary: #aab4bd;
+  --color-muted: #6b7680;
+  --color-hairline: #24303c;
+  --color-accent: #3987e5;
+  --color-status-good: #0ca30c;
+  --color-status-warning: #fab219;
+  --color-status-critical: #d03b3b;
+  --color-status-neutral: #6b7680;
+}
+
+@theme inline {
+  --color-canvas: var(--color-canvas);
+  --color-surface: var(--color-surface);
+  --color-surface-raised: var(--color-surface-raised);
+  --color-primary: var(--color-text-primary);
+  --color-secondary: var(--color-text-secondary);
+  --color-muted: var(--color-muted);
+  --color-hairline: var(--color-hairline);
+  --color-accent: var(--color-accent);
+  --color-status-good: var(--color-status-good);
+  --color-status-warning: var(--color-status-warning);
+  --color-status-critical: var(--color-status-critical);
+  --color-status-neutral: var(--color-status-neutral);
+  --font-sans: var(--font-plex-sans);
+  --font-mono: var(--font-plex-mono);
+}
+
+body {
+  background: var(--color-canvas);
+}
+
+/*
+ * Power-flow line animation -- ported from
+ * dashboard/components/schematic.py's `console-flow` keyframe. Speed
+ * is set per-line via inline `animation-duration`, driven by real
+ * power magnitude (see PowerFlowSchematic.tsx); this keyframe only
+ * defines the motion itself.
+ */
+@keyframes console-flow {
+  to {
+    stroke-dashoffset: -24;
+  }
+}
+
+.flow-line {
+  animation-name: console-flow;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
