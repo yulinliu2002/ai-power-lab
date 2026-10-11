@@ -18,6 +18,16 @@
   --color-status-warning: #fab219;
   --color-status-critical: #d03b3b;
   --color-status-neutral: #6b7680;
+
+  /*
+   * Pixso Concept 03's topology/state palette, read directly off the
+   * design nodes (01 — OBSERVE / Steady State, 02 — TRANSIENT / Minimum
+   * Vdc): #5AC8D8 cyan, #D9A454 amber. Scoped to PowerFlowSchematic only
+   * for this slice -- distinct from --color-accent and the status-*
+   * tokens above, which other components still use.
+   */
+  --color-schematic-cyan: #5ac8d8;
+  --color-schematic-amber: #d9a454;
 }
 
 @theme inline {
@@ -39,23 +49,4 @@
 
 body {
   background: var(--color-canvas);
-}
-
-/*
- * Power-flow line animation -- ported from
- * dashboard/components/schematic.py's `console-flow` keyframe. Speed
- * is set per-line via inline `animation-duration`, driven by real
- * power magnitude (see PowerFlowSchematic.tsx); this keyframe only
- * defines the motion itself.
- */
-@keyframes console-flow {
-  to {
-    stroke-dashoffset: -24;
-  }
-}
-
-.flow-line {
-  animation-name: console-flow;
-  animation-timing-function: linear;
-  animation-iteration-count: infinite;
 }

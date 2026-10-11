@@ -214,6 +214,7 @@ function Console({
         sample={sample}
         ratedPowerW={data.thresholds.rated_power_w}
         voltageReferenceV={data.thresholds.voltage_reference_v}
+        capacitanceF={data.thresholds.capacitance_f}
       />
 
       {metrics && (
