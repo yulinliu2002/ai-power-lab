@@ -15,6 +15,7 @@ import argparse
 import sys
 from pathlib import Path
 
+from peos.plan import MAX_MAX_CYCLES, MIN_MAX_CYCLES
 from peos.report import build_report
 from peos.workflow import RunResult, run_workflow
 
@@ -80,6 +81,18 @@ def main(argv: list[str] | None = None) -> int:
         default=Path.cwd(),
         help="Repository root to operate in (default: current directory).",
     )
+    parser.add_argument(
+        "--max-cycles",
+        type=int,
+        default=None,
+        help=(
+            f"Maximum number of bounded remediation cycles ({MIN_MAX_CYCLES}-{MAX_MAX_CYCLES}, "
+            "SPEC-004 Requirement 6). Counts remediation cycles only, never the fixed cycle-0 "
+            "initial implementation/review. Omitting this uses the V2 default of 3 -- a "
+            "deliberate behavior change from V1's effective 1; pass --max-cycles 1 to "
+            "reproduce SPEC-001/SPEC-003's exact one-remediation-cycle behavior."
+        ),
+    )
     args = parser.parse_args(argv)
 
     def _report_input_failure(reason: str, report_repo_root: Path) -> int:
@@ -115,6 +128,16 @@ def main(argv: list[str] | None = None) -> int:
     if not (repo_root / ".git").exists():
         return _report_input_failure(f"{repo_root} is not a Git repository root", repo_root)
 
+    # SPEC-004 Requirement 6/AC-4: an out-of-range --max-cycles is a hard
+    # input-validation failure, reported the same shape as an invalid
+    # --repo/--spec -- never a traceback, never a silently clamped value.
+    if args.max_cycles is not None and not (MIN_MAX_CYCLES <= args.max_cycles <= MAX_MAX_CYCLES):
+        return _report_input_failure(
+            f"--max-cycles must be between {MIN_MAX_CYCLES} and {MAX_MAX_CYCLES} "
+            f"(inclusive), got {args.max_cycles}.",
+            repo_root,
+        )
+
     explicit_spec: Path | None = None
     if args.spec is not None:
         explicit_spec, spec_error = _canonicalize_spec(args.spec, repo_root)
@@ -122,7 +145,7 @@ def main(argv: list[str] | None = None) -> int:
             return _report_input_failure(spec_error, repo_root)
 
     try:
-        result = run_workflow(args.task, repo_root, explicit_spec=explicit_spec)
+        result = run_workflow(args.task, repo_root, explicit_spec=explicit_spec, max_cycles=args.max_cycles)
     except Exception as exc:  # noqa: BLE001 -- Finding 11: never let an unexpected
         # exception escape as a traceback; still produce a PEOS final report.
         result = RunResult(

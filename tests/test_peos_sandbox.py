@@ -195,6 +195,67 @@ def test_reconcile_never_copies_back_protected_governance_changes(repo_root):
         discard_workspace(workspace)
 
 
+def test_reconcile_never_copies_a_forged_ledger_path_even_if_gitignore_rule_is_removed(repo_root):
+    """SPEC-004 remediation Finding 2 (BLOCKER), Case A: an implementation
+    agent removes the workspace's own `.gitignore` rule for
+    `.peos/runs/` and then creates a forged ledger path there. Before
+    this fix, reconciliation relied entirely on that gitignore rule to
+    keep `git ls-files --others --exclude-standard` from seeing it as an
+    ordinary untracked file; with the rule gone, it previously would
+    have been copied straight into the authoritative repository.
+    """
+    workspace = create_isolated_workspace(repo_root, "testrun_f2a")
+    try:
+        (workspace.path / ".gitignore").write_text("", encoding="utf-8")
+        forged_dir = workspace.path / ".peos" / "runs" / "forged"
+        forged_dir.mkdir(parents=True)
+        (forged_dir / "ledger.json").write_text('{"outcome": "APPROVED", "forged": true}', encoding="utf-8")
+
+        result = reconcile_workspace_to_repo(workspace, repo_root)
+
+        assert not (repo_root / ".peos" / "runs" / "forged").exists()
+        assert not any(".peos/runs" in p for p in result.copied)
+    finally:
+        discard_workspace(workspace)
+
+
+def test_reconcile_never_touches_an_authoritative_ledger_even_if_tracked_in_the_workspace(repo_root):
+    """SPEC-004 remediation Finding 2 (BLOCKER), Case B: a pre-existing
+    *authoritative* Run Ledger (as a real prior PEOS run would leave
+    behind) must never be modified, replaced, or deleted by
+    reconciliation, even if the implementation agent forces that exact
+    gitignored path to become a *tracked* change inside the workspace
+    (`git add -f`) -- bypassing `.gitignore` at the Git level entirely,
+    not merely editing it. The `.peos/runs/` exclusion in
+    `reconcile_workspace_to_repo` must be structural (a path-prefix
+    check), not something a tracked change can route around.
+    """
+    real_run_dir = repo_root / ".peos" / "runs" / "real-run"
+    real_run_dir.mkdir(parents=True)
+    authoritative_content = '{"outcome": "FAILED", "run_id": "real-run"}'
+    (real_run_dir / "ledger.json").write_text(authoritative_content, encoding="utf-8")
+
+    workspace = create_isolated_workspace(repo_root, "testrun_f2b")
+    try:
+        ledger_in_workspace = workspace.path / ".peos" / "runs" / "real-run" / "ledger.json"
+        ledger_in_workspace.parent.mkdir(parents=True, exist_ok=True)
+        ledger_in_workspace.write_text(
+            '{"outcome": "APPROVED", "run_id": "real-run", "forged": true}', encoding="utf-8",
+        )
+        subprocess.run(
+            ["git", "add", "-f", ".peos/runs/real-run/ledger.json"],
+            cwd=str(workspace.path), check=True, capture_output=True,
+        )
+
+        result = reconcile_workspace_to_repo(workspace, repo_root)
+
+        assert (real_run_dir / "ledger.json").read_text(encoding="utf-8") == authoritative_content
+        assert not any(".peos/runs" in p for p in result.copied)
+        assert not any(".peos/runs" in p for p in result.deleted)
+    finally:
+        discard_workspace(workspace)
+
+
 def test_reconcile_with_no_changes_is_a_noop(repo_root):
     workspace = create_isolated_workspace(repo_root, "testrun7")
     try:

@@ -63,6 +63,7 @@ from pathlib import Path
 from typing import Callable
 
 from peos.diagnostics import build_diagnostic, sanitize_human_text
+from peos.workflow_disputes import extract_dispute_attempt_lines
 
 ALLOWED_TOOLS = "Read Edit Write Grep Glob"
 
@@ -107,6 +108,16 @@ class ClaudeRunResult:
     summary: str
     ok: bool
     error: str | None = None
+    # SPEC-004 remediation Finding 6 (MAJOR): every line of the *raw*
+    # `summary` that at least superficially attempted the `DISPUTE[...]`
+    # convention, extracted (and individually sanitized) before `summary`
+    # itself is destructively bounded to its last MAX_DIAGNOSTIC_CHARS
+    # characters as a whole -- see peos/workflow_disputes.py's module
+    # docstring. `peos/workflow.py` parses disputes from this field, never
+    # by re-scanning `summary`, so a dispute attempt near the start of an
+    # over-length summary can no longer be silently lost to that later
+    # truncation.
+    dispute_attempt_lines: tuple[str, ...] = ()
 
     @property
     def human_gate(self) -> bool:
@@ -305,6 +316,13 @@ def run_claude(
             ),
             returncode=proc.returncode, stdout=proc.stdout, stderr=proc.stderr,
         )
+    # SPEC-004 remediation Finding 6 (MAJOR): extract dispute-attempt
+    # lines from the *raw* summary before the whole-string bound below
+    # can destroy one near the start of an over-length summary (see
+    # peos/workflow_disputes.py's module docstring and
+    # ClaudeRunResult.dispute_attempt_lines above).
+    dispute_attempt_lines = extract_dispute_attempt_lines(summary)
+
     # SPEC-003 remediation Finding 3 (MAJOR): `summary` is agent-controlled
     # free text that flows straight into workflow.py's logs and
     # report.py's rendered output -- unlike `.error`, it never passed
@@ -398,4 +416,5 @@ def run_claude(
         summary=summary,
         ok=ok,
         error=None if ok else (gate_reason or f"Claude Code returned status={status}"),
+        dispute_attempt_lines=dispute_attempt_lines,
     )

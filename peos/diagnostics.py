@@ -158,6 +158,48 @@ def build_diagnostic(
     return f"{prefix}{bounded_text}"
 
 
+_HASH_TOKEN_RE = re.compile(r"\b[0-9a-f]{40}\b|\b[0-9a-f]{64}\b")
+
+
+def sanitize_identity_text(text: str) -> str:
+    """Sanitize an orchestrator-computed machine-identity string (a Run
+    Ledger field such as `authoritative_baseline`/`governing_spec_
+    identity`: a Git commit hash, a content hash, or a `path:hash` pair
+    joining the two) for persistence -- SPEC-004 remediation Finding 9.
+
+    `sanitize_human_text`'s generic token-redaction rule
+    (`GENERIC_TOKEN_MIN_LEN`-or-longer run of `[A-Za-z0-9_\\-\\.]`) cannot
+    tell a 40-character Git SHA-1 or 64-character SHA-256 content hash
+    apart from a secret-shaped token of the same length, and redacting it
+    destroys identity information the ledger's own retention/integrity
+    logic depends on (SPEC-004 Requirement 20).
+
+    The boundary this function relies on is structural, not content-
+    based: it must only ever be called on the two orchestrator-*computed*
+    ledger fields, never on agent-authored free text (a finding
+    description, a Claude summary, a gate reason) -- those remain on
+    `sanitize_human_text`/`redact`'s ordinary generic-token redaction with
+    no exception. Given that boundary, a substring that exactly matches
+    the expected hash shape (40 or 64 lowercase hex characters) is
+    preserved verbatim; everything else in the string (e.g. a file path
+    joined to the hash by `:`) still goes through the same `redact()` a
+    human-text field would. A malformed candidate (wrong length, any
+    non-hex character) does not match the hash-shape pattern at all, so
+    it falls through to ordinary `redact()` like any other text and is
+    still redacted if it happens to also match the generic token
+    pattern -- this function does not create a general "claim to be a
+    hash and skip sanitization" bypass for arbitrary text.
+    """
+    pieces: list[str] = []
+    last = 0
+    for match in _HASH_TOKEN_RE.finditer(text):
+        pieces.append(redact(text[last:match.start()]))
+        pieces.append(match.group(0))
+        last = match.end()
+    pieces.append(redact(text[last:]))
+    return bound("".join(pieces))
+
+
 def sanitize_human_text(text: str) -> str:
     """Redact and bound one agent-controlled, human-facing free-text
     field -- SPEC-003 remediation Finding 3 (MAJOR): Claude's `summary`/

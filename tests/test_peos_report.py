@@ -221,6 +221,9 @@ def test_report_never_surfaces_a_secret_from_claude_gate_reason_or_codex_finding
                 "requires_human_decision": False,
             }],
             "acceptance_criteria": None,
+            "reviewer_overrules_dispute": None,
+            "addressed_dispute_references": None,
+            "historical_finding_dispositions": None,
         }), encoding="utf-8")
         return subprocess.CompletedProcess(args=["codex"], returncode=0, stdout="", stderr="")
 
@@ -267,6 +270,9 @@ def test_report_never_surfaces_a_secret_from_an_acceptance_criterion_id_end_to_e
             "acceptance_criteria": [
                 {"id": f"AC-001-{secret}", "met": True, "note": "covered"},
             ],
+            "reviewer_overrules_dispute": None,
+            "addressed_dispute_references": None,
+            "historical_finding_dispositions": None,
         }), encoding="utf-8")
         return subprocess.CompletedProcess(args=["codex"], returncode=0, stdout="", stderr="")
 

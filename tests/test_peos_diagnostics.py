@@ -14,6 +14,7 @@ from peos.diagnostics import (
     build_diagnostic,
     classify,
     redact,
+    sanitize_identity_text,
 )
 
 
@@ -171,3 +172,48 @@ def test_build_diagnostic_includes_exit_code_when_given():
 def test_build_diagnostic_omits_exit_code_part_when_not_given():
     diagnostic = build_diagnostic(structured_message="no exit code here", category_override="schema")
     assert "exit=" not in diagnostic
+
+
+# --- SPEC-004 remediation Finding 9: machine-identity hashes survive ----
+
+def test_sanitize_identity_text_preserves_a_valid_40_char_git_hash():
+    git_hash = "a" * 40
+    assert sanitize_identity_text(git_hash) == git_hash
+
+
+def test_sanitize_identity_text_preserves_a_valid_64_char_content_hash():
+    content_hash = "f" * 64
+    assert sanitize_identity_text(content_hash) == content_hash
+
+
+def test_sanitize_identity_text_preserves_a_hash_embedded_in_a_path_colon_hash_pair():
+    git_hash = "0123456789abcdef0123456789abcdef01234567"
+    value = f"docs/specifications/SPEC-004-x.md:{git_hash}"
+    result = sanitize_identity_text(value)
+    assert git_hash in result
+    assert result == value
+    assert "[REDACTED]" not in result
+
+
+def test_sanitize_identity_text_still_redacts_a_malformed_pseudo_hash():
+    """The boundary this function relies on is structural (which FIELD
+    calls it), not "this string merely looks hash-shaped" -- a candidate
+    that is not exactly 40 or 64 lowercase hex characters (here: 40
+    characters, but containing a non-hex 'g') must not bypass
+    sanitization merely by resembling a hash in length.
+    """
+    pseudo_hash = "g" * 40  # 40 chars, but 'g' is not a hex digit
+    result = sanitize_identity_text(f"value={pseudo_hash} end")
+    assert pseudo_hash not in result
+    assert "[REDACTED]" in result
+
+
+def test_sanitize_identity_text_still_redacts_an_unrelated_secret_shaped_token():
+    secret = "sk-liveAbCdEfGhIjKlMnOpQrSt"
+    result = sanitize_identity_text(f"token={secret} leaked")
+    assert secret not in result
+    assert "[REDACTED]" in result
+
+
+def test_sanitize_identity_text_is_bounded():
+    assert len(sanitize_identity_text("z" * (MAX_DIAGNOSTIC_CHARS * 2))) <= MAX_DIAGNOSTIC_CHARS
