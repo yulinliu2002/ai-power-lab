@@ -398,6 +398,172 @@ def test_spec_declared_unparseable_command_fails_closed_without_being_dropped(tm
     assert any("could not be parsed" in f.error for f in report.failures)
 
 
+def test_plan_does_not_infer_commands_from_wrapped_list_prose(tmp_path):
+    """SPEC-005 dogfood defect: a Verification Requirements section
+    written as an ordinary Markdown numbered/bulleted list wraps long
+    bullet text across physical lines, with the wrapped continuation
+    lines indented (to align under the bullet marker) by more than the
+    4-space/tab threshold that previously meant "literal command line".
+    None of that wrapped prose -- including fragments beginning with the
+    exact tokens PEOS previously handed to `sandbox-exec` ("—", "least",
+    "and", "visually.") -- must ever become an executable command.
+    """
+    (tmp_path / "tests").mkdir()
+    spec_path = _write_spec(
+        tmp_path / "SPEC-TEST-x.md",
+        "## Verification Requirements\n\n"
+        "1. **Local verification (implementer):**\n"
+        "   - `cd frontend && npm run lint && npm run typecheck && npm run build`\n"
+        "   - `python -m pytest -q` at the repository root (confirms AC-015/AC-019\n"
+        "     — expect no change in results).\n"
+        "   - Manual run of the dev server (`npm run dev` against the running\n"
+        "     FastAPI backend) exercising: initial page load (baseline run), at\n"
+        "     least one `ExperimentPanel` run with a different `final_fraction`,\n"
+        "     and the mobile-width layout — confirming AC-001 through AC-014\n"
+        "     visually.\n"
+        "2. **Independent review (Codex, per `AGENTS.md`):** review against this\n"
+        "   spec's acceptance criteria specifically.\n",
+    )
+
+    plan = resolve_verification_plan(tmp_path, spec_path)
+
+    # Only the default pytest step -- no frontend/ directory exists in
+    # this fixture, and nothing from the prose was inferred as a command.
+    assert [s.name for s in plan.steps] == ["python tests (pytest -q)"]
+    for step in plan.steps:
+        for token in step.command:
+            assert token not in ("—", "least", "and", "visually.")
+
+    workspace = _workspace_for(tmp_path)
+    calls = []
+    sandbox_calls = []
+
+    def capturing_sandbox_wrapper(command, workspace, repo_root, sandbox_profile_dir, **kwargs):
+        sandbox_calls.append(list(command))
+        return list(command)
+
+    def runner(name, command, cwd, env=None):
+        calls.append((name, tuple(command)))
+        return _ok(name, command, cwd)
+
+    report = execute_plan(
+        plan, workspace, tmp_path, tmp_path / "sandbox-profiles",
+        command_runner=runner, sandbox_wrapper=capturing_sandbox_wrapper,
+    )
+    assert report.passed
+    assert [name for name, _ in calls] == ["python tests (pytest -q)"]
+    forbidden = {"—", "least", "and", "visually.", "FastAPI", "ExperimentPanel"}
+    for _, command in calls:
+        assert not (set(command) & forbidden)
+    for command in sandbox_calls:
+        assert not (set(command) & forbidden)
+
+
+def test_plan_still_runs_legitimate_structured_commands_alongside_manual_prose(tmp_path):
+    """Companion case: a spec section that mixes a genuine (blank-line
+    isolated) indented code block -- the only structured convention that
+    produces an executable command -- with an ordinary bulleted list of
+    manual prose must still execute the code-block command, and must
+    still keep the prose out of the executable plan entirely.
+    """
+    (tmp_path / "tests").mkdir()
+    spec_path = _write_spec(
+        tmp_path / "SPEC-TEST-x.md",
+        "## Verification\n\n"
+        "In addition to the standard suite, this change must also pass:\n\n"
+        "    pytest tests/test_scenario_a_regression.py -q\n\n"
+        "Manual checks:\n\n"
+        "- Manual run of the dev server exercising the mobile-width layout\n"
+        "  — confirming AC-001 through AC-014 visually.\n",
+    )
+
+    plan = resolve_verification_plan(tmp_path, spec_path)
+
+    names = [s.name for s in plan.steps]
+    assert any("test_scenario_a_regression.py" in n for n in names)
+    spec_step = next(s for s in plan.steps if "test_scenario_a_regression.py" in s.name)
+    assert spec_step.command == ("pytest", "tests/test_scenario_a_regression.py", "-q")
+    assert spec_step.parse_error is None
+    for step in plan.steps:
+        for token in step.command:
+            assert token not in ("—", "visually.")
+
+
+def test_plan_captures_manual_verification_items_distinctly(tmp_path):
+    """Requirement: deterministic executable verification and manual/
+    observational verification must be represented distinctly, and the
+    manual items must remain visible in the frozen plan.
+    """
+    (tmp_path / "tests").mkdir()
+    spec_path = _write_spec(
+        tmp_path / "SPEC-TEST-x.md",
+        "## Verification Requirements\n\n"
+        "1. **Local verification (implementer):**\n"
+        "   - `cd frontend && npm run lint && npm run typecheck && npm run build`\n"
+        "   - Manual run of the dev server (`npm run dev` against the running\n"
+        "     FastAPI backend) exercising: initial page load (baseline run), at\n"
+        "     least one `ExperimentPanel` run with a different `final_fraction`,\n"
+        "     and the mobile-width layout — confirming AC-001 through AC-014\n"
+        "     visually.\n"
+        "2. **Independent review (Codex, per `AGENTS.md`):** review against this\n"
+        "   spec's acceptance criteria specifically.\n",
+    )
+
+    plan = resolve_verification_plan(tmp_path, spec_path)
+
+    assert plan.manual_items  # not silently dropped
+    joined = " ".join(plan.manual_items)
+    assert "FastAPI backend" in joined
+    assert "ExperimentPanel" in joined
+    assert "confirming AC-001 through AC-014 visually." in joined
+    assert "Independent review" in joined
+    # The nested bullet's full command text is carried verbatim for
+    # visibility, but never contributes to plan.steps (it is not an
+    # isolated code block -- it is list-item text); with no frontend/
+    # directory in this fixture, the only executable step is the
+    # hardcoded pytest default.
+    assert any("npm run lint" in item for item in plan.manual_items)
+    assert [s.name for s in plan.steps] == ["python tests (pytest -q)"]
+
+
+def test_execute_plan_never_executes_manual_verification_items(tmp_path):
+    """Requirement: manual verification items must not be passed to
+    sandbox-exec (or any other command runner) under any circumstance --
+    `execute_plan` operates only on `plan.steps`, never `plan.manual_items`.
+    """
+    (tmp_path / "tests").mkdir()
+    spec_path = _write_spec(
+        tmp_path / "SPEC-TEST-x.md",
+        "## Verification Requirements\n\n"
+        "1. **Local verification (implementer):**\n"
+        "   - Manual run of the dev server exercising the mobile-width layout\n"
+        "     — confirming AC-001 through AC-014 visually.\n",
+    )
+
+    plan = resolve_verification_plan(tmp_path, spec_path)
+    assert plan.manual_items
+    assert [s.name for s in plan.steps] == ["python tests (pytest -q)"]
+
+    workspace = _workspace_for(tmp_path)
+    sandbox_calls = []
+
+    def capturing_sandbox_wrapper(command, workspace, repo_root, sandbox_profile_dir, **kwargs):
+        sandbox_calls.append(list(command))
+        return list(command)
+
+    execute_plan(
+        plan, workspace, tmp_path, tmp_path / "sandbox-profiles",
+        command_runner=lambda name, command, cwd, env=None: _ok(name, command, cwd),
+        sandbox_wrapper=capturing_sandbox_wrapper,
+    )
+    # Only the hardcoded pytest step ever reached the sandbox wrapper --
+    # one call, for a command that contains none of the manual item text.
+    assert len(sandbox_calls) == 1
+    for manual_text in plan.manual_items:
+        for word in manual_text.split():
+            assert word not in sandbox_calls[0]
+
+
 def test_execute_plan_fails_closed_when_sandbox_unavailable(tmp_path):
     """Finding 1 (BLOCKER): if the verification sandbox cannot be built
     on this platform, every step must fail closed, never fall back to

@@ -141,12 +141,20 @@ def _format_verification(reports: tuple[VerificationReport, ...]) -> str:
 
 
 def _format_verification_plan(plan: VerificationPlan | None) -> str:
-    if plan is None or not plan.steps:
+    if plan is None or (not plan.steps and not plan.manual_items):
         return "(not resolved)"
-    return "\n".join(
+    lines = [
         f"- {step.name} (cwd: {step.cwd_relative}, requires: {step.required_input})"
         for step in plan.steps
-    )
+    ]
+    if plan.manual_items:
+        lines.append(
+            "Manual / observational verification (from the governing specification's "
+            "Verification section; not executed by PEOS -- requires human or "
+            "implementer evidence, per ENGINEERING.md's governance model):"
+        )
+        lines.extend(f"  - {item}" for item in plan.manual_items)
+    return "\n".join(lines)
 
 
 def _format_reviews(reviews) -> str:

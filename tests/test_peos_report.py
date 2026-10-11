@@ -90,6 +90,23 @@ def test_report_includes_frozen_verification_plan():
     assert "python tests (pytest -q)" in report
 
 
+def test_report_shows_manual_verification_items_distinctly_and_marks_them_not_executed():
+    """Manual/observational verification requirements from the governing
+    spec must remain visible in the frozen verification plan rendered
+    into the report, clearly labeled as not executed by PEOS -- distinct
+    from the executable steps list.
+    """
+    plan = VerificationPlan(
+        (VerificationStep(name="python tests (pytest -q)", command=("pytest", "-q"), cwd_relative=".", required_input="tests"),),
+        ("Manual run of the dev server exercising AC-001 through AC-014 visually.",),
+    )
+    result = RunResult(task="t", outcome="APPROVED", spec=SPEC, verification_plan=plan)
+    report = build_report(result, REPO_ROOT)
+    assert "python tests (pytest -q)" in report
+    assert "not executed by PEOS" in report
+    assert "Manual run of the dev server exercising AC-001 through AC-014 visually." in report
+
+
 def test_report_includes_reconciliation_and_workspace_path():
     reconciliation = ReconciliationResult(copied=("a.py",), deleted=("b.py",), blocked_governance_changes=("CLAUDE.md",))
     result = RunResult(
