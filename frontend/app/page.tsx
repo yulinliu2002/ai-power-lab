@@ -10,6 +10,7 @@ import {
 } from "./components/ExperimentPanel";
 import { KpiReadout } from "./components/KpiTile";
 import { PowerFlowSchematic } from "./components/PowerFlowSchematic";
+import { SensitivityStudy } from "./components/SensitivityStudy";
 import { TelemetryChart } from "./components/TelemetryChart";
 import { TimeScrubber } from "./components/TimeScrubber";
 import { TransientMetricsPanel } from "./components/TransientMetricsPanel";
@@ -314,6 +315,8 @@ function Console({
           />
         )}
       </div>
+
+      <SensitivityStudy draft={draftParams} />
     </div>
   );
 }
