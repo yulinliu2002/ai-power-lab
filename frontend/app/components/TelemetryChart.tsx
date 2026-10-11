@@ -5,6 +5,9 @@ export interface ChartSeries {
   values: number[];
   color: string;
   dashed?: boolean;
+  /** Draw no connecting line (points only) -- used by the sensitivity
+   * sweep, where nothing between sampled points is claimed. */
+  hideLine?: boolean;
 }
 
 export interface ReferenceLine {
@@ -53,10 +56,15 @@ interface TelemetryChartProps {
   timeS: number[];
   series: ChartSeries[];
   yUnit: string;
-  currentTimeS: number;
+  /** Omit to draw no "you are here" cursor (non-time x-axes). */
+  currentTimeS?: number;
+  /** Formats x-axis tick labels; defaults to seconds. */
+  xTickFormat?: (x: number) => string;
   referenceLines?: ReferenceLine[];
   eventMarkers?: EventMarker[];
   markerPoint?: MarkerPoint;
+  /** Marks every sampled point; an empty label draws the dot only. */
+  pointMarkers?: MarkerPoint[];
   deficitFill?: DeficitFill;
 }
 
@@ -83,9 +91,11 @@ export function TelemetryChart({
   series,
   yUnit,
   currentTimeS,
+  xTickFormat = (t) => `${t.toFixed(3)}s`,
   referenceLines = [],
   eventMarkers = [],
   markerPoint,
+  pointMarkers = [],
   deficitFill,
 }: TelemetryChartProps) {
   const xMin = timeS[0];
@@ -187,7 +197,7 @@ export function TelemetryChart({
             fontSize={9.5}
             fill={SVG_COLOR.textSecondary}
           >
-            {t.toFixed(3)}s
+            {xTickFormat(t)}
           </text>
         ))}
 
@@ -243,7 +253,7 @@ export function TelemetryChart({
           <polygon points={deficitPolygon} fill={SVG_COLOR.accent} opacity={0.14} />
         )}
 
-        {series.map((s) => (
+        {series.filter((s) => !s.hideLine).map((s) => (
           <polyline
             key={s.label}
             points={timeS.map((t, i) => `${scaleX(t)},${scaleY(s.values[i])}`).join(" ")}
@@ -277,14 +287,41 @@ export function TelemetryChart({
           </g>
         )}
 
-        <line
-          x1={scaleX(currentTimeS)}
-          x2={scaleX(currentTimeS)}
-          y1={MARGIN.top}
-          y2={H - MARGIN.bottom}
-          stroke={SVG_COLOR.textPrimary}
-          strokeWidth={1.5}
-        />
+        {pointMarkers.map((p) => (
+          <g key={`${p.time}-${p.label}`}>
+            <circle
+              cx={scaleX(p.time)}
+              cy={scaleY(p.value)}
+              r={p.label ? 4 : 3}
+              fill={p.label ? SVG_COLOR.surface : SVG_COLOR.accent}
+              stroke={p.label ? SVG_COLOR.textPrimary : SVG_COLOR.accent}
+              strokeWidth={1.5}
+            />
+            {p.label && (
+              <text
+                x={scaleX(p.time) + 6}
+                y={scaleY(p.value) - 6}
+                fontFamily="var(--font-mono)"
+                fontSize={9.5}
+                fontWeight={600}
+                fill={SVG_COLOR.textPrimary}
+              >
+                {p.label}
+              </text>
+            )}
+          </g>
+        ))}
+
+        {currentTimeS !== undefined && (
+          <line
+            x1={scaleX(currentTimeS)}
+            x2={scaleX(currentTimeS)}
+            y1={MARGIN.top}
+            y2={H - MARGIN.bottom}
+            stroke={SVG_COLOR.textPrimary}
+            strokeWidth={1.5}
+          />
+        )}
       </svg>
       {deficitPolygon && (
         <span className="flex items-center gap-1.5 font-mono text-[9.5px] text-secondary">

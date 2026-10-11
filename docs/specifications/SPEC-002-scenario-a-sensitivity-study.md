@@ -11,8 +11,8 @@
 Revision 0.2 resolves the Human Engineering Lead decisions raised as open
 items in v0.1 (execution architecture, sweep size, visualization,
 current-value representation, UI placement, testing approach, and the
-framing of the physics acceptance criteria). Status remains Draft pending
-final sign-off.
+framing of the physics acceptance criteria). This revision is Approved;
+no open item remains pending sign-off.
 
 ## 1. Problem Statement
 

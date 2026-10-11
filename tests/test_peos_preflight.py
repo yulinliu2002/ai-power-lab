@@ -2,9 +2,15 @@
 integrity (peos/preflight.py, SPEC-001 remediation Finding 7, Finding 4
 in the second remediation pass)."""
 
+import sys
 from pathlib import Path
 
-from peos.preflight import check_repository_safety, detect_mutations, hash_governance_artifacts
+from peos.preflight import (
+    check_repository_safety,
+    check_verification_interpreter,
+    detect_mutations,
+    hash_governance_artifacts,
+)
 
 from tests._peos_fixtures import make_minimal_repo
 
@@ -107,3 +113,35 @@ def test_detect_mutations_empty_when_nothing_changed(tmp_path):
 
     mutated = detect_mutations(baseline, repo_root)
     assert mutated == ()
+
+
+def test_verification_interpreter_check_passes_when_pytest_importable():
+    # The interpreter actually running this test suite necessarily has
+    # pytest importable -- exercised with the real default `find_spec`,
+    # no injection needed.
+    result = check_verification_interpreter()
+    assert result.ok
+    assert result.reason is None
+
+
+def test_verification_interpreter_check_fails_closed_when_pytest_missing():
+    # pytest cannot actually be uninstalled from the interpreter running
+    # this test, so the "module not importable" case is exercised via
+    # the injected `find_spec` -- the one input this check depends on.
+    result = check_verification_interpreter(find_spec=lambda name: None)
+    assert not result.ok
+    assert sys.executable in result.reason
+    assert "pytest" in result.reason
+    assert "venv" in result.reason or "virtual environment" in result.reason
+
+
+def test_verification_interpreter_check_only_probes_pytest():
+    seen = []
+
+    def fake_find_spec(name):
+        seen.append(name)
+        return object()
+
+    result = check_verification_interpreter(find_spec=fake_find_spec)
+    assert result.ok
+    assert seen == ["pytest"]

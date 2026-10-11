@@ -17,6 +17,7 @@ tests/test_peos_real_cli_contract.py.
 
 import os
 import subprocess
+import sys
 from pathlib import Path
 
 from peos.claude_agent import ClaudeRunResult
@@ -199,6 +200,84 @@ def test_preflight_failure_on_missing_governance_file(tmp_path):
 
     assert result.outcome == "FAILED"
     assert "AGENTS.md" in result.gate_reason
+
+
+def test_interpreter_preflight_failure_stops_before_claude_or_workspace(tmp_path, monkeypatch):
+    """PEOS infrastructure maintenance (dogfooding finding): if the
+    interpreter running PEOS cannot satisfy the frozen plan's pytest
+    step, that must fail closed immediately, before Intake resolves a
+    spec, before Claude's authentication preflight, before the isolated
+    workspace is created, and before Claude is invoked at all -- not
+    deep inside a later verification CommandResult.
+    """
+    import peos.workflow as workflow_module
+    from peos.preflight import InterpreterPreflightResult
+
+    monkeypatch.setattr(
+        workflow_module,
+        "check_verification_interpreter",
+        lambda: InterpreterPreflightResult(
+            ok=False,
+            reason=f"The interpreter currently running PEOS ({sys.executable}) does not have pytest installed.",
+        ),
+    )
+
+    repo_root = make_minimal_repo(tmp_path)
+    spec_calls = []
+    claude_calls = []
+    workspace_calls = []
+
+    def resolver(task, specs_dir, explicit_spec):
+        spec_calls.append(1)
+        return SpecResolution(spec=_spec_for(repo_root))
+
+    def workspace_factory(repo_root_arg, run_id):
+        workspace_calls.append(1)
+        return _fake_workspace_factory(repo_root_arg, run_id)
+
+    result = run_workflow(
+        "task", repo_root,
+        log=lambda msg: None,
+        spec_resolver=resolver,
+        claude_runner=lambda prompt, cwd, env=None: (claude_calls.append(1), _ok_claude())[1],
+        verifier=lambda workspace, repo_root, plan: _pass_verification(),
+        codex_runner=lambda prompt, cwd, env=None: _approve_review(),
+        workspace_factory=workspace_factory,
+        environ=_valid_environ(tmp_path),
+    )
+
+    assert result.outcome == "FAILED"
+    assert "interpreter preflight" in result.gate_reason.lower()
+    assert sys.executable in result.gate_reason
+    assert "pytest" in result.gate_reason.lower()
+    # Fails before Intake even resolves the governing spec.
+    assert spec_calls == []
+    assert claude_calls == []
+    assert workspace_calls == []
+    assert result.workspace_path is None
+
+
+def test_interpreter_preflight_passes_normally_when_pytest_importable(tmp_path):
+    """The default, real `check_verification_interpreter` (no injection)
+    must not block a normal run on an interpreter that does have pytest
+    -- the interpreter actually running this test suite always does.
+    """
+    repo_root = make_minimal_repo(tmp_path)
+    claude_calls = []
+
+    result = run_workflow(
+        "task", repo_root,
+        log=lambda msg: None,
+        spec_resolver=_resolver_returns(_spec_for(repo_root)),
+        claude_runner=lambda prompt, cwd, env=None: (claude_calls.append(1), _ok_claude())[1],
+        verifier=lambda workspace, repo_root, plan: _pass_verification(),
+        codex_runner=lambda prompt, cwd, env=None: _approve_review(),
+        workspace_factory=_fake_workspace_factory,
+        environ=_valid_environ(tmp_path),
+    )
+
+    assert result.outcome == "APPROVED"
+    assert claude_calls == [1]
 
 
 def test_intake_gate_when_no_spec_found(tmp_path):
@@ -913,13 +992,39 @@ def test_no_real_home_or_credential_denylist_var_ever_reaches_either_agent_even_
     """AC-6: neither agent's environment ever carries the real HOME or a
     CREDENTIAL_ENV_DENYLIST variable, including on a failure path (here,
     Codex's auth preflight failing after Claude's phase already ran).
+
+    Regression (PEOS infrastructure maintenance, dogfooding finding): this
+    test's `with_codex=False` intent must hold even when the orchestrator's
+    real ambient environment already has a *valid* PEOS_CODEX_AUTH_HOME
+    exported, exactly as a developer's own shell legitimately might.
+    `dict(os.environ)` followed by `dict.update(_valid_environ(..., with_codex=False))`
+    only ever adds/overwrites keys present in the overlay -- it never
+    removes a key the overlay omits -- so a real ambient
+    PEOS_CODEX_AUTH_HOME previously survived untouched into `environ`, made
+    Codex's auth preflight pass, and flipped this test's outcome from the
+    intended FAILED to APPROVED. `monkeypatch.setenv` below reproduces that
+    exact ambient-pollution scenario deterministically (a real, valid,
+    on-disk auth directory), independent of whatever the actual invoking
+    shell happens to have exported, and the explicit `.pop(...)` after the
+    overlay is what makes `with_codex=False` authoritative again.
     """
     import peos.workflow as workflow_module
 
     repo_root = make_minimal_repo(tmp_path)
     monkeypatch.setenv("SSH_AUTH_SOCK", "/tmp/should-never-leak.sock")
+    real_ambient_codex_auth_home = tmp_path / "real-ambient-codex-auth-home"
+    real_ambient_codex_auth_home.mkdir()
+    (real_ambient_codex_auth_home / CODEX_AUTH_FILENAME).write_text('{"real": "auth"}', encoding="utf-8")
+    monkeypatch.setenv(CODEX_AUTH_HOME_ENV_VAR, str(real_ambient_codex_auth_home))
+
     environ = dict(os.environ)
     environ.update(_valid_environ(tmp_path, with_codex=False))
+    # Make the with_codex=False intent authoritative: dict.update() only
+    # adds/overwrites keys present in its argument, it never deletes one
+    # absent from it, so the real ambient PEOS_CODEX_AUTH_HOME set above
+    # (or exported in the real invoking shell) would otherwise survive
+    # into `environ` untouched and silently contradict this scenario.
+    environ.pop(CODEX_AUTH_HOME_ENV_VAR, None)
     captured_claude_envs = []
 
     result = run_workflow(
