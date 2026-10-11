@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { EnergyDeficitAnalysis } from "./components/EnergyDeficitAnalysis";
 import { EngineeringInterpretation } from "./components/EngineeringInterpretation";
 import {
   BASELINE_EXPERIMENT_PARAMS,
@@ -22,7 +23,7 @@ import {
 } from "./lib/simulationApi";
 import { busStatus, sstStatus } from "./lib/statusRoles";
 import { SVG_COLOR } from "./lib/theme";
-import { computeTransientMetrics } from "./lib/transientMetrics";
+import { computeTransientMetrics, formatEnergyDeficitKj } from "./lib/transientMetrics";
 
 // The initial AI load fraction (before the step) is fixed in V1 --
 // Scenario A always starts at 40% rated load, matching
@@ -279,13 +280,20 @@ function Console({
                     aboveLabel: "P_load",
                     baselineLabel: "P_sst",
                     windowEndS: metrics.minVdcTimeS,
-                    label: `shaded area ≈ ${metrics.energyDeficitKj.toFixed(1)} kJ drawn from the DC bus (energy, not power)`,
+                    label: `shaded area ≈ ${formatEnergyDeficitKj(metrics)} kJ drawn from the DC bus (energy, not power)`,
                   }
                 : undefined
             }
           />
         </div>
       </div>
+
+      {metrics && (
+        <EnergyDeficitAnalysis
+          metrics={metrics}
+          voltageReferenceV={data.thresholds.voltage_reference_v}
+        />
+      )}
 
       {metrics && (
         <TransientMetricsPanel
