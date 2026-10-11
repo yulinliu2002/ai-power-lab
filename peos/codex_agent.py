@@ -30,6 +30,24 @@ end-to-end against the installed `codex exec --output-schema` /
 `--output-last-message` contract with a live invocation; the model's
 JSON conformed with no schema-rejection and no coercion needed.
 
+SPEC-004 (PEOS Autonomous Engineering Loop, Requirement 8/16/22) adds
+three new, nullable-by-default top-level fields, following the same
+strictness pattern every other nullable field in this schema already
+uses: `reviewer_overrules_dispute` (bool, null only when no dispute is
+active this cycle), `addressed_dispute_references` (list[str], null only
+when no dispute is active -- required, non-null, and must name every
+currently-active dispute reference otherwise), and
+`historical_finding_dispositions` (a list of
+`{reference, disposition, note}` closing an Outstanding Findings
+Register entry -- see `peos/findings_register.py`). `_validate_review_
+payload` now additionally takes `active_dispute_references` (to check
+the null/non-null symmetry and completeness above) and `required_ac_ids`
+(to reject an `APPROVE` whose acceptance-criteria assessment omits any
+AC the governing specification declares -- SPEC-004 Requirement 5/
+AC-25). Both default to empty, reproducing SPEC-001/SPEC-003's exact
+behavior when V2's caller (`peos/workflow.py`) does not supply them
+(e.g. cycle 0, or `--max-cycles 1` mode).
+
 Finding 4 (adversarial-proof parsing): `_validate_review_payload` treats
 a non-dict top level (e.g. `[]`), a missing/non-list `findings` (e.g.
 `null`), any finding missing a required field or using an unrecognized
@@ -61,6 +79,7 @@ from pathlib import Path
 from typing import Callable
 
 from peos.diagnostics import build_diagnostic, sanitize_human_text
+from peos.findings_register import VALID_DISPOSITIONS, FindingRef
 
 Runner = Callable[..., subprocess.CompletedProcess]
 
@@ -107,10 +126,59 @@ REVIEW_SCHEMA = {
                 "additionalProperties": False,
             },
         },
+        # SPEC-004 Requirement 8/22: null only when no dispute is active
+        # this cycle.
+        "reviewer_overrules_dispute": {"type": ["boolean", "null"]},
+        # SPEC-004 Requirement 8: null only when no dispute is active;
+        # otherwise required to list every active dispute's reference.
+        "addressed_dispute_references": {"type": ["array", "null"], "items": {"type": "string"}},
+        # SPEC-004 Requirement 16: closes Outstanding Findings Register
+        # entries. Null is valid whether or not any entry is closed this
+        # cycle (most cycles close nothing -- omission, not an error).
+        "historical_finding_dispositions": {
+            "type": ["array", "null"],
+            "items": {
+                "type": "object",
+                "properties": {
+                    "reference": {"type": "string"},
+                    "disposition": {"type": "string", "enum": list(VALID_DISPOSITIONS)},
+                    "note": {"type": ["string", "null"]},
+                },
+                "required": ["reference", "disposition", "note"],
+                "additionalProperties": False,
+            },
+        },
     },
-    "required": ["verdict", "summary", "findings", "acceptance_criteria"],
+    "required": [
+        "verdict", "summary", "findings", "acceptance_criteria",
+        "reviewer_overrules_dispute", "addressed_dispute_references",
+        "historical_finding_dispositions",
+    ],
     "additionalProperties": False,
 }
+
+_TOP_LEVEL_KEYS = frozenset(REVIEW_SCHEMA["required"])
+
+# SPEC-004 remediation Finding 7 (MAJOR): the CLI-facing REVIEW_SCHEMA
+# (above) requires all seven top-level keys -- matching the "strict
+# Structured Outputs" shape the real `codex exec --output-schema`
+# contract needs (Finding 5) -- but this module's own local Python-side
+# payload validator previously only required the four pre-SPEC-004 keys
+# (`_LEGACY_REQUIRED_KEYS`, now removed), silently treating a payload
+# that omitted `reviewer_overrules_dispute`/`addressed_dispute_
+# references`/`historical_finding_dispositions` entirely the same as one
+# that supplied them as an explicit `null`. That is a real gap, not a
+# harmless convenience: a payload is validated locally by this function
+# on every path (there is no separate "trust the CLI's own schema
+# enforcement" path), so a payload that happened to omit a required-but-
+# nullable key -- whether from a CLI/model inconsistency or a crafted
+# adversarial input -- was accepted here even though it violates
+# REVIEW_SCHEMA's own `required` list. "Required-but-nullable" means the
+# KEY must be present; only its VALUE may be `null`. `missing_keys` below
+# is therefore checked against the complete `_TOP_LEVEL_KEYS` set, with
+# no exception for these three -- the fail-closed behavior already
+# enforced for `verdict`/`summary`/`findings`/`acceptance_criteria` now
+# applies identically to all seven.
 
 
 @dataclass(frozen=True)
@@ -119,6 +187,13 @@ class Finding:
     category: str
     description: str
     requires_human_decision: bool
+
+
+@dataclass(frozen=True)
+class HistoricalFindingDisposition:
+    reference: str
+    disposition: str
+    note: str
 
 
 @dataclass(frozen=True)
@@ -132,6 +207,9 @@ class CodexReviewResult:
     raw_stderr: str
     ok: bool
     error: str | None = None
+    reviewer_overrules_dispute: bool | None = None
+    addressed_dispute_references: tuple[str, ...] | None = None
+    historical_finding_dispositions: tuple[HistoricalFindingDisposition, ...] | None = None
 
     @property
     def approved(self) -> bool:
@@ -289,13 +367,56 @@ def _validate_acceptance_criteria(raw: object) -> tuple[dict, ...] | None:
     return tuple(result)
 
 
-def _validate_review_payload(data: object) -> CodexReviewResult:
+def _validate_historical_finding_dispositions(raw: object) -> tuple[HistoricalFindingDisposition, ...] | None:
+    """Returns `None` (invalid) or a validated tuple; `raw=None` (nullable
+    per schema) validates to an empty tuple -- most cycles close no
+    historical finding, which is not itself an error (SPEC-004 Outstanding
+    Findings Register: "omission never closes a finding").
+    """
+    if raw is None:
+        return ()
+    if not isinstance(raw, list):
+        return None
+    result = []
+    for item in raw:
+        if not isinstance(item, dict):
+            return None
+        if set(item.keys()) != {"reference", "disposition", "note"}:
+            return None
+        reference, disposition, note = item.get("reference"), item.get("disposition"), item.get("note")
+        if not isinstance(reference, str) or FindingRef.parse(reference) is None:
+            return None
+        if disposition not in VALID_DISPOSITIONS:
+            return None
+        if note is not None and not isinstance(note, str):
+            return None
+        result.append(HistoricalFindingDisposition(
+            reference=reference, disposition=disposition,
+            note=sanitize_human_text(note) if isinstance(note, str) else "",
+        ))
+    return tuple(result)
+
+
+def _validate_review_payload(
+    data: object,
+    *,
+    active_dispute_references: frozenset = frozenset(),
+    required_ac_ids: frozenset = frozenset(),
+) -> CodexReviewResult:
     """Strictly validate a parsed Codex payload. Fails closed on every
     reproduced adversarial case (SPEC-001 remediation Finding 4): a
     non-dict top level, an incomplete/missing `findings`, an unrecognized
     enum, and an internally contradictory APPROVE (a blocking/major or
     human-decision finding, or an unmet acceptance criterion, alongside
     verdict=APPROVE) all yield `ok=False`.
+
+    SPEC-004 Requirement 8/22/25: `active_dispute_references` (the set of
+    currently-active dispute references this cycle, per the Round Packet)
+    and `required_ac_ids` (the complete governing AC set) are supplied by
+    `peos/workflow.py` from orchestrator-owned state, never from this
+    payload itself -- both default to empty, reproducing SPEC-001/
+    SPEC-003's exact behavior (no dispute mechanism, no AC-completeness
+    check) when a caller does not supply them.
     """
     if not isinstance(data, dict):
         return _fail(0, build_diagnostic(
@@ -303,7 +424,6 @@ def _validate_review_payload(data: object) -> CodexReviewResult:
             category_override="schema",
         ))
 
-    _TOP_LEVEL_KEYS = {"verdict", "summary", "findings", "acceptance_criteria"}
     unexpected_keys = set(data.keys()) - _TOP_LEVEL_KEYS
     if unexpected_keys:
         return _fail(
@@ -317,11 +437,12 @@ def _validate_review_payload(data: object) -> CodexReviewResult:
             ),
         )
 
-    # Final acceptance review: all four top-level keys are schema-required
-    # (REVIEW_SCHEMA["required"]), including `acceptance_criteria` whose
-    # VALUE may be null but whose KEY must still be present. A missing key
-    # must not be treated the same as an explicit null via `.get()`.
-    missing_keys = set(REVIEW_SCHEMA["required"]) - set(data.keys())
+    # SPEC-004 remediation Finding 7: all seven top-level keys are
+    # schema-required (REVIEW_SCHEMA["required"]), including the four
+    # nullable ones whose VALUE may be null but whose KEY must still be
+    # present. A missing key must not be treated the same as an explicit
+    # null via `.get()`.
+    missing_keys = _TOP_LEVEL_KEYS - set(data.keys())
     if missing_keys:
         return _fail(
             0,
@@ -375,7 +496,80 @@ def _validate_review_payload(data: object) -> CodexReviewResult:
             category_override="schema",
         ))
 
+    # SPEC-004 Requirement 8 (AC-10): `reviewer_overrules_dispute` and
+    # `addressed_dispute_references` must be null together (no dispute
+    # active) or non-null together (dispute(s) active) -- never one
+    # without the other, and never non-null when nothing is active.
+    raw_overrules = data.get("reviewer_overrules_dispute")
+    if raw_overrules is not None and not isinstance(raw_overrules, bool):
+        return _fail(0, build_diagnostic(
+            structured_message=f"Codex `reviewer_overrules_dispute` must be boolean or null, got {raw_overrules!r}",
+            category_override="schema",
+        ))
+
+    raw_addressed = data.get("addressed_dispute_references")
+    if raw_addressed is not None:
+        if not isinstance(raw_addressed, list) or not all(isinstance(r, str) for r in raw_addressed):
+            return _fail(0, build_diagnostic(
+                structured_message=f"Codex `addressed_dispute_references` must be a list of strings or null, got {raw_addressed!r}",
+                category_override="schema",
+            ))
+    addressed_dispute_references = tuple(raw_addressed) if raw_addressed is not None else None
+
+    if not active_dispute_references:
+        if raw_overrules is not None or addressed_dispute_references is not None:
+            return _fail(0, build_diagnostic(
+                structured_message=(
+                    "Codex set reviewer_overrules_dispute/addressed_dispute_references "
+                    "while no dispute is active this cycle; both must be null"
+                ),
+                category_override="schema",
+            ))
+    else:
+        if raw_overrules is None or addressed_dispute_references is None:
+            return _fail(0, build_diagnostic(
+                structured_message=(
+                    "Codex left reviewer_overrules_dispute/addressed_dispute_references null "
+                    "while a dispute is active this cycle; both are required"
+                ),
+                category_override="schema",
+            ))
+        missing_refs = active_dispute_references - set(addressed_dispute_references)
+        if missing_refs:
+            return _fail(0, build_diagnostic(
+                structured_message=(
+                    "Codex `addressed_dispute_references` omits active dispute reference(s): "
+                    f"{sorted(missing_refs)!r}"
+                ),
+                category_override="schema",
+            ))
+
+    historical_finding_dispositions = _validate_historical_finding_dispositions(
+        data.get("historical_finding_dispositions")
+    )
+    if historical_finding_dispositions is None:
+        return _fail(0, build_diagnostic(
+            structured_message=(
+                f"Codex `historical_finding_dispositions` field is malformed: "
+                f"{data.get('historical_finding_dispositions')!r}"
+            ),
+            category_override="schema",
+        ))
+
     if verdict == "APPROVE":
+        # SPEC-004 Requirement 8 (AC-21): an earlier draft allowed APPROVE
+        # and reviewer_overrules_dispute=true to coexist as merely
+        # inconsistent rather than invalid -- a persistent, reviewer-
+        # overruled dispute is never a valid approval.
+        if raw_overrules is True:
+            return _fail(0, build_diagnostic(
+                structured_message=(
+                    "Codex returned a contradictory APPROVE: verdict=APPROVE but "
+                    "reviewer_overrules_dispute=true for an active dispute. Failing closed "
+                    "rather than trusting the verdict field alone."
+                ),
+                category_override="schema",
+            ))
         contradicting = [f for f in findings if f.severity in _BLOCKING_SEVERITIES or f.requires_human_decision]
         if contradicting:
             return _fail(
@@ -423,10 +617,34 @@ def _validate_review_payload(data: object) -> CodexReviewResult:
                     category_override="schema",
                 ),
             )
+        # SPEC-004 Requirement 5/25: an AC assessment covering fewer than
+        # the complete governing AC set the Round Packet supplied is
+        # itself a contract violation, not a passing review -- a partial-
+        # coverage APPROVE is rejected here, before it can ever reach
+        # convergence as an approval.
+        if required_ac_ids:
+            covered = {ac["id"] for ac in acceptance_criteria}
+            uncovered = set(required_ac_ids) - covered
+            if uncovered:
+                return _fail(
+                    0,
+                    build_diagnostic(
+                        structured_message=(
+                            "Codex returned a contradictory APPROVE: verdict=APPROVE but the "
+                            f"acceptance-criteria assessment omits required AC(s): "
+                            f"{sorted(uncovered)!r}. Failing closed rather than trusting the "
+                            "verdict field alone."
+                        ),
+                        category_override="schema",
+                    ),
+                )
 
     return CodexReviewResult(
         returncode=0, verdict=verdict, summary=summary, findings=findings,
         acceptance_criteria=acceptance_criteria, raw_stdout="", raw_stderr="", ok=True,
+        reviewer_overrules_dispute=raw_overrules,
+        addressed_dispute_references=addressed_dispute_references,
+        historical_finding_dispositions=historical_finding_dispositions,
     )
 
 
@@ -436,6 +654,8 @@ def run_codex_review(
     runner: Runner = subprocess.run,
     timeout: int = 3600,
     env: dict | None = None,
+    active_dispute_references: frozenset = frozenset(),
+    required_ac_ids: frozenset = frozenset(),
 ) -> CodexReviewResult:
     """Invoke Codex for an independent review of `cwd` (the isolated
     workspace, never the authoritative repository directly) and capture
@@ -445,6 +665,10 @@ def run_codex_review(
     cannot be read/parsed, or output that fails `_validate_review_payload`
     yields `ok=False, verdict=None` rather than guessing APPROVE
     (SPEC-001 Section 11, AC-011).
+
+    `active_dispute_references`/`required_ac_ids` (SPEC-004) are
+    orchestrator-owned state forwarded verbatim to
+    `_validate_review_payload`; see that function's docstring.
     """
     with tempfile.TemporaryDirectory(prefix="peos-codex-") as tmp:
         schema_path = Path(tmp) / "review_schema.json"
@@ -495,7 +719,9 @@ def run_codex_review(
                 stdout=proc.stdout, stderr=proc.stderr,
             )
 
-        result = _validate_review_payload(data)
+        result = _validate_review_payload(
+            data, active_dispute_references=active_dispute_references, required_ac_ids=required_ac_ids,
+        )
         if not result.ok:
             return CodexReviewResult(
                 returncode=proc.returncode, verdict=None, summary="", findings=(),
@@ -506,4 +732,7 @@ def run_codex_review(
             returncode=proc.returncode, verdict=result.verdict, summary=result.summary,
             findings=result.findings, acceptance_criteria=result.acceptance_criteria,
             raw_stdout=proc.stdout, raw_stderr=proc.stderr, ok=True,
+            reviewer_overrules_dispute=result.reviewer_overrules_dispute,
+            addressed_dispute_references=result.addressed_dispute_references,
+            historical_finding_dispositions=result.historical_finding_dispositions,
         )

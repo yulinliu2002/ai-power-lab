@@ -32,6 +32,17 @@ def make_minimal_repo(tmp_path: Path, spec_status: str = "Approved") -> Path:
     (repo_root / "CLAUDE.md").write_text(_MINIMAL_CLAUDE_MD, encoding="utf-8")
     (repo_root / "AGENTS.md").write_text(_MINIMAL_AGENTS_MD, encoding="utf-8")
     (repo_root / "ENGINEERING.md").write_text(_MINIMAL_ENGINEERING_MD, encoding="utf-8")
+    # SPEC-004 Requirement 19: `.peos/runs/` is gitignored in any real
+    # target repository. Several workflow tests reuse `repo_root` itself
+    # as the "isolated workspace" (`_fake_workspace_factory`, for speed,
+    # since a real `git clone` per test is unnecessary to exercise
+    # routing logic) -- the Run Ledger, always written under the real
+    # `repo_root`, would otherwise show up as an untracked file inside
+    # that same fake "workspace" and confuse reconciliation's
+    # untracked-file scan (`git ls-files --others --exclude-standard`),
+    # exactly as a real target repository without this gitignore entry
+    # would confuse real reconciliation too.
+    (repo_root / ".gitignore").write_text(".peos/runs/\n", encoding="utf-8")
 
     specs_dir = repo_root / "docs" / "specifications"
     specs_dir.mkdir(parents=True)

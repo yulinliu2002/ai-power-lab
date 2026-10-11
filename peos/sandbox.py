@@ -176,6 +176,8 @@ import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from peos.ledger import RUNS_SUBDIR
+
 # Environment variables that can carry Git/GitHub/SSH push credentials.
 # This is a named, auditable deny-list, not a claim that every possible
 # ambient credential source is covered -- see the trust-boundary note in
@@ -550,6 +552,27 @@ def _changed_paths(workspace: IsolatedWorkspace) -> tuple[list[tuple[str, str]],
     return tracked, untracked
 
 
+def _is_orchestrator_owned_run_state(rel: str) -> bool:
+    """SPEC-004 remediation Finding 2 (BLOCKER): `.peos/runs/` is
+    orchestrator-owned Run Ledger state (peos/ledger.py), never content
+    an implementation agent's workspace edits are allowed to introduce
+    into the authoritative repository. This check is structural --
+    a fixed path-prefix comparison -- and is applied unconditionally,
+    before `protected_relative_paths` is even consulted and regardless
+    of whatever `.gitignore` says. Previously, reconciliation relied
+    entirely on `.peos/runs/` being gitignored for this property: an
+    agent that removed (or never had) that gitignore entry could make
+    `git ls-files --others --exclude-standard` see a forged
+    `.peos/runs/<run>/ledger.json` as an ordinary untracked file, which
+    reconciliation would then copy straight into the authoritative
+    repository -- agent-authored content masquerading as orchestrator
+    ledger state. A `.gitignore` change inside the workspace cannot
+    affect this check at all, because it never looks at ignore rules in
+    the first place.
+    """
+    return rel == RUNS_SUBDIR or rel.startswith(f"{RUNS_SUBDIR}/")
+
+
 def reconcile_workspace_to_repo(
     workspace: IsolatedWorkspace,
     repo_root: Path,
@@ -561,7 +584,14 @@ def reconcile_workspace_to_repo(
     artifacts + the governing specification) are never copied back even
     if changed -- such a change is reported in
     `blocked_governance_changes` instead so it is visible, not silently
-    applied or silently dropped.
+    applied or silently dropped. Anything under `.peos/runs/`
+    (`_is_orchestrator_owned_run_state`) is excluded structurally, before
+    `protected_relative_paths` is even consulted: it is never copied,
+    never used to delete/replace the authoritative ledger, regardless of
+    whether the path reached this function via a tracked change, an
+    untracked file, or a tracked-but-deleted path (a rename is already
+    split into a delete + an add by `_changed_paths`, so this one check
+    covers a rename into or out of that subtree too).
     """
     tracked, untracked = _changed_paths(workspace)
 
@@ -570,6 +600,8 @@ def reconcile_workspace_to_repo(
     blocked: list[str] = []
 
     for status, rel in tracked:
+        if _is_orchestrator_owned_run_state(rel):
+            continue
         if rel in protected_relative_paths:
             blocked.append(rel)
             continue
@@ -586,6 +618,8 @@ def reconcile_workspace_to_repo(
             copied.append(rel)
 
     for rel in untracked:
+        if _is_orchestrator_owned_run_state(rel):
+            continue
         if rel in protected_relative_paths:
             blocked.append(rel)
             continue

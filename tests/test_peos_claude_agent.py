@@ -446,3 +446,57 @@ def test_run_claude_missing_summary_key_is_rejected():
     assert not result.ok
     assert result.status is None
     assert "summary" in result.error
+
+
+# --- SPEC-004 remediation Finding 6: dispute attempt survives bounding -
+
+def test_run_claude_preserves_a_dispute_attempt_lost_to_whole_summary_bounding():
+    """Reproduces F6 through the real `run_claude` extraction pipeline
+    (raw CLI stdout -> structured_output -> ClaudeRunResult), not a
+    hand-built ClaudeRunResult: a well-formed `DISPUTE[0.1]: ...` line at
+    the very start of a summary long enough that `sanitize_human_text`'s
+    whole-string `bound()` (keeps the *tail*) would discard it entirely
+    must still show up in `dispute_attempt_lines`, even though it is
+    genuinely no longer present in the (correctly bounded) `summary`
+    field itself.
+    """
+    from peos.diagnostics import MAX_DIAGNOSTIC_CHARS
+
+    # Space-separated filler (not one long token-shaped run, so redaction
+    # does not collapse it down before bounding even gets a chance to
+    # truncate it -- matching peos/diagnostics.py's own redact-then-bound
+    # ordering, see tests/test_peos_diagnostics.py's equivalent fixture).
+    padding = "filler word " * ((MAX_DIAGNOSTIC_CHARS + 500) // len("filler word "))
+    raw_summary = f"DISPUTE[0.1]: this is already fixed, see test_foo.\n{padding}"
+    structured = {
+        "status": "COMPLETED", "gate_category": None, "gate_reason": None, "summary": raw_summary,
+    }
+    payload = _wrap(structured)
+
+    def runner(command, **kwargs):
+        return _completed(0, stdout=payload)
+
+    result = run_claude("task", Path("."), runner=runner)
+
+    assert result.ok
+    # The whole-summary bound genuinely did its job -- the dispute line
+    # is gone from `summary` itself.
+    assert "DISPUTE[0.1]" not in result.summary
+    assert len(result.summary) <= MAX_DIAGNOSTIC_CHARS
+    # ...but it survived independently in `dispute_attempt_lines`.
+    assert result.dispute_attempt_lines == ("DISPUTE[0.1]: this is already fixed, see test_foo.",)
+
+
+def test_run_claude_summary_with_no_dispute_has_empty_dispute_attempt_lines():
+    structured = {
+        "status": "COMPLETED", "gate_category": None, "gate_reason": None,
+        "summary": "Did the work, no disputes.",
+    }
+    payload = _wrap(structured)
+
+    def runner(command, **kwargs):
+        return _completed(0, stdout=payload)
+
+    result = run_claude("task", Path("."), runner=runner)
+    assert result.ok
+    assert result.dispute_attempt_lines == ()

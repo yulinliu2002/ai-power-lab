@@ -11,7 +11,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
 def _patch_workflow(monkeypatch, outcome: str):
-    def fake_run_workflow(task, repo_root, explicit_spec=None):
+    def fake_run_workflow(task, repo_root, explicit_spec=None, max_cycles=None):
         return RunResult(task=task, outcome=outcome, phases=(PhaseLog(phase="Intake"),))
 
     monkeypatch.setattr(cli, "run_workflow", fake_run_workflow)
@@ -90,7 +90,7 @@ def test_spec_path_is_canonicalized_relative_to_repo(tmp_path, monkeypatch):
 
     captured = {}
 
-    def fake_run_workflow(task, repo_root, explicit_spec=None):
+    def fake_run_workflow(task, repo_root, explicit_spec=None, max_cycles=None):
         captured["explicit_spec"] = explicit_spec
         return RunResult(task=task, outcome="APPROVED", phases=(PhaseLog(phase="Intake"),))
 
@@ -137,7 +137,7 @@ def test_rejects_spec_path_with_nul_byte_without_a_traceback(tmp_path, capsys):
 def test_unhandled_workflow_exception_is_reported_not_raised(tmp_path, monkeypatch, capsys):
     (tmp_path / ".git").mkdir()
 
-    def exploding_run_workflow(task, repo_root, explicit_spec=None):
+    def exploding_run_workflow(task, repo_root, explicit_spec=None, max_cycles=None):
         raise RuntimeError("simulated orchestration bug")
 
     monkeypatch.setattr(cli, "run_workflow", exploding_run_workflow)
@@ -146,3 +146,48 @@ def test_unhandled_workflow_exception_is_reported_not_raised(tmp_path, monkeypat
     out = capsys.readouterr().out
     assert "FAILED" in out
     assert "simulated orchestration bug" in out
+
+
+# --- SPEC-004 Requirement 6/AC-4: --max-cycles validation ---------------
+
+@pytest.mark.parametrize("bad_value", [0, -1, 6, 100])
+def test_max_cycles_outside_valid_range_is_rejected_with_a_full_report(tmp_path, capsys, bad_value):
+    (tmp_path / ".git").mkdir()
+    code = cli.main(["task", "--repo", str(tmp_path), "--max-cycles", str(bad_value)])
+    assert code == 1
+    out = capsys.readouterr().out
+    assert "PEOS Run Report" in out
+    assert "FAILED" in out
+    assert "--max-cycles must be between" in out
+
+
+@pytest.mark.parametrize("good_value", [1, 2, 3, 4, 5])
+def test_max_cycles_within_valid_range_is_accepted_and_forwarded(tmp_path, monkeypatch, good_value):
+    (tmp_path / ".git").mkdir()
+    captured = {}
+
+    def fake_run_workflow(task, repo_root, explicit_spec=None, max_cycles=None):
+        captured["max_cycles"] = max_cycles
+        return RunResult(task=task, outcome="APPROVED", phases=(PhaseLog(phase="Planning"),))
+
+    monkeypatch.setattr(cli, "run_workflow", fake_run_workflow)
+    code = cli.main(["task", "--repo", str(tmp_path), "--max-cycles", str(good_value)])
+    assert code == 0
+    assert captured["max_cycles"] == good_value
+
+
+def test_max_cycles_omitted_is_forwarded_as_none(tmp_path, monkeypatch):
+    """Omitting --max-cycles must forward `None`, not a hardcoded 1 or 3
+    -- the V2 default is `peos/workflow.py`'s own responsibility to
+    apply, not the CLI's (SPEC-004 Resolved Decision 2)."""
+    (tmp_path / ".git").mkdir()
+    captured = {}
+
+    def fake_run_workflow(task, repo_root, explicit_spec=None, max_cycles=None):
+        captured["max_cycles"] = max_cycles
+        return RunResult(task=task, outcome="APPROVED", phases=(PhaseLog(phase="Planning"),))
+
+    monkeypatch.setattr(cli, "run_workflow", fake_run_workflow)
+    code = cli.main(["task", "--repo", str(tmp_path)])
+    assert code == 0
+    assert captured["max_cycles"] is None

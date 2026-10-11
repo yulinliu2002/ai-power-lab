@@ -15,7 +15,10 @@ tests/test_peos_sandbox.py; real CLI contract behavior (actual `claude`/
 tests/test_peos_real_cli_contract.py.
 """
 
+import hashlib
+import json
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -95,10 +98,26 @@ def _fail_verification():
     return VerificationReport((CommandResult(name="pytest", command=(), cwd=".", returncode=1, stdout="", stderr="e"),))
 
 
-def _approve_review():
+def _approve_review(resolves=()):
+    """`resolves`: reference strings (e.g. "0.1") of prior outstanding
+    findings this APPROVE closes via `historical_finding_dispositions`
+    -- SPEC-004's Outstanding Findings Register (peos/findings_register.py)
+    makes APPROVE contractually invalid while any historical BLOCKER/MAJOR
+    finding remains OUTSTANDING, so a closure review approving after an
+    earlier CHANGES_REQUIRED review raised one must now explicitly
+    disposition it, exactly as a real Codex closure review would.
+    """
+    from peos.codex_agent import HistoricalFindingDisposition
+    from peos.findings_register import RESOLVED
+
+    dispositions = tuple(
+        HistoricalFindingDisposition(reference=ref, disposition=RESOLVED, note="fixed")
+        for ref in resolves
+    ) or None
     return CodexReviewResult(
         returncode=0, verdict="APPROVE", summary="looks good", findings=(),
         acceptance_criteria=(), raw_stdout="", raw_stderr="", ok=True,
+        historical_finding_dispositions=dispositions,
     )
 
 
@@ -454,7 +473,7 @@ def test_remediation_cycle_then_approve(tmp_path):
     repo_root = make_minimal_repo(tmp_path)
     claude_calls = []
     codex_calls = []
-    review_sequence = [_changes_required_review(human_decision=False), _approve_review()]
+    review_sequence = [_changes_required_review(human_decision=False), _approve_review(resolves=("0.1",))]
 
     def codex_runner(prompt, cwd, env=None):
         codex_calls.append(prompt)
@@ -478,6 +497,11 @@ def test_remediation_cycle_then_approve(tmp_path):
 
 
 def test_bounded_remediation_still_changes_required_gates(tmp_path):
+    """SPEC-004 AC-1b: `--max-cycles 1` explicitly passed reproduces
+    SPEC-001/SPEC-003's exact one-remediation-cycle-then-gate behavior
+    (the V2 default of 3 is covered separately by
+    test_default_max_cycles_exhausts_after_three_remediation_cycles).
+    """
     repo_root = make_minimal_repo(tmp_path)
     claude_calls = []
     codex_calls = []
@@ -491,11 +515,13 @@ def test_bounded_remediation_still_changes_required_gates(tmp_path):
         codex_runner=lambda prompt, cwd, env=None: (codex_calls.append(prompt), _changes_required_review())[1],
         workspace_factory=_fake_workspace_factory,
         environ=_valid_environ(tmp_path),
+        max_cycles=1,
     )
 
     assert result.outcome == "HUMAN_GATE"
     assert result.gate_id == "8"
     assert result.remediation_performed is True
+    assert result.max_cycles == 1
     # exactly one remediation cycle -- never a third Claude call or third review
     assert len(claude_calls) == 2
     assert len(codex_calls) == 2
@@ -918,7 +944,7 @@ def test_codex_auth_preflight_is_not_redundantly_rechecked_on_rereview(tmp_path,
 
     claude_calls = []
     codex_calls = []
-    review_sequence = [_changes_required_review(human_decision=False), _approve_review()]
+    review_sequence = [_changes_required_review(human_decision=False), _approve_review(resolves=("0.1",))]
 
     def codex_runner(prompt, cwd, env=None):
         codex_calls.append(prompt)
@@ -1079,3 +1105,1150 @@ def test_default_verifier_is_bound_to_this_runs_resolved_environ(tmp_path, monke
 
     assert result.outcome == "APPROVED"
     assert captured["environ"] is fake_environ
+
+
+# --- SPEC-004: bounded multi-cycle remediation loop ---------------------
+
+def _sequenced_codex_runner(review_sequence):
+    calls = []
+
+    def codex_runner(prompt, cwd, env=None, **kwargs):
+        calls.append(prompt)
+        return review_sequence[len(calls) - 1]
+
+    return codex_runner, calls
+
+
+def _counting_claude_runner():
+    calls = []
+
+    def claude_runner(prompt, cwd, env=None):
+        calls.append(prompt)
+        return _ok_claude()
+
+    return claude_runner, calls
+
+
+def test_ac1_default_max_cycles_converges_using_two_remediation_cycles(tmp_path):
+    """AC-1: omitting --max-cycles uses the V2 default of 3, and this
+    fixture specifically requires two remediation cycles -- it would
+    reach HUMAN_GATE #8 under a reintroduced default of 1."""
+    repo_root = make_minimal_repo(tmp_path)
+    review_sequence = [
+        _changes_required_review(),
+        _changes_required_review(),
+        _approve_review(resolves=("0.1", "1.1")),
+    ]
+    codex_runner, codex_calls = _sequenced_codex_runner(review_sequence)
+    claude_runner, claude_calls = _counting_claude_runner()
+
+    result = run_workflow(
+        "task", repo_root, log=lambda msg: None,
+        spec_resolver=_resolver_returns(_spec_for(repo_root)),
+        claude_runner=claude_runner,
+        verifier=lambda workspace, repo_root, plan: _pass_verification(),
+        codex_runner=codex_runner,
+        workspace_factory=_fake_workspace_factory,
+        environ=_valid_environ(tmp_path),
+    )
+
+    assert result.outcome == "APPROVED"
+    assert result.max_cycles == 3
+    assert result.remediation_cycles_run == 2
+    assert len(claude_calls) == 3  # implementation + 2 remediation cycles
+    assert len(codex_calls) == 3
+
+
+def test_ac1_same_fixture_under_explicit_max_cycles_1_gates_instead():
+    """Same scenario as above but with --max-cycles 1 explicit: must
+    stop at HUMAN_GATE #8 after exactly one remediation cycle -- this is
+    what catches a silent reintroduction of "default behaves like
+    max_cycles=1"."""
+    import tempfile
+    tmp_path = Path(tempfile.mkdtemp())
+    repo_root = make_minimal_repo(tmp_path)
+    review_sequence = [_changes_required_review(), _changes_required_review()]
+    codex_runner, codex_calls = _sequenced_codex_runner(review_sequence)
+    claude_runner, claude_calls = _counting_claude_runner()
+
+    result = run_workflow(
+        "task", repo_root, log=lambda msg: None,
+        spec_resolver=_resolver_returns(_spec_for(repo_root)),
+        claude_runner=claude_runner,
+        verifier=lambda workspace, repo_root, plan: _pass_verification(),
+        codex_runner=codex_runner,
+        workspace_factory=_fake_workspace_factory,
+        environ=_valid_environ(tmp_path),
+        max_cycles=1,
+    )
+
+    assert result.outcome == "HUMAN_GATE"
+    assert result.gate_id == "8"
+    assert len(claude_calls) == 2
+    assert len(codex_calls) == 2
+
+
+def test_ac2_converges_only_on_the_last_of_three_remediation_cycles(tmp_path):
+    """AC-2: max_cycles=3, CHANGES_REQUIRED through remediation cycles 1
+    and 2, APPROVE only after remediation cycle 3's closure review -- 4
+    total Claude calls, 4 total Codex calls, never an early stop."""
+    repo_root = make_minimal_repo(tmp_path)
+    review_sequence = [
+        _changes_required_review(),
+        _changes_required_review(),
+        _changes_required_review(),
+        _approve_review(resolves=("0.1", "1.1", "2.1")),
+    ]
+    codex_runner, codex_calls = _sequenced_codex_runner(review_sequence)
+    claude_runner, claude_calls = _counting_claude_runner()
+
+    result = run_workflow(
+        "task", repo_root, log=lambda msg: None,
+        spec_resolver=_resolver_returns(_spec_for(repo_root)),
+        claude_runner=claude_runner,
+        verifier=lambda workspace, repo_root, plan: _pass_verification(),
+        codex_runner=codex_runner,
+        workspace_factory=_fake_workspace_factory,
+        environ=_valid_environ(tmp_path),
+        max_cycles=3,
+    )
+
+    assert result.outcome == "APPROVED"
+    assert result.remediation_cycles_run == 3
+    assert len(claude_calls) == 4
+    assert len(codex_calls) == 4
+
+
+def test_ac3_exhausting_max_cycles_always_changes_required_gates_never_approves(tmp_path):
+    """AC-3: max_cycles=3, Codex always CHANGES_REQUIRED -> HUMAN_GATE #8
+    after exactly 1 initial + 3 closure Codex calls, never a 4th
+    remediation cycle, never APPROVED."""
+    repo_root = make_minimal_repo(tmp_path)
+    codex_calls = []
+
+    def codex_runner(prompt, cwd, env=None, **kwargs):
+        codex_calls.append(prompt)
+        return _changes_required_review()
+
+    claude_runner, claude_calls = _counting_claude_runner()
+
+    result = run_workflow(
+        "task", repo_root, log=lambda msg: None,
+        spec_resolver=_resolver_returns(_spec_for(repo_root)),
+        claude_runner=claude_runner,
+        verifier=lambda workspace, repo_root, plan: _pass_verification(),
+        codex_runner=codex_runner,
+        workspace_factory=_fake_workspace_factory,
+        environ=_valid_environ(tmp_path),
+        max_cycles=3,
+    )
+
+    assert result.outcome == "HUMAN_GATE"
+    assert result.gate_id == "8"
+    assert len(claude_calls) == 4  # implementation + 3 remediation cycles, never a 4th
+    assert len(codex_calls) == 4  # initial + 3 closure reviews, never a 5th
+    assert "3" in result.gate_reason
+
+
+def test_ac4_run_workflow_rejects_out_of_range_max_cycles_defensively(tmp_path):
+    repo_root = make_minimal_repo(tmp_path)
+    for bad in (0, -1, 6):
+        result = run_workflow(
+            "task", repo_root, log=lambda msg: None,
+            spec_resolver=_resolver_returns(_spec_for(repo_root)),
+            claude_runner=lambda prompt, cwd, env=None: _ok_claude(),
+            verifier=lambda workspace, repo_root, plan: _pass_verification(),
+            codex_runner=lambda prompt, cwd, env=None: _approve_review(),
+            workspace_factory=_fake_workspace_factory,
+            environ=_valid_environ(tmp_path),
+            max_cycles=bad,
+        )
+        assert result.outcome == "FAILED"
+
+
+def test_ac5_context_recovery_output_present_even_when_no_spec_resolves(tmp_path):
+    repo_root = make_minimal_repo(tmp_path)
+    result = run_workflow(
+        "task", repo_root, log=lambda msg: None,
+        spec_resolver=_resolver_gates("No approved specification was found"),
+        claude_runner=lambda prompt, cwd, env=None: _ok_claude(),
+        verifier=lambda workspace, repo_root, plan: _pass_verification(),
+        codex_runner=lambda prompt, cwd, env=None: _approve_review(),
+        workspace_factory=_fake_workspace_factory,
+        environ=_valid_environ(tmp_path),
+    )
+    assert result.outcome == "HUMAN_GATE"
+    assert result.context_recovery is not None
+    assert "SPEC-001-x.md" in result.context_recovery.related_specs
+
+
+def test_ac6_design_context_missing_artifact_gates_11_before_any_workspace_or_agent(tmp_path):
+    repo_root = make_minimal_repo(tmp_path)
+    spec_path = repo_root / "docs" / "specifications" / "SPEC-001-x.md"
+    spec_path.write_text(
+        spec_path.read_text(encoding="utf-8") + "\n## Design Context\n\n    docs/design/missing.json\n",
+        encoding="utf-8",
+    )
+    workspace_calls = []
+    claude_calls = []
+
+    def tracking_workspace_factory(repo_root_arg, run_id):
+        workspace_calls.append(1)
+        return _fake_workspace_factory(repo_root_arg, run_id)
+
+    result = run_workflow(
+        "task", repo_root, log=lambda msg: None,
+        spec_resolver=_resolver_returns(_spec_for(repo_root)),
+        claude_runner=lambda prompt, cwd, env=None: (claude_calls.append(1), _ok_claude())[1],
+        verifier=lambda workspace, repo_root, plan: _pass_verification(),
+        codex_runner=lambda prompt, cwd, env=None: _approve_review(),
+        workspace_factory=tracking_workspace_factory,
+        environ=_valid_environ(tmp_path),
+    )
+    assert result.outcome == "HUMAN_GATE"
+    assert result.gate_id == "11"
+    assert workspace_calls == []
+    assert claude_calls == []
+
+
+def test_ac7_design_context_resolved_artifact_proceeds_and_is_staged(tmp_path):
+    repo_root = make_minimal_repo(tmp_path)
+    (repo_root / "docs" / "design").mkdir(parents=True)
+    (repo_root / "docs" / "design" / "export.json").write_text("{}", encoding="utf-8")
+    spec_path = repo_root / "docs" / "specifications" / "SPEC-001-x.md"
+    spec_path.write_text(
+        spec_path.read_text(encoding="utf-8") + "\n## Design Context\n\n    docs/design/export.json\n",
+        encoding="utf-8",
+    )
+
+    def real_ish_workspace_factory(repo_root_arg: Path, run_id: str) -> IsolatedWorkspace:
+        workspace_dir = tmp_path / f"fake-workspace-{run_id}"
+        (workspace_dir / "docs" / "specifications").mkdir(parents=True)
+        spec_src = repo_root_arg / "docs" / "specifications" / "SPEC-001-x.md"
+        (workspace_dir / "docs" / "specifications" / "SPEC-001-x.md").write_text(
+            spec_src.read_text(encoding="utf-8"), encoding="utf-8",
+        )
+        for governance_file in ("CLAUDE.md", "AGENTS.md", "ENGINEERING.md"):
+            (workspace_dir / governance_file).write_text(
+                (repo_root_arg / governance_file).read_text(encoding="utf-8"), encoding="utf-8",
+            )
+        return IsolatedWorkspace(path=workspace_dir, home_dir=workspace_dir, baseline_commit="deadbeef")
+
+    result = run_workflow(
+        "task", repo_root, log=lambda msg: None,
+        spec_resolver=_resolver_returns(_spec_for(repo_root)),
+        claude_runner=lambda prompt, cwd, env=None: _ok_claude(),
+        verifier=lambda workspace, repo_root, plan: _pass_verification(),
+        codex_runner=lambda prompt, cwd, env=None: _approve_review(),
+        workspace_factory=real_ish_workspace_factory,
+        environ=_valid_environ(tmp_path),
+    )
+    assert result.outcome == "APPROVED"
+
+
+def test_ac26_verification_failure_on_remediation_cycle_fails_immediately_no_codex_call(tmp_path):
+    repo_root = make_minimal_repo(tmp_path)
+    codex_calls = []
+    verifier_calls = []
+
+    def codex_runner(prompt, cwd, env=None, **kwargs):
+        codex_calls.append(prompt)
+        return _changes_required_review()
+
+    def verifier(workspace, repo_root, plan):
+        verifier_calls.append(1)
+        if len(verifier_calls) == 1:
+            return _pass_verification()
+        return _fail_verification()
+
+    result = run_workflow(
+        "task", repo_root, log=lambda msg: None,
+        spec_resolver=_resolver_returns(_spec_for(repo_root)),
+        claude_runner=lambda prompt, cwd, env=None: _ok_claude(),
+        verifier=verifier,
+        codex_runner=codex_runner,
+        workspace_factory=_fake_workspace_factory,
+        environ=_valid_environ(tmp_path),
+        max_cycles=3,
+    )
+
+    assert result.outcome == "FAILED"
+    assert len(codex_calls) == 1  # only the cycle-0 initial review -- no closure review
+    assert len(verifier_calls) == 2  # cycle-0 verification + the failing remediation-cycle-1 verification
+
+
+def test_ac34_fingerprint_mismatch_detected_only_on_remediation_cycle_2(tmp_path):
+    repo_root = make_minimal_repo(tmp_path)
+    codex_calls = []
+
+    def codex_runner(prompt, cwd, env=None, **kwargs):
+        codex_calls.append(1)
+        if len(codex_calls) == 3:
+            # Simulate an out-of-band mutation during remediation cycle 2's closure review.
+            (Path(cwd) / "sneaky_cycle_2.txt").write_text("should not be here\n", encoding="utf-8")
+        return _changes_required_review()
+
+    result = run_workflow(
+        "task", repo_root, log=lambda msg: None,
+        spec_resolver=_resolver_returns(_spec_for(repo_root)),
+        claude_runner=lambda prompt, cwd, env=None: _ok_claude(),
+        verifier=lambda workspace, repo_root, plan: _pass_verification(),
+        codex_runner=codex_runner,
+        workspace_factory=_fake_workspace_factory,
+        environ=_valid_environ(tmp_path),
+        max_cycles=3,
+    )
+    assert result.outcome == "FAILED"
+    assert "read-only reviewer boundary" in result.gate_reason
+
+
+def test_ac35_governing_spec_mutated_on_disk_before_remediation_cycle_fails_closed(tmp_path):
+    """AC-35 is specifically about a mutation to the *authoritative*
+    spec file that a workspace-vs-frozen-baseline comparison alone would
+    not catch (the workspace's own copy, cloned before the mutation,
+    stays unchanged) -- exercised here with a workspace factory that
+    genuinely uses a separate directory from repo_root, unlike
+    `_fake_workspace_factory`'s speed shortcut.
+    """
+    repo_root = make_minimal_repo(tmp_path)
+    spec_path = repo_root / "docs" / "specifications" / "SPEC-001-x.md"
+
+    def real_ish_workspace_factory(repo_root_arg: Path, run_id: str) -> IsolatedWorkspace:
+        workspace_dir = tmp_path / f"fake-workspace-{run_id}"
+        (workspace_dir / "docs" / "specifications").mkdir(parents=True)
+        (workspace_dir / "docs" / "specifications" / "SPEC-001-x.md").write_text(
+            spec_path.read_text(encoding="utf-8"), encoding="utf-8",
+        )
+        for governance_file in ("CLAUDE.md", "AGENTS.md", "ENGINEERING.md"):
+            (workspace_dir / governance_file).write_text(
+                (repo_root_arg / governance_file).read_text(encoding="utf-8"), encoding="utf-8",
+            )
+        head = subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=str(repo_root_arg), capture_output=True, text=True,
+        ).stdout.strip()
+        return IsolatedWorkspace(path=workspace_dir, home_dir=workspace_dir, baseline_commit=head)
+
+    verifier_calls = []
+
+    def verifier(workspace, repo_root, plan):
+        verifier_calls.append(1)
+        if len(verifier_calls) == 1:
+            # Mutate the *authoritative* spec file on disk right after
+            # cycle 0's own verification -- i.e. between cycle 0's review
+            # and remediation cycle 1's Claude call -- not the workspace copy.
+            spec_path.write_text(spec_path.read_text(encoding="utf-8") + "\nmutated\n", encoding="utf-8")
+        return _pass_verification()
+
+    result = run_workflow(
+        "task", repo_root, log=lambda msg: None,
+        spec_resolver=_resolver_returns(_spec_for(repo_root)),
+        claude_runner=lambda prompt, cwd, env=None: _ok_claude(),
+        verifier=verifier,
+        codex_runner=lambda prompt, cwd, env=None, **kwargs: _changes_required_review(),
+        workspace_factory=real_ish_workspace_factory,
+        environ=_valid_environ(tmp_path),
+        max_cycles=3,
+    )
+    assert result.outcome == "FAILED"
+    assert "no longer matches the identity frozen at Planning" in result.gate_reason
+
+
+def test_ac36_reconciliation_behavior_identical_at_cycle_0_and_cycle_n_convergence(tmp_path):
+    (tmp_path / "a").mkdir()
+    (tmp_path / "b").mkdir()
+    repo_root_a = make_minimal_repo(tmp_path / "a")
+    result_a = run_workflow(
+        "task", repo_root_a, log=lambda msg: None,
+        spec_resolver=_resolver_returns(_spec_for(repo_root_a)),
+        claude_runner=lambda prompt, cwd, env=None: _ok_claude(),
+        verifier=lambda workspace, repo_root, plan: _pass_verification(),
+        codex_runner=lambda prompt, cwd, env=None: _approve_review(),
+        workspace_factory=_fake_workspace_factory,
+        environ=_valid_environ(tmp_path / "a"),
+    )
+
+    repo_root_b = make_minimal_repo(tmp_path / "b")
+    review_sequence_b = [_changes_required_review() for _ in range(5)] + [
+        _approve_review(resolves=tuple(f"{i}.1" for i in range(5)))
+    ]
+    codex_runner_b, _ = _sequenced_codex_runner(review_sequence_b)
+    result_b = run_workflow(
+        "task", repo_root_b, log=lambda msg: None,
+        spec_resolver=_resolver_returns(_spec_for(repo_root_b)),
+        claude_runner=lambda prompt, cwd, env=None: _ok_claude(),
+        verifier=lambda workspace, repo_root, plan: _pass_verification(),
+        codex_runner=codex_runner_b,
+        workspace_factory=_fake_workspace_factory,
+        environ=_valid_environ(tmp_path / "b"),
+        max_cycles=5,
+    )
+
+    assert result_a.outcome == "APPROVED"
+    assert result_b.outcome == "APPROVED"
+    assert result_b.remediation_cycles_run == 5
+    # Reconciliation ran in both cases, with the same shape of result.
+    assert result_a.reconciliation is not None
+    assert result_b.reconciliation is not None
+    assert result_a.blocked_governance_mutation == ()
+    assert result_b.blocked_governance_mutation == ()
+    # `.peos/runs` is never part of what reconciliation copies/reports.
+    assert not any(".peos" in p for p in result_a.reconciliation.copied)
+    assert not any(".peos" in p for p in result_b.reconciliation.copied)
+
+
+def test_ac38_human_decision_required_with_same_payload_approve_gates_6_never_approved_never_failed(tmp_path):
+    """AC-38: cycle 0 raises a major finding (ref 0.1); a later closure
+    review's historical_finding_dispositions sets 0.1 to
+    HUMAN_DECISION_REQUIRED while that *same* payload's verdict is
+    APPROVE -- must produce HUMAN_GATE #6, never APPROVED, never FAILED.
+    """
+    from peos.codex_agent import HistoricalFindingDisposition
+    from peos.findings_register import HUMAN_DECISION_REQUIRED
+
+    repo_root = make_minimal_repo(tmp_path)
+
+    def contradictory_approve():
+        return CodexReviewResult(
+            returncode=0, verdict="APPROVE", summary="ok", findings=(),
+            acceptance_criteria=(), raw_stdout="", raw_stderr="", ok=True,
+            historical_finding_dispositions=(
+                HistoricalFindingDisposition(reference="0.1", disposition=HUMAN_DECISION_REQUIRED, note="architecture call"),
+            ),
+        )
+
+    review_sequence = [_changes_required_review(), contradictory_approve()]
+    codex_runner, codex_calls = _sequenced_codex_runner(review_sequence)
+
+    result = run_workflow(
+        "task", repo_root, log=lambda msg: None,
+        spec_resolver=_resolver_returns(_spec_for(repo_root)),
+        claude_runner=lambda prompt, cwd, env=None: _ok_claude(),
+        verifier=lambda workspace, repo_root, plan: _pass_verification(),
+        codex_runner=codex_runner,
+        workspace_factory=_fake_workspace_factory,
+        environ=_valid_environ(tmp_path),
+        max_cycles=3,
+    )
+    assert result.outcome == "HUMAN_GATE"
+    assert result.gate_id == "6"
+
+
+def test_ac20_approve_with_outstanding_register_entry_fails_not_gates(tmp_path):
+    """AC-20: APPROVE while the register still has an OUTSTANDING
+    blocking/major entry is FAILED (a contract violation), never a plain
+    convergence/APPROVED."""
+    repo_root = make_minimal_repo(tmp_path)
+    review_sequence = [_changes_required_review(), _approve_review()]  # does NOT resolve 0.1
+    codex_runner, _ = _sequenced_codex_runner(review_sequence)
+
+    result = run_workflow(
+        "task", repo_root, log=lambda msg: None,
+        spec_resolver=_resolver_returns(_spec_for(repo_root)),
+        claude_runner=lambda prompt, cwd, env=None: _ok_claude(),
+        verifier=lambda workspace, repo_root, plan: _pass_verification(),
+        codex_runner=codex_runner,
+        workspace_factory=_fake_workspace_factory,
+        environ=_valid_environ(tmp_path),
+        max_cycles=3,
+    )
+    assert result.outcome == "FAILED"
+    assert "Outstanding Findings Register" in result.gate_reason
+
+
+# --- SPEC-004 Requirement 8: end-to-end dispute mechanics ----------------
+
+def _claude_disputing(reference: str, evidence: str = "already covered by test_foo"):
+    # SPEC-004 remediation Finding 6: production `run_claude` populates
+    # `dispute_attempt_lines` by extracting DISPUTE[...] lines from the
+    # *raw* summary before it is destructively bounded as a whole (see
+    # peos/claude_agent.py and peos/workflow_disputes.py) -- a hand-built
+    # `ClaudeRunResult` fixture must do the same, since peos/workflow.py
+    # now parses disputes from that field, never from `summary` text.
+    dispute_line = f"DISPUTE[{reference}]: {evidence}"
+    return ClaudeRunResult(
+        returncode=0, stdout="", stderr="", status="COMPLETED", gate_category=None, gate_reason=None,
+        summary=f"Addressed everything else.\n{dispute_line}", ok=True,
+        dispute_attempt_lines=(dispute_line,),
+    )
+
+
+def test_ac8_reviewer_overrules_dispute_gates_10_even_with_budget_remaining(tmp_path):
+    repo_root = make_minimal_repo(tmp_path)
+
+    def overruling_closure_review():
+        return CodexReviewResult(
+            returncode=0, verdict="CHANGES_REQUIRED", summary="still an issue", findings=(),
+            acceptance_criteria=(), raw_stdout="", raw_stderr="", ok=True,
+            reviewer_overrules_dispute=True, addressed_dispute_references=("0.1",),
+        )
+
+    review_sequence = [_changes_required_review(), overruling_closure_review()]
+    codex_runner, codex_calls = _sequenced_codex_runner(review_sequence)
+
+    claude_calls = []
+
+    def claude_runner(prompt, cwd, env=None):
+        claude_calls.append(prompt)
+        if len(claude_calls) == 1:
+            return _ok_claude()
+        return _claude_disputing("0.1")
+
+    result = run_workflow(
+        "task", repo_root, log=lambda msg: None,
+        spec_resolver=_resolver_returns(_spec_for(repo_root)),
+        claude_runner=claude_runner,
+        verifier=lambda workspace, repo_root, plan: _pass_verification(),
+        codex_runner=codex_runner,
+        workspace_factory=_fake_workspace_factory,
+        environ=_valid_environ(tmp_path),
+        max_cycles=5,  # plenty of budget remaining -- must still gate immediately
+    )
+    assert result.outcome == "HUMAN_GATE"
+    assert result.gate_id == "10"
+
+
+def test_ac9_conceded_dispute_proceeds_through_normal_convergence(tmp_path):
+    from peos.codex_agent import HistoricalFindingDisposition
+
+    repo_root = make_minimal_repo(tmp_path)
+
+    def conceding_closure_review():
+        return CodexReviewResult(
+            returncode=0, verdict="APPROVE", summary="fair point", findings=(),
+            acceptance_criteria=(), raw_stdout="", raw_stderr="", ok=True,
+            reviewer_overrules_dispute=False, addressed_dispute_references=("0.1",),
+            historical_finding_dispositions=(
+                HistoricalFindingDisposition(reference="0.1", disposition="RESOLVED", note="conceded"),
+            ),
+        )
+
+    review_sequence = [_changes_required_review(), conceding_closure_review()]
+    codex_runner, _ = _sequenced_codex_runner(review_sequence)
+
+    claude_calls = []
+
+    def claude_runner(prompt, cwd, env=None):
+        claude_calls.append(prompt)
+        if len(claude_calls) == 1:
+            return _ok_claude()
+        return _claude_disputing("0.1")
+
+    result = run_workflow(
+        "task", repo_root, log=lambda msg: None,
+        spec_resolver=_resolver_returns(_spec_for(repo_root)),
+        claude_runner=claude_runner,
+        verifier=lambda workspace, repo_root, plan: _pass_verification(),
+        codex_runner=codex_runner,
+        workspace_factory=_fake_workspace_factory,
+        environ=_valid_environ(tmp_path),
+    )
+    assert result.outcome == "APPROVED"
+
+
+def test_ac22_malformed_dispute_line_fails_the_remediation_cycle(tmp_path):
+    repo_root = make_minimal_repo(tmp_path)
+    review_sequence = [_changes_required_review()]
+    codex_runner, codex_calls = _sequenced_codex_runner(review_sequence)
+
+    claude_calls = []
+
+    def claude_runner(prompt, cwd, env=None):
+        claude_calls.append(prompt)
+        if len(claude_calls) == 1:
+            return _ok_claude()
+        return ClaudeRunResult(
+            returncode=0, stdout="", stderr="", status="COMPLETED", gate_category=None, gate_reason=None,
+            summary="DISPUTE[abc]: malformed reference", ok=True,
+            dispute_attempt_lines=("DISPUTE[abc]: malformed reference",),
+        )
+
+    result = run_workflow(
+        "task", repo_root, log=lambda msg: None,
+        spec_resolver=_resolver_returns(_spec_for(repo_root)),
+        claude_runner=claude_runner,
+        verifier=lambda workspace, repo_root, plan: _pass_verification(),
+        codex_runner=codex_runner,
+        workspace_factory=_fake_workspace_factory,
+        environ=_valid_environ(tmp_path),
+    )
+    assert result.outcome == "FAILED"
+    assert "DISPUTE" in result.gate_reason
+    assert len(codex_calls) == 1  # closure review never reached
+
+
+# =========================================================================
+# PEOS V2 implementation review remediation (SPEC-004 remediation, Codex
+# findings F1-F11). Each test below reproduces the exact failure
+# mechanism Codex's review described, exercised through the production
+# `run_workflow` orchestration path (not a narrower helper), per that
+# remediation's "do not repeat the mistake of testing only helpers"
+# requirement.
+# =========================================================================
+
+
+# --- F1 (BLOCKER): governing-spec identity frozen at Planning ----------
+
+def test_f1_spec_drift_during_workspace_creation_fails_closed_with_zero_consuming_invocations(tmp_path):
+    """Reproduces the exact F1 race: Planning parses the governing
+    specification's bytes (spec A) and freezes their hash
+    (`peos.plan.build_plan`'s `governing_spec_content_hash`). The
+    authoritative file then changes to spec B -- here, simulated as
+    happening *during* workspace creation, adding a new acceptance
+    criterion -- before the workspace's own staged copy and any
+    consuming agent ever sees it. The run must fail closed, and neither
+    Claude nor Codex may be invoked even once: there is no "mixed
+    A-parsed/B-baseline" execution. Uses the real, default spec resolver
+    (`peos.spec.resolve_governing_spec`, via `explicit_spec`) so Planning
+    genuinely reads the file from disk, not a mocked resolution.
+    """
+    repo_root = make_minimal_repo(tmp_path)
+    spec_path = repo_root / "docs" / "specifications" / "SPEC-001-x.md"
+    original_text = spec_path.read_text(encoding="utf-8")
+
+    claude_calls = []
+    codex_calls = []
+
+    def mutating_workspace_factory(repo_root_arg, run_id):
+        # The authoritative spec changes to B *during* workspace
+        # creation -- after Planning already parsed and hashed A.
+        spec_path.write_text(
+            original_text + "\n### AC-999 -- A brand-new acceptance criterion added after Planning\n",
+            encoding="utf-8",
+        )
+        return _fake_workspace_factory(repo_root_arg, run_id)
+
+    result = run_workflow(
+        "implement x", repo_root,
+        log=lambda msg: None,
+        explicit_spec=spec_path,
+        claude_runner=lambda prompt, cwd, env=None: (claude_calls.append(prompt), _ok_claude())[1],
+        verifier=lambda workspace, repo_root, plan: _pass_verification(),
+        codex_runner=lambda prompt, cwd, env=None, **kwargs: (codex_calls.append(prompt), _approve_review())[1],
+        workspace_factory=mutating_workspace_factory,
+        environ=_valid_environ(tmp_path),
+    )
+
+    assert result.outcome == "FAILED"
+    assert "identity frozen at Planning" in result.gate_reason
+    assert claude_calls == []  # zero consuming agent invocations
+    assert codex_calls == []
+
+
+def test_f1_no_drift_still_proceeds_normally_to_approval(tmp_path):
+    """Sanity counterpart: when nothing drifts, the frozen-identity
+    checks introduced by this fix must not themselves block a normal
+    run -- the governing spec's content never changes here.
+    """
+    repo_root = make_minimal_repo(tmp_path)
+    spec_path = repo_root / "docs" / "specifications" / "SPEC-001-x.md"
+
+    result = run_workflow(
+        "implement x", repo_root, log=lambda msg: None,
+        explicit_spec=spec_path,
+        claude_runner=lambda prompt, cwd, env=None: _ok_claude(),
+        verifier=lambda workspace, repo_root, plan: _pass_verification(),
+        codex_runner=lambda prompt, cwd, env=None, **kwargs: _approve_review(),
+        workspace_factory=_fake_workspace_factory,
+        environ=_valid_environ(tmp_path),
+    )
+    assert result.outcome == "APPROVED"
+
+
+# --- F4 (MAJOR): Round Packet actually delivered in every prompt -------
+
+def test_f4_round_packet_content_is_rendered_in_every_actual_prompt(tmp_path):
+    """Captures the REAL prompts `run_workflow` passes to the injected
+    Claude/Codex runners across a multi-cycle run (initial Claude,
+    initial Codex, remediation Claude, closure Codex) and asserts the
+    Round Packet's required elements are literal text in every one of
+    them -- not merely held in an orchestrator-side dataclass
+    (SPEC-004 remediation Finding 4/AC-37).
+    """
+    repo_root = make_minimal_repo(tmp_path)
+    spec_path = repo_root / "docs" / "specifications" / "SPEC-001-x.md"
+    spec_path.write_text(
+        spec_path.read_text(encoding="utf-8")
+        + "\n### AC-1 -- Do the thing\n\n### AC-2 -- Do the other thing\n",
+        encoding="utf-8",
+    )
+    decisions_dir = repo_root / "docs" / "decisions"
+    decisions_dir.mkdir(parents=True)
+    (decisions_dir / "0001-example.md").write_text("# Decision\n\nbody\n", encoding="utf-8")
+    # Commit both additions so the working tree is clean: `_fake_workspace_
+    # factory` reuses repo_root itself as the "workspace" (for speed), so
+    # an *untracked* file here would make reconciliation's untracked-file
+    # copy-back try to copy repo_root onto itself (a `shutil.SameFileError`)
+    # -- a fake-workspace-factory artifact unrelated to what this test is
+    # about, avoided the same way test_ac7_design_context_resolved_
+    # artifact_proceeds_and_is_staged avoids it (committing/pre-existing
+    # state rather than leaving new files untracked).
+    subprocess.run(["git", "add", "-A"], cwd=str(repo_root), check=True, capture_output=True)
+    subprocess.run(
+        ["git", "-c", "user.email=test@example.com", "-c", "user.name=Test", "commit", "-q", "-m", "fixtures"],
+        cwd=str(repo_root), check=True, capture_output=True,
+    )
+    baseline_commit = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=str(repo_root), capture_output=True, text=True, check=True,
+    ).stdout.strip()
+
+    claude_prompts = []
+    codex_prompts = []
+    review_sequence = [_changes_required_review(), _approve_review(resolves=("0.1",))]
+
+    def claude_runner(prompt, cwd, env=None):
+        claude_prompts.append(prompt)
+        return _ok_claude()
+
+    def codex_runner(prompt, cwd, env=None, **kwargs):
+        codex_prompts.append(prompt)
+        return review_sequence[len(codex_prompts) - 1]
+
+    result = run_workflow(
+        "task", repo_root, log=lambda msg: None,
+        spec_resolver=_resolver_returns(_spec_for(repo_root)),
+        claude_runner=claude_runner,
+        verifier=lambda workspace, repo_root, plan: _pass_verification(),
+        codex_runner=codex_runner,
+        workspace_factory=_fake_workspace_factory,
+        environ=_valid_environ(tmp_path),
+    )
+
+    assert result.outcome == "APPROVED"
+    assert len(claude_prompts) == 2  # initial implementation + 1 remediation
+    assert len(codex_prompts) == 2  # initial review + closure review
+    initial_claude_prompt, remediation_prompt = claude_prompts
+    initial_review_prompt, closure_prompt = codex_prompts
+
+    spec_hash = hashlib.sha256(spec_path.read_bytes()).hexdigest()
+    claude_md_hash = hashlib.sha256((repo_root / "CLAUDE.md").read_bytes()).hexdigest()
+    agents_md_hash = hashlib.sha256((repo_root / "AGENTS.md").read_bytes()).hexdigest()
+    engineering_md_hash = hashlib.sha256((repo_root / "ENGINEERING.md").read_bytes()).hexdigest()
+    for prompt in (initial_claude_prompt, initial_review_prompt, remediation_prompt, closure_prompt):
+        # Governing-spec identity.
+        assert spec_hash in prompt
+        # Governance/decision identity.
+        assert "docs/decisions/0001-example.md" in prompt
+        # Complete governing acceptance-criteria set.
+        assert "AC-1" in prompt
+        assert "AC-2" in prompt
+        # Workspace snapshot identity (the `_round_packet` helper always
+        # renders a repo_state_fingerprint, a non-empty string).
+        assert "Isolated workspace snapshot identity:" in prompt
+        # SPEC-004 remediation Finding 4 (closure review): governance
+        # artifact identities -- AGENTS.md, CLAUDE.md, ENGINEERING.md --
+        # and the authoritative baseline Git commit SHA must be literal
+        # text in every one of the four production prompts, not merely
+        # held in an orchestrator-side RoundPacket the agent never reads.
+        assert "CLAUDE.md" in prompt and claude_md_hash in prompt
+        assert "AGENTS.md" in prompt and agents_md_hash in prompt
+        assert "ENGINEERING.md" in prompt and engineering_md_hash in prompt
+        assert baseline_commit in prompt
+
+    # Initial Claude: no verification has run yet -- represented
+    # explicitly, not omitted.
+    assert "no deterministic verification result yet" in initial_claude_prompt
+
+    # Initial Codex: receives the ACTUAL just-completed cycle-0
+    # verification result.
+    assert "PASSED" in initial_review_prompt
+
+    # Remediation Claude: must receive the real LATEST verification
+    # result (cycle 0's) -- never a hardcoded "no result yet" once
+    # verification has actually happened.
+    assert "PASSED" in remediation_prompt
+    assert "no deterministic verification result yet" not in remediation_prompt
+
+    # Closure Codex: the historical disposition that resolved 0.1 must
+    # be rendered, not only the (now empty) outstanding-findings list.
+    assert "RESOLVED" in closure_prompt
+    assert "0.1" in closure_prompt
+
+
+# --- F5 (MAJOR): static context re-verified before the FIRST Claude call
+
+def test_f5_static_context_drift_before_initial_claude_fails_closed_with_zero_claude_calls(tmp_path):
+    """Reproduces F5 exactly: the static-context artifact's identity is
+    pinned during Planning. It then drifts before the isolated workspace
+    stages it -- i.e. before cycle 0's Claude call, the very first
+    consuming invocation of this run. Before this fix, the first re-
+    verification of static-context identity happened only right before
+    the *Codex* independent review (after Claude had already run once);
+    this proves Claude is never invoked at all when the drift happens
+    this early.
+    """
+    repo_root = make_minimal_repo(tmp_path)
+    (repo_root / "docs" / "design").mkdir(parents=True)
+    artifact_path = repo_root / "docs" / "design" / "export.json"
+    artifact_path.write_text('{"a": 1}', encoding="utf-8")
+    spec_path = repo_root / "docs" / "specifications" / "SPEC-001-x.md"
+    spec_path.write_text(
+        spec_path.read_text(encoding="utf-8") + "\n## Design Context\n\n    docs/design/export.json\n",
+        encoding="utf-8",
+    )
+
+    claude_calls = []
+
+    def mutating_workspace_factory(repo_root_arg, run_id):
+        # The static-context artifact drifts between Planning (where it
+        # was pinned) and workspace creation/staging. A genuinely
+        # separate workspace directory is used (not the `_fake_workspace_
+        # factory` shortcut that reuses repo_root itself) because staging
+        # a Design Context artifact copies the artifact *into* the
+        # workspace at the same relative path -- reusing repo_root as the
+        # workspace would make source and destination the same file.
+        artifact_path.write_text('{"a": 2}', encoding="utf-8")
+        workspace_dir = tmp_path / f"fake-workspace-{run_id}"
+        (workspace_dir / "docs" / "specifications").mkdir(parents=True)
+        (workspace_dir / "docs" / "specifications" / "SPEC-001-x.md").write_text(
+            spec_path.read_text(encoding="utf-8"), encoding="utf-8",
+        )
+        for governance_file in ("CLAUDE.md", "AGENTS.md", "ENGINEERING.md"):
+            (workspace_dir / governance_file).write_text(
+                (repo_root_arg / governance_file).read_text(encoding="utf-8"), encoding="utf-8",
+            )
+        return IsolatedWorkspace(path=workspace_dir, home_dir=workspace_dir, baseline_commit="deadbeef")
+
+    result = run_workflow(
+        "task", repo_root, log=lambda msg: None,
+        spec_resolver=_resolver_returns(_spec_for(repo_root)),
+        claude_runner=lambda prompt, cwd, env=None: (claude_calls.append(prompt), _ok_claude())[1],
+        verifier=lambda workspace, repo_root, plan: _pass_verification(),
+        codex_runner=lambda prompt, cwd, env=None: _approve_review(),
+        workspace_factory=mutating_workspace_factory,
+        environ=_valid_environ(tmp_path),
+    )
+
+    assert result.outcome == "FAILED"
+    assert "identity check failed before Claude implementation" in result.gate_reason
+    assert "drifted" in result.gate_reason
+    assert claude_calls == []
+
+
+def _real_ish_workspace_factory_with_design_context(repo_root: Path, spec_path: Path, tmp_path: Path, holder: dict):
+    """Shared by the F5-A/F5-B tests below: a workspace factory that
+    builds a genuinely separate workspace directory (never `repo_root`
+    itself, since Design Context staging copies a file *into* the
+    workspace at the same relative path) and records its path in
+    `holder["path"]` so a later `claude_runner` hook -- invoked only
+    after staging has already completed -- can tamper with the staged
+    copy.
+    """
+    def factory(repo_root_arg: Path, run_id: str) -> IsolatedWorkspace:
+        workspace_dir = tmp_path / f"fake-workspace-{run_id}"
+        (workspace_dir / "docs" / "specifications").mkdir(parents=True)
+        (workspace_dir / "docs" / "specifications" / "SPEC-001-x.md").write_text(
+            spec_path.read_text(encoding="utf-8"), encoding="utf-8",
+        )
+        for governance_file in ("CLAUDE.md", "AGENTS.md", "ENGINEERING.md"):
+            (workspace_dir / governance_file).write_text(
+                (repo_root_arg / governance_file).read_text(encoding="utf-8"), encoding="utf-8",
+            )
+        holder["path"] = workspace_dir
+        return IsolatedWorkspace(path=workspace_dir, home_dir=workspace_dir, baseline_commit="deadbeef")
+    return factory
+
+
+def test_f5a_staged_artifact_swapped_for_matching_content_symlink_fails_before_codex(tmp_path):
+    """F5-A: Planning/staging succeeds normally. Between cycle 0's Claude
+    call (which runs after staging) and the Codex independent review
+    that follows it, the staged artifact is replaced by a symlink to the
+    authoritative file itself -- guaranteeing byte-for-byte-identical
+    content. The static-context re-verification that already runs
+    before every Codex/Claude invocation (`_check_static_context_
+    identity`) must catch this on structure alone and fail closed before
+    Codex is ever invoked -- its invocation count must stay zero.
+    """
+    repo_root = make_minimal_repo(tmp_path)
+    (repo_root / "docs" / "design").mkdir(parents=True)
+    artifact_path = repo_root / "docs" / "design" / "export.json"
+    artifact_path.write_text('{"a": 1}', encoding="utf-8")
+    spec_path = repo_root / "docs" / "specifications" / "SPEC-001-x.md"
+    spec_path.write_text(
+        spec_path.read_text(encoding="utf-8") + "\n## Design Context\n\n    docs/design/export.json\n",
+        encoding="utf-8",
+    )
+
+    holder: dict = {}
+    codex_calls = []
+
+    def claude_runner(prompt, cwd, env=None):
+        staged_path = holder["path"] / "docs" / "design" / "export.json"
+        staged_path.unlink()
+        staged_path.symlink_to(artifact_path)
+        return _ok_claude()
+
+    result = run_workflow(
+        "task", repo_root, log=lambda msg: None,
+        spec_resolver=_resolver_returns(_spec_for(repo_root)),
+        claude_runner=claude_runner,
+        verifier=lambda workspace, repo_root, plan: _pass_verification(),
+        codex_runner=lambda prompt, cwd, env=None, **kwargs: (codex_calls.append(prompt), _approve_review())[1],
+        workspace_factory=_real_ish_workspace_factory_with_design_context(repo_root, spec_path, tmp_path, holder),
+        environ=_valid_environ(tmp_path),
+    )
+
+    assert result.outcome == "FAILED"
+    assert "symlink" in result.gate_reason.lower()
+    assert codex_calls == []
+
+
+def test_f5b_staged_parent_directory_swapped_for_symlink_fails_before_codex(tmp_path):
+    """F5-B: same as F5-A, but the swap replaces the staged artifact's
+    *parent directory* with a symlink (pointing at the real
+    `docs/design` directory, so the file found through it still has
+    matching content) rather than the leaf file itself. Must still fail
+    closed before Codex is invoked.
+    """
+    repo_root = make_minimal_repo(tmp_path)
+    (repo_root / "docs" / "design").mkdir(parents=True)
+    artifact_path = repo_root / "docs" / "design" / "export.json"
+    artifact_path.write_text('{"a": 1}', encoding="utf-8")
+    spec_path = repo_root / "docs" / "specifications" / "SPEC-001-x.md"
+    spec_path.write_text(
+        spec_path.read_text(encoding="utf-8") + "\n## Design Context\n\n    docs/design/export.json\n",
+        encoding="utf-8",
+    )
+
+    holder: dict = {}
+    codex_calls = []
+
+    def claude_runner(prompt, cwd, env=None):
+        staged_parent = holder["path"] / "docs" / "design"
+        shutil.rmtree(staged_parent)
+        staged_parent.symlink_to(artifact_path.parent, target_is_directory=True)
+        return _ok_claude()
+
+    result = run_workflow(
+        "task", repo_root, log=lambda msg: None,
+        spec_resolver=_resolver_returns(_spec_for(repo_root)),
+        claude_runner=claude_runner,
+        verifier=lambda workspace, repo_root, plan: _pass_verification(),
+        codex_runner=lambda prompt, cwd, env=None, **kwargs: (codex_calls.append(prompt), _approve_review())[1],
+        workspace_factory=_real_ish_workspace_factory_with_design_context(repo_root, spec_path, tmp_path, holder),
+        environ=_valid_environ(tmp_path),
+    )
+
+    assert result.outcome == "FAILED"
+    assert "symlink" in result.gate_reason.lower()
+    assert codex_calls == []
+
+
+def test_f5c_normal_regular_staged_copy_continues_normally_to_approval(tmp_path):
+    """F5-C: the sanity counterpart -- an ordinary, untampered staged
+    copy (a real regular file with a matching hash, no symlink anywhere)
+    must not itself be blocked by the structural check introduced for
+    F5-A/F5-B. Equivalent in spirit to
+    `test_ac7_design_context_resolved_artifact_proceeds_and_is_staged`,
+    repeated here under the F5 label for direct traceability to the
+    closure review's required regressions.
+    """
+    repo_root = make_minimal_repo(tmp_path)
+    (repo_root / "docs" / "design").mkdir(parents=True)
+    (repo_root / "docs" / "design" / "export.json").write_text('{"a": 1}', encoding="utf-8")
+    spec_path = repo_root / "docs" / "specifications" / "SPEC-001-x.md"
+    spec_path.write_text(
+        spec_path.read_text(encoding="utf-8") + "\n## Design Context\n\n    docs/design/export.json\n",
+        encoding="utf-8",
+    )
+
+    holder: dict = {}
+    result = run_workflow(
+        "task", repo_root, log=lambda msg: None,
+        spec_resolver=_resolver_returns(_spec_for(repo_root)),
+        claude_runner=lambda prompt, cwd, env=None: _ok_claude(),
+        verifier=lambda workspace, repo_root, plan: _pass_verification(),
+        codex_runner=lambda prompt, cwd, env=None, **kwargs: _approve_review(),
+        workspace_factory=_real_ish_workspace_factory_with_design_context(repo_root, spec_path, tmp_path, holder),
+        environ=_valid_environ(tmp_path),
+    )
+
+    assert result.outcome == "APPROVED"
+    staged_path = holder["path"] / "docs" / "design" / "export.json"
+    assert staged_path.is_file()
+    assert not staged_path.is_symlink()
+
+
+# --- F8 (MAJOR): unexpected exception terminalizes the ledger ----------
+
+def test_f8_unexpected_verifier_exception_persists_a_terminal_failed_ledger(tmp_path):
+    """Reproduces F8: an unexpected exception from an injected agent/
+    verifier must not only make `run_workflow` *return* FAILED -- the
+    *persisted* Run Ledger on disk must also show the terminal outcome,
+    not whatever non-terminal phase (outcome=null) it last reached before
+    the exception. Checked by reading the real ledger.json this run
+    actually wrote, via `result.ledger_path`.
+    """
+    repo_root = make_minimal_repo(tmp_path)
+
+    def exploding_verifier(workspace, repo_root, plan):
+        raise RuntimeError("simulated verifier crash")
+
+    result = run_workflow(
+        "task", repo_root, log=lambda msg: None,
+        spec_resolver=_resolver_returns(_spec_for(repo_root)),
+        claude_runner=lambda prompt, cwd, env=None: _ok_claude(),
+        verifier=exploding_verifier,
+        codex_runner=lambda prompt, cwd, env=None: _approve_review(),
+        workspace_factory=_fake_workspace_factory,
+        environ=_valid_environ(tmp_path),
+    )
+
+    assert result.outcome == "FAILED"
+    assert "simulated verifier crash" in result.gate_reason
+    assert result.ledger_path is not None
+    ledger_data = json.loads(Path(result.ledger_path).read_text(encoding="utf-8"))
+    assert ledger_data["outcome"] == "FAILED"
+    assert "simulated verifier crash" in ledger_data["gate_reason"]
+    # The run is now recognized terminal by retention's own validator.
+    from peos.ledger import SCHEMA_VERSION
+    assert ledger_data["schema_version"] == SCHEMA_VERSION
+
+
+def test_f8_ledger_write_failure_itself_does_not_recurse(tmp_path, monkeypatch):
+    """The companion requirement: if the ledger subsystem itself is why a
+    terminal write cannot be persisted, `peos/workflow.py` must not retry
+    it (no recursive failure) -- it still returns FAILED with a sanitized
+    diagnostic. Demonstrated by making every ledger write fail and
+    confirming the run still completes (promptly, without hanging) with
+    a sane FAILED result.
+    """
+    import peos.workflow as workflow_module
+    from peos.ledger import LedgerError
+
+    repo_root = make_minimal_repo(tmp_path)
+
+    def always_failing_write(self, ledger):
+        raise LedgerError("simulated ledger write failure")
+
+    monkeypatch.setattr(workflow_module.LedgerWriter, "write", always_failing_write)
+
+    result = run_workflow(
+        "task", repo_root, log=lambda msg: None,
+        spec_resolver=_resolver_returns(_spec_for(repo_root)),
+        claude_runner=lambda prompt, cwd, env=None: _ok_claude(),
+        verifier=lambda workspace, repo_root, plan: _pass_verification(),
+        codex_runner=lambda prompt, cwd, env=None: _approve_review(),
+        workspace_factory=_fake_workspace_factory,
+        environ=_valid_environ(tmp_path),
+    )
+
+    assert result.outcome == "FAILED"
+    assert "simulated ledger write failure" in result.gate_reason
+
+
+# --- F10 (MINOR): retention cap enforced AFTER the current run completes
+
+def test_f10_current_run_completion_does_not_leave_cap_plus_one_retained(tmp_path):
+    """Reproduces F10's retention-timing gap: with exactly
+    `DEFAULT_RETENTION` pre-existing valid-terminal runs already on disk,
+    a new run that itself terminalizes must not leave `DEFAULT_RETENTION
+    + 1` runs retained -- retention must be enforced again *after* this
+    run's own terminal ledger write, not only at the top of the run
+    before it started.
+    """
+    from peos.ledger import DEFAULT_RETENTION, LedgerWriter, RunLedger, SCHEMA_VERSION
+
+    repo_root = make_minimal_repo(tmp_path)
+    for i in range(DEFAULT_RETENTION):
+        writer = LedgerWriter(repo_root, f"preexisting{i}")
+        writer.write(RunLedger(
+            run_id=f"preexisting{i}", schema_version=SCHEMA_VERSION,
+            created_at=f"2024-01-{i + 1:02d}T00:00:00+00:00",
+            updated_at=f"2024-01-{i + 1:02d}T00:00:00+00:00",
+            max_cycles=1, authoritative_baseline="", governing_spec_identity="",
+            active_phase="Complete", last_completed_phase="Complete", current_cycle=0,
+            outcome="FAILED",
+        ))
+
+    result = run_workflow(
+        "task", repo_root, log=lambda msg: None,
+        spec_resolver=_resolver_returns(_spec_for(repo_root)),
+        claude_runner=lambda prompt, cwd, env=None: _ok_claude(),
+        verifier=lambda workspace, repo_root, plan: _pass_verification(),
+        codex_runner=lambda prompt, cwd, env=None: _approve_review(),
+        workspace_factory=_fake_workspace_factory,
+        environ=_valid_environ(tmp_path),
+    )
+    assert result.outcome == "APPROVED"
+
+    remaining = {p.name for p in (repo_root / ".peos" / "runs").iterdir()}
+    assert len(remaining) == DEFAULT_RETENTION
+    assert result.run_id in remaining  # the just-completed run survives as the most recent
+
+
+# --- F11 (MINOR test gap): AC-14 Delivery Report retained regression ---
+
+def test_f11_delivery_report_shows_unresolved_minors_and_resolved_history(tmp_path):
+    """A retained, automated regression for AC-14: a multi-cycle APPROVED
+    run whose final Codex review carries MINOR/INFO findings must have
+    them explicitly surfaced in the Delivery Report, alongside the
+    resolved historical BLOCKER finding from an earlier cycle -- both
+    read back from the real `build_report()` output, not an ad hoc
+    in-memory check.
+    """
+    from peos.codex_agent import HistoricalFindingDisposition
+    from peos.findings_register import RESOLVED
+    from peos.report import build_report
+
+    repo_root = make_minimal_repo(tmp_path)
+
+    def changes_required_with_blocker():
+        findings = (
+            Finding(
+                severity="blocking", category="implementation_defect",
+                description="a real blocker finding", requires_human_decision=False,
+            ),
+        )
+        return CodexReviewResult(
+            returncode=0, verdict="CHANGES_REQUIRED", summary="blocker found", findings=findings,
+            acceptance_criteria=(), raw_stdout="", raw_stderr="", ok=True,
+        )
+
+    def approve_with_minor_and_info():
+        minor_info = (
+            Finding(
+                severity="minor", category="non_blocking_improvement",
+                description="could rename a local variable", requires_human_decision=False,
+            ),
+            Finding(
+                severity="info", category="non_blocking_improvement",
+                description="consider adding a clarifying comment", requires_human_decision=False,
+            ),
+        )
+        return CodexReviewResult(
+            returncode=0, verdict="APPROVE", summary="ok now", findings=minor_info,
+            acceptance_criteria=(), raw_stdout="", raw_stderr="", ok=True,
+            historical_finding_dispositions=(
+                HistoricalFindingDisposition(reference="0.1", disposition=RESOLVED, note="fixed the blocker"),
+            ),
+        )
+
+    review_sequence = [changes_required_with_blocker(), approve_with_minor_and_info()]
+    codex_runner, codex_calls = _sequenced_codex_runner(review_sequence)
+
+    result = run_workflow(
+        "task", repo_root, log=lambda msg: None,
+        spec_resolver=_resolver_returns(_spec_for(repo_root)),
+        claude_runner=lambda prompt, cwd, env=None: _ok_claude(),
+        verifier=lambda workspace, repo_root, plan: _pass_verification(),
+        codex_runner=codex_runner,
+        workspace_factory=_fake_workspace_factory,
+        environ=_valid_environ(tmp_path),
+    )
+
+    assert result.outcome == "APPROVED"
+    report = build_report(result, repo_root)
+
+    # Explicit unresolved MINOR/INFO findings section, with both names present.
+    assert "## Unresolved MINOR findings" in report
+    minor_section = report.split("## Unresolved MINOR findings", 1)[1]
+    assert "could rename a local variable" in minor_section
+    assert "consider adding a clarifying comment" in minor_section
+
+    # Resolved historical BLOCKER is represented, with its disposition.
+    assert "a real blocker finding" in report
+    assert "RESOLVED" in report
+    assert "fixed the blocker" in report
+
+    # Readiness/outcome is accurate.
+    assert "**Outcome:** APPROVED" in report

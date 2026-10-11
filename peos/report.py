@@ -181,6 +181,90 @@ def _format_claude_runs(runs) -> str:
     return "\n".join(lines)
 
 
+def _format_context_recovery(context_recovery) -> str:
+    """SPEC-004 Requirement 10/AC-5: Context Recovery's output is shown
+    even on a run that never reaches implementation -- this section's
+    content comes only from `result.context_recovery`, never from
+    whether Planning/implementation succeeded.
+    """
+    if context_recovery is None:
+        return "(not run)"
+    lines = []
+    for label, items in (
+        ("Related approved specifications", context_recovery.related_specs),
+        ("Related decision records", context_recovery.related_decisions),
+        ("Related validation records", context_recovery.related_validation_records),
+    ):
+        lines.append(f"{label}: {', '.join(items) if items else '(none found)'}")
+    return "\n".join(lines)
+
+
+def _format_iteration_history(result: RunResult) -> str:
+    """SPEC-004 Requirement 10: one cycle-indexed table -- cycle 0 is the
+    initial implementation + review; remediation cycle N is the Nth
+    remediation + closure review -- including any dispute activity for
+    that cycle, read from `result.dispute_log`.
+    """
+    if not result.claude_runs:
+        return "(not reached)"
+    lines = []
+    for i, claude_run in enumerate(result.claude_runs):
+        cycle_label = "Cycle 0 (initial implementation)" if i == 0 else f"Remediation cycle {i}"
+        lines.append(f"{cycle_label}:")
+        lines.append(f"  Claude: status={claude_run.status or 'UNINTERPRETABLE'}")
+        review = result.review_results[i] if i < len(result.review_results) else None
+        if review is not None:
+            review_label = "Codex initial review" if i == 0 else "Codex closure review"
+            lines.append(f"  {review_label}: {review.verdict or 'UNINTERPRETABLE'}")
+        cycle_disputes = [
+            entry for entry in result.dispute_log
+            if f"remediation cycle {i}" in entry and i > 0
+        ]
+        for entry in cycle_disputes:
+            lines.append(f"  {entry}")
+    return "\n".join(lines)
+
+
+def _format_findings_register(register) -> str:
+    """SPEC-004 Requirement 10/16: every finding the run's Outstanding
+    Findings Register ever held, its PEOS-assigned reference, and its
+    final disposition -- with no exceptions (omission from this section
+    is itself a reporting defect, not a valid way to say "nothing more
+    to report").
+    """
+    if register is None:
+        return "(no reviews completed -- register empty)"
+    entries = register.all_entries()
+    if not entries:
+        return "(no blocking/major findings were ever raised in this run)"
+    lines = []
+    for entry in entries:
+        if entry.outstanding:
+            status = "OUTSTANDING"
+        else:
+            status = entry.disposition or "CLOSED"
+        lines.append(f"- [{entry.ref}] [{entry.severity}] {status}: {entry.description}")
+        if entry.disposition_note:
+            lines.append(f"    note: {entry.disposition_note}")
+    return "\n".join(lines)
+
+
+def _format_unresolved_minor_findings(result: RunResult) -> str:
+    """SPEC-004 Requirement 10: an explicit section whenever the run
+    reaches APPROVED/HUMAN_GATE with any minor/info finding still
+    outstanding in the last review reached, so a non-blocking finding is
+    never silently dropped just because it wasn't blocking enough to
+    stop the run.
+    """
+    if result.outcome not in ("APPROVED", "HUMAN_GATE") or not result.review_results:
+        return "(none)"
+    last_review = result.review_results[-1]
+    minors = [f for f in last_review.findings if f.severity in ("minor", "info")]
+    if not minors:
+        return "(none)"
+    return "\n".join(f"- [{f.severity}/{f.category}] {f.description}" for f in minors)
+
+
 def _task_specific_limitations(result: RunResult) -> list[str]:
     items: list[str] = []
     if result.blocked_governance_mutation:
@@ -215,9 +299,23 @@ def build_report(result: RunResult, repo_root: Path) -> str:
         f"**Task:** {result.task}",
         f"**Governing specification:** {spec_label}",
         f"**Outcome:** {result.outcome}",
+        f"**Max remediation cycles (effective):** {result.max_cycles}",
+        f"**Remediation cycles run:** {result.remediation_cycles_run}",
         "",
         "## Phases executed",
         "\n".join(f"- {p.phase}" + (f": {p.detail}" if p.detail else "") for p in result.phases),
+        "",
+        "## Context recovered",
+        _format_context_recovery(result.context_recovery),
+        "",
+        "## Iteration history",
+        _format_iteration_history(result),
+        "",
+        "## Findings and resolutions (Outstanding Findings Register)",
+        _format_findings_register(result.register),
+        "",
+        "## Unresolved MINOR findings",
+        _format_unresolved_minor_findings(result),
         "",
         "## Frozen verification plan",
         _format_verification_plan(result.verification_plan),

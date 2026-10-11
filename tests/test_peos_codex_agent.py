@@ -19,12 +19,43 @@ def _completed(returncode=0, stdout="", stderr=""):
     return subprocess.CompletedProcess(args=["codex"], returncode=returncode, stdout=stdout, stderr=stderr)
 
 
-def _runner_writing_last_message(payload):
+def _runner_writing_last_message_exact(payload):
+    """Write `payload` verbatim, with no modification -- used where a
+    test needs exact control over which top-level keys are present (e.g.
+    the SPEC-004 remediation Finding 7 tests below, which specifically
+    test omitting one of the three nullable keys entirely).
+    """
     def runner(command, **kwargs):
         last_message_path = Path(command[command.index("--output-last-message") + 1])
         last_message_path.write_text(json.dumps(payload), encoding="utf-8")
         return _completed(0)
     return runner
+
+
+# SPEC-004 added three nullable-by-default top-level keys to REVIEW_SCHEMA
+# (`reviewer_overrules_dispute`, `addressed_dispute_references`,
+# `historical_finding_dispositions`). Finding 7's fix makes all three
+# required KEYS (value may still be null) -- every payload literal in
+# this file predates that change and only sets the four original keys,
+# so `_runner_writing_last_message` fills in explicit nulls for whichever
+# of the three a payload omits, the same way a real, schema-conformant
+# `codex exec --output-schema` response always would. This is purely test
+# infrastructure: it keeps ~30 existing payload literals representative
+# of a schema-conformant response without hand-editing each one, while
+# the omission itself is tested directly and explicitly, against the
+# *exact* writer, in test_payload_missing_any_of_the_three_spec004_keys_
+# entirely_is_rejected below.
+_SPEC004_NULLABLE_DEFAULTS = {
+    "reviewer_overrules_dispute": None,
+    "addressed_dispute_references": None,
+    "historical_finding_dispositions": None,
+}
+
+
+def _runner_writing_last_message(payload):
+    merged = dict(_SPEC004_NULLABLE_DEFAULTS)
+    merged.update(payload)
+    return _runner_writing_last_message_exact(merged)
 
 
 def _runner_writing_raw(raw_text: str):
@@ -529,6 +560,215 @@ def test_run_codex_review_summary_is_redacted_of_a_secret_shaped_string():
     assert result.ok
     assert secret not in result.summary
     assert "[REDACTED]" in result.summary
+
+
+# --- SPEC-004 Requirement 8/16/22/25: dispute + register + AC-coverage --
+
+def _approve_payload(**overrides):
+    payload = {
+        "verdict": "APPROVE", "summary": "ok", "findings": [],
+        "acceptance_criteria": [{"id": "AC-1", "met": True, "note": "covered"}],
+    }
+    payload.update(overrides)
+    return payload
+
+
+def test_reviewer_overrules_dispute_true_with_active_dispute_is_accepted_as_changes_required():
+    runner = _runner_writing_last_message({
+        "verdict": "CHANGES_REQUIRED", "summary": "still an issue", "findings": [],
+        "acceptance_criteria": None,
+        "reviewer_overrules_dispute": True, "addressed_dispute_references": ["0.1"],
+        "historical_finding_dispositions": None,
+    })
+    result = run_codex_review("prompt", Path("."), runner=runner, active_dispute_references=frozenset({"0.1"}))
+    assert result.ok
+    assert result.reviewer_overrules_dispute is True
+    assert result.addressed_dispute_references == ("0.1",)
+
+
+def test_ac21_approve_with_reviewer_overrules_dispute_true_is_rejected():
+    runner = _runner_writing_last_message({
+        "verdict": "APPROVE", "summary": "ok", "findings": [], "acceptance_criteria": None,
+        "reviewer_overrules_dispute": True, "addressed_dispute_references": ["0.1"],
+        "historical_finding_dispositions": None,
+    })
+    result = run_codex_review("prompt", Path("."), runner=runner, active_dispute_references=frozenset({"0.1"}))
+    assert not result.ok
+    assert result.verdict is None
+
+
+def test_ac10_dispute_fields_set_while_no_dispute_active_is_rejected():
+    runner = _runner_writing_last_message({
+        "verdict": "CHANGES_REQUIRED", "summary": "x", "findings": [], "acceptance_criteria": None,
+        "reviewer_overrules_dispute": False, "addressed_dispute_references": ["0.1"],
+        "historical_finding_dispositions": None,
+    })
+    result = run_codex_review("prompt", Path("."), runner=runner)  # no active_dispute_references
+    assert not result.ok
+
+
+def test_ac10_dispute_fields_null_while_dispute_active_is_rejected():
+    runner = _runner_writing_last_message({
+        "verdict": "CHANGES_REQUIRED", "summary": "x", "findings": [], "acceptance_criteria": None,
+        "reviewer_overrules_dispute": None, "addressed_dispute_references": None,
+        "historical_finding_dispositions": None,
+    })
+    result = run_codex_review("prompt", Path("."), runner=runner, active_dispute_references=frozenset({"0.1"}))
+    assert not result.ok
+
+
+def test_ac24_addressed_dispute_references_omitting_an_active_reference_is_rejected():
+    runner = _runner_writing_last_message({
+        "verdict": "CHANGES_REQUIRED", "summary": "x", "findings": [], "acceptance_criteria": None,
+        "reviewer_overrules_dispute": False, "addressed_dispute_references": ["0.1"],
+        "historical_finding_dispositions": None,
+    })
+    result = run_codex_review(
+        "prompt", Path("."), runner=runner, active_dispute_references=frozenset({"0.1", "0.2"}),
+    )
+    assert not result.ok
+    assert "omits" in result.error
+
+
+def test_addressed_dispute_references_covering_every_active_reference_is_accepted():
+    runner = _runner_writing_last_message({
+        "verdict": "CHANGES_REQUIRED", "summary": "x", "findings": [], "acceptance_criteria": None,
+        "reviewer_overrules_dispute": False, "addressed_dispute_references": ["0.1", "0.2"],
+        "historical_finding_dispositions": None,
+    })
+    result = run_codex_review(
+        "prompt", Path("."), runner=runner, active_dispute_references=frozenset({"0.1", "0.2"}),
+    )
+    assert result.ok
+
+
+def test_historical_finding_dispositions_well_formed_is_accepted():
+    runner = _runner_writing_last_message({
+        "verdict": "CHANGES_REQUIRED", "summary": "x", "findings": [], "acceptance_criteria": None,
+        "reviewer_overrules_dispute": None, "addressed_dispute_references": None,
+        "historical_finding_dispositions": [
+            {"reference": "0.1", "disposition": "RESOLVED", "note": "fixed"},
+        ],
+    })
+    result = run_codex_review("prompt", Path("."), runner=runner)
+    assert result.ok
+    assert len(result.historical_finding_dispositions) == 1
+    assert result.historical_finding_dispositions[0].disposition == "RESOLVED"
+
+
+def test_historical_finding_dispositions_with_malformed_reference_is_rejected():
+    runner = _runner_writing_last_message({
+        "verdict": "CHANGES_REQUIRED", "summary": "x", "findings": [], "acceptance_criteria": None,
+        "reviewer_overrules_dispute": None, "addressed_dispute_references": None,
+        "historical_finding_dispositions": [
+            {"reference": "not-a-ref", "disposition": "RESOLVED", "note": "fixed"},
+        ],
+    })
+    result = run_codex_review("prompt", Path("."), runner=runner)
+    assert not result.ok
+
+
+def test_historical_finding_dispositions_with_invalid_disposition_value_is_rejected():
+    runner = _runner_writing_last_message({
+        "verdict": "CHANGES_REQUIRED", "summary": "x", "findings": [], "acceptance_criteria": None,
+        "reviewer_overrules_dispute": None, "addressed_dispute_references": None,
+        "historical_finding_dispositions": [
+            {"reference": "0.1", "disposition": "MAYBE_FIXED", "note": None},
+        ],
+    })
+    result = run_codex_review("prompt", Path("."), runner=runner)
+    assert not result.ok
+
+
+def test_ac20_approve_payload_shape_is_unaffected_by_register_state_itself():
+    """`_validate_review_payload` never sees the Outstanding Findings
+    Register directly (that check lives at the orchestrator level in
+    peos/workflow.py's `_evaluate_cycle` -- see test_peos_workflow.py);
+    this schema-level payload alone, with no dispute/AC-set context, must
+    still validate normally.
+    """
+    runner = _runner_writing_last_message(_approve_payload())
+    result = run_codex_review("prompt", Path("."), runner=runner)
+    assert result.ok
+    assert result.approved
+
+
+def test_ac25_approve_with_incomplete_ac_coverage_is_rejected():
+    runner = _runner_writing_last_message(_approve_payload(
+        acceptance_criteria=[{"id": "AC-1", "met": True, "note": "covered"}],
+    ))
+    result = run_codex_review(
+        "prompt", Path("."), runner=runner, required_ac_ids=frozenset({"AC-1", "AC-2"}),
+    )
+    assert not result.ok
+    assert "AC-2" in result.error
+
+
+def test_ac25_approve_with_complete_ac_coverage_is_accepted():
+    runner = _runner_writing_last_message(_approve_payload(
+        acceptance_criteria=[
+            {"id": "AC-1", "met": True, "note": "covered"},
+            {"id": "AC-2", "met": True, "note": "covered"},
+        ],
+    ))
+    result = run_codex_review(
+        "prompt", Path("."), runner=runner, required_ac_ids=frozenset({"AC-1", "AC-2"}),
+    )
+    assert result.ok
+    assert result.approved
+
+
+def test_payload_missing_any_of_the_three_spec004_keys_entirely_is_rejected():
+    """SPEC-004 remediation Finding 7 (MAJOR): REVIEW_SCHEMA requires all
+    seven top-level keys, including `reviewer_overrules_dispute`/
+    `addressed_dispute_references`/`historical_finding_dispositions`
+    (value may be null, but the KEY must be present). Local validation
+    previously required only the four pre-SPEC-004 keys, so a payload
+    omitting one of these three entirely -- not merely setting it to
+    null -- was silently accepted. Each omission, individually, must now
+    be rejected the same way omitting `verdict`/`summary`/`findings`/
+    `acceptance_criteria` already was and remains.
+    """
+    base = {
+        "verdict": "APPROVE", "summary": "ok", "findings": [],
+        "acceptance_criteria": [{"id": "AC-001", "met": True, "note": "covered"}],
+        "reviewer_overrules_dispute": None,
+        "addressed_dispute_references": None,
+        "historical_finding_dispositions": None,
+    }
+    for omitted_key in (
+        "reviewer_overrules_dispute", "addressed_dispute_references", "historical_finding_dispositions",
+    ):
+        payload = dict(base)
+        del payload[omitted_key]
+        runner = _runner_writing_last_message_exact(payload)
+        result = run_codex_review("prompt", Path("."), runner=runner)
+        assert not result.ok, f"omitting {omitted_key!r} entirely must be rejected"
+        assert result.verdict is None
+        assert "missing required field" in result.error.lower()
+        assert omitted_key in result.error
+
+
+def test_payload_with_all_seven_keys_present_and_the_three_new_ones_explicit_null_is_accepted():
+    """The positive counterpart: a payload that supplies all seven keys,
+    with the three SPEC-004 keys explicitly null (no dispute active,
+    nothing dispositioned this cycle), is well-formed and must validate
+    normally -- "required KEY, nullable VALUE" is satisfied exactly as
+    REVIEW_SCHEMA intends.
+    """
+    payload = {
+        "verdict": "APPROVE", "summary": "ok", "findings": [],
+        "acceptance_criteria": [{"id": "AC-001", "met": True, "note": "covered"}],
+        "reviewer_overrules_dispute": None,
+        "addressed_dispute_references": None,
+        "historical_finding_dispositions": None,
+    }
+    runner = _runner_writing_last_message_exact(payload)
+    result = run_codex_review("prompt", Path("."), runner=runner)
+    assert result.ok
+    assert result.reviewer_overrules_dispute is None
+    assert result.addressed_dispute_references is None
+    assert result.historical_finding_dispositions == ()
 
 
 def test_finding_missing_requires_human_decision_key_is_rejected():
