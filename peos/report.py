@@ -273,6 +273,32 @@ def _format_unresolved_minor_findings(result: RunResult) -> str:
     return "\n".join(f"- [{f.severity}/{f.category}] {f.description}" for f in minors)
 
 
+def _format_runtime_verification_history(result: RunResult) -> str:
+    """SPEC-006 Section 18 extension point 4: one entry per round whose
+    Runtime Verification actually ran (the documented no-op is never
+    listed here), showing that round's execution-integrity outcome and
+    every declared check's own status -- never only the latest round's.
+    """
+    history = getattr(result, "runtime_verification_history", ())
+    ran_rounds = [o for o in history if o.ran]
+    if not ran_rounds:
+        return "(no runtime checks declared, or Runtime Verification did not run)"
+    lines = []
+    for outcome in ran_rounds:
+        integrity = "PASSED" if outcome.execution_integrity_passed else "FAILED"
+        lines.append(f"Execution integrity: {integrity}")
+        if outcome.failure_reason:
+            lines.append(f"  reason: {outcome.failure_reason}")
+        if outcome.evidence is not None:
+            lines.append(f"  cycle: {outcome.evidence.cycle_label}")
+            if outcome.persisted is not None:
+                lines.append(f"  evidence: {outcome.persisted.evidence_dir} (sha256 {outcome.persisted.evidence_json_sha256})")
+            for check in outcome.evidence.checks:
+                ac_ids = ", ".join(check.related_ac_ids) or "(none)"
+                lines.append(f"  - [{check.check_id}] kind={check.kind} status={check.status} ac={ac_ids}")
+    return "\n".join(lines)
+
+
 def _task_specific_limitations(result: RunResult) -> list[str]:
     items: list[str] = []
     if result.blocked_governance_mutation:
@@ -330,6 +356,9 @@ def build_report(result: RunResult, repo_root: Path) -> str:
         "",
         "## Local verification",
         _format_verification(result.verification_reports),
+        "",
+        "## Runtime evidence",
+        _format_runtime_verification_history(result),
         "",
         "## Claude implementation/remediation",
         _format_claude_runs(result.claude_runs),

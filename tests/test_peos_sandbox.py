@@ -27,12 +27,14 @@ import pytest
 from peos.sandbox import (
     CREDENTIAL_ENV_DENYLIST,
     SandboxUnavailableError,
+    build_runtime_verification_sandbox_profile,
     build_verification_sandbox_profile,
     create_isolated_workspace,
     discard_workspace,
     ensure_spec_in_workspace,
     reconcile_workspace_to_repo,
     sandboxed_env,
+    sandboxed_runtime_verification_command,
     sandboxed_verification_command,
 )
 
@@ -191,6 +193,60 @@ def test_reconcile_never_copies_back_protected_governance_changes(repo_root):
         assert "CLAUDE.md" in result.blocked_governance_changes
         assert "CLAUDE.md" not in result.copied
         assert (repo_root / "CLAUDE.md").read_text(encoding="utf-8") == original_claude_md
+    finally:
+        discard_workspace(workspace)
+
+
+def test_ac045_reconcile_never_copies_back_a_peos_control_plane_change(repo_root):
+    """SPEC-006 Codex Round 1 Finding 1: a candidate edit to peos/ itself
+    is reported as a blocked governance mutation, never copied back onto
+    the authoritative repository, regardless of whether the call site
+    passes it via `protected_relative_paths` -- this must hold
+    structurally, like `.peos/runs/` already does."""
+    (repo_root / "peos").mkdir(exist_ok=True)
+    (repo_root / "peos" / "sandbox.py").write_text("# trusted control-plane module\n", encoding="utf-8")
+    subprocess.run(["git", "add", "peos/sandbox.py"], cwd=str(repo_root), check=True, capture_output=True)
+    subprocess.run(
+        ["git", "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-m", "add peos/sandbox.py"],
+        cwd=str(repo_root), check=True, capture_output=True,
+    )
+    original = (repo_root / "peos" / "sandbox.py").read_text(encoding="utf-8")
+    workspace = create_isolated_workspace(repo_root, "testrun-peos-protect")
+    try:
+        (workspace.path / "peos" / "sandbox.py").write_text(
+            "def _always_approve(): return True\n", encoding="utf-8",
+        )
+        (workspace.path / "peos" / "new_untracked_module.py").write_text(
+            "def pwn(): pass\n", encoding="utf-8",
+        )
+
+        result = reconcile_workspace_to_repo(workspace, repo_root)
+
+        assert "peos/sandbox.py" in result.blocked_governance_changes
+        assert "peos/new_untracked_module.py" in result.blocked_governance_changes
+        assert "peos/sandbox.py" not in result.copied
+        assert "peos/new_untracked_module.py" not in result.copied
+        assert (repo_root / "peos" / "sandbox.py").read_text(encoding="utf-8") == original
+        assert not (repo_root / "peos" / "new_untracked_module.py").exists()
+    finally:
+        discard_workspace(workspace)
+
+
+def test_ac020_reconcile_never_copies_back_staged_runtime_evidence(repo_root):
+    """Codex implementation review Finding 5: the staged evidence copy
+    under .peos/runtime-evidence/ is a sibling of .peos/runs/, not a
+    descendant of it, so the existing run-state exclusion alone did not
+    cover it -- confirmed as a real leak and closed here."""
+    workspace = create_isolated_workspace(repo_root, "testrun-evidence-leak")
+    try:
+        staged_dir = workspace.path / ".peos" / "runtime-evidence" / "cycle-0"
+        staged_dir.mkdir(parents=True)
+        (staged_dir / "evidence.json").write_text('{"fake": "evidence"}', encoding="utf-8")
+
+        result = reconcile_workspace_to_repo(workspace, repo_root)
+
+        assert not (repo_root / ".peos" / "runtime-evidence").exists()
+        assert not any("runtime-evidence" in p for p in result.copied)
     finally:
         discard_workspace(workspace)
 
@@ -665,3 +721,126 @@ def test_verification_sandbox_profile_denies_network_and_confines_writes(repo_ro
         assert str((repo_root / ".git")) in profile or str(repo_root) in profile
     finally:
         discard_workspace(workspace)
+
+
+def test_sandboxed_runtime_verification_command_fails_closed_when_unavailable(repo_root, tmp_path, monkeypatch):
+    """SPEC-006 AC-007: a missing sandbox-exec must fail closed, never an
+    unsandboxed fallback, for the Runtime Verification profile too."""
+    import peos.sandbox as sandbox_module
+
+    monkeypatch.setattr(sandbox_module.shutil, "which", lambda name: None)
+    workspace = create_isolated_workspace(repo_root, "sbx-rv-unavailable")
+    try:
+        with pytest.raises(SandboxUnavailableError):
+            sandboxed_runtime_verification_command(
+                ["python3", "-c", "pass"], workspace, repo_root, tmp_path / "profiles"
+            )
+    finally:
+        discard_workspace(workspace)
+
+
+def test_runtime_verification_sandbox_profile_denies_network_and_confines_writes_and_excludes_evidence_dir(repo_root):
+    """SPEC-006 Section 11, Codex Round 1 Finding 4: the evidence output
+    directory must never appear in this profile's write-allow set (only
+    the unsandboxed orchestrator process writes there)."""
+    workspace = create_isolated_workspace(repo_root, "sbx-rv-profile")
+    try:
+        profile = build_runtime_verification_sandbox_profile(workspace, repo_root)
+        assert "(deny network*)" in profile
+        assert str(workspace.path) in profile
+        assert str((repo_root / ".git")) in profile or str(repo_root) in profile
+        assert "runtime-evidence" not in profile
+    finally:
+        discard_workspace(workspace)
+
+
+@requires_sandbox_exec
+class TestRuntimeVerificationSandboxEnforcement:
+    """Real `sandbox-exec` invocations proving SPEC-006's security
+    claims about the backend/frontend service sandbox hold in practice,
+    the same empirical style as `TestVerificationSandboxEnforcement`
+    above -- not a mocked routing test that only proves our Python
+    *called* the right function."""
+
+    def test_ac033_service_process_cannot_reach_a_real_external_destination(self, real_repo_root, tmp_path):
+        workspace = create_isolated_workspace(real_repo_root, "sbx-rv1")
+        try:
+            profile_dir = tmp_path / "profiles"
+            command = sandboxed_runtime_verification_command(
+                ["python3", "-c", "import socket; socket.create_connection(('1.1.1.1', 443), timeout=3)"],
+                workspace, real_repo_root, profile_dir,
+            )
+            proc = subprocess.run(command, cwd=str(workspace.path), capture_output=True, text=True, timeout=30)
+            assert proc.returncode != 0
+        finally:
+            discard_workspace(workspace)
+
+    def test_ac033_service_process_can_use_a_loopback_socket(self, real_repo_root, tmp_path):
+        """A backend/frontend service must be able to bind and connect
+        over 127.0.0.1 (SPEC-006's whole premise), while a genuine
+        external destination remains denied (proven above)."""
+        workspace = create_isolated_workspace(real_repo_root, "sbx-rv2")
+        try:
+            profile_dir = tmp_path / "profiles"
+            command = sandboxed_runtime_verification_command(
+                [
+                    "python3", "-c",
+                    "import socket, threading\n"
+                    "s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)\n"
+                    "s.bind(('127.0.0.1', 0))\n"
+                    "s.listen(1)\n"
+                    "port = s.getsockname()[1]\n"
+                    "def client():\n"
+                    "    c = socket.socket(socket.AF_INET, socket.SOCK_STREAM)\n"
+                    "    c.connect(('127.0.0.1', port))\n"
+                    "    c.send(b'hi')\n"
+                    "    c.close()\n"
+                    "t = threading.Thread(target=client)\n"
+                    "t.start()\n"
+                    "conn, _ = s.accept()\n"
+                    "assert conn.recv(2) == b'hi'\n"
+                    "t.join()\n",
+                ],
+                workspace, real_repo_root, profile_dir,
+            )
+            proc = subprocess.run(command, cwd=str(workspace.path), capture_output=True, text=True, timeout=30)
+            assert proc.returncode == 0, proc.stderr
+        finally:
+            discard_workspace(workspace)
+
+    def test_ac032_service_process_cannot_write_to_a_repo_root_nested_under_an_allowed_temp_directory(self, tmp_path):
+        repo_root = make_minimal_repo(tmp_path)
+        workspace = create_isolated_workspace(repo_root, "sbx-rv-temp-attack")
+        try:
+            profile_dir = tmp_path / "profiles"
+            target = repo_root / "pwned_by_runtime_verification.txt"
+            command = sandboxed_runtime_verification_command(
+                ["python3", "-c", f"open({str(target)!r}, 'w').write('pwned')"],
+                workspace, repo_root, profile_dir,
+            )
+            proc = subprocess.run(command, cwd=str(workspace.path), capture_output=True, text=True, timeout=30)
+            assert not target.exists()
+        finally:
+            discard_workspace(workspace)
+
+    def test_ac050_service_process_cannot_read_an_extra_denied_path_outside_real_home(self, real_repo_root, tmp_path):
+        """SPEC-006 Codex Round 1 Finding 7: an arbitrarily-located
+        PEOS_CODEX_AUTH_HOME-style directory, forwarded via
+        `extra_deny_read_paths`, must be denied to service processes too."""
+        secret_dir = tmp_path / "codex-auth-outside-home"
+        secret_dir.mkdir()
+        secret_file = secret_dir / "auth.json"
+        secret_file.write_text('{"token": "secret"}', encoding="utf-8")
+
+        workspace = create_isolated_workspace(real_repo_root, "sbx-rv-extra-deny")
+        try:
+            profile_dir = tmp_path / "profiles"
+            command = sandboxed_runtime_verification_command(
+                ["python3", "-c", f"open({str(secret_file)!r}).read()"],
+                workspace, real_repo_root, profile_dir,
+                extra_deny_read_paths=(secret_dir,),
+            )
+            proc = subprocess.run(command, cwd=str(workspace.path), capture_output=True, text=True, timeout=30)
+            assert proc.returncode != 0
+        finally:
+            discard_workspace(workspace)

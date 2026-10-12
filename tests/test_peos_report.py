@@ -43,6 +43,58 @@ def test_report_contains_core_sections_for_approved_run():
     assert "Recommended next human action" in report
 
 
+def test_report_shows_no_runtime_evidence_section_when_none_ran():
+    result = RunResult(
+        task="do the thing", outcome="APPROVED",
+        phases=(PhaseLog(phase="Complete"),), spec=SPEC, claude_runs=(),
+        verification_reports=(), review_results=(), remediation_performed=False,
+    )
+    report = build_report(result, REPO_ROOT)
+    assert "## Runtime evidence" in report
+    assert "no runtime checks declared" in report
+
+
+def test_ac021_report_shows_every_rounds_runtime_evidence_not_only_the_latest():
+    from peos.runtime_evidence import PersistedEvidence, RuntimeEvidence, build_runtime_check
+    from peos.runtime_verification import RuntimeVerificationOutcome
+
+    check, _ = build_runtime_check(
+        check_id="runtime.cycle-0.0.viewport_overflow", kind="viewport_overflow",
+        related_ac_ids=("AC-012",), parameters={}, status="PASS",
+        action_performed="x", observation="x", measurements={}, screenshot_bytes=None,
+    )
+    evidence0 = RuntimeEvidence(
+        run_id="r", cycle_label="cycle 0", workspace_snapshot_identity="fp", baseline_commit="bc",
+        catalog_version="1.0.0", playwright_version="1.49.1", browser_version="fake",
+        browser_environment={}, service_readiness=(), checks=(check,), execution_integrity_passed=True,
+    )
+    evidence1 = RuntimeEvidence(**{**evidence0.__dict__, "cycle_label": "remediation cycle 1"})
+    persisted0 = PersistedEvidence(
+        evidence_dir=Path("/tmp/e0"), evidence_json_path=Path("/tmp/e0/evidence.json"),
+        evidence_hash_path=Path("/tmp/e0/evidence.json.sha256"), evidence_json_sha256="a" * 64,
+    )
+    persisted1 = PersistedEvidence(
+        evidence_dir=Path("/tmp/e1"), evidence_json_path=Path("/tmp/e1/evidence.json"),
+        evidence_hash_path=Path("/tmp/e1/evidence.json.sha256"), evidence_json_sha256="b" * 64,
+    )
+    result = RunResult(
+        task="do the thing", outcome="APPROVED",
+        phases=(PhaseLog(phase="Complete"),), spec=SPEC, claude_runs=(),
+        verification_reports=(), review_results=(), remediation_performed=True,
+        runtime_verification_history=(
+            RuntimeVerificationOutcome(ran=True, execution_integrity_passed=True, failure_reason=None,
+                                        evidence=evidence0, persisted=persisted0, staged_dir=Path("/tmp/s0")),
+            RuntimeVerificationOutcome(ran=True, execution_integrity_passed=True, failure_reason=None,
+                                        evidence=evidence1, persisted=persisted1, staged_dir=Path("/tmp/s1")),
+        ),
+    )
+    report = build_report(result, REPO_ROOT)
+    assert "cycle 0" in report
+    assert "remediation cycle 1" in report
+    assert "a" * 64 in report
+    assert "b" * 64 in report
+
+
 def test_report_surfaces_gate_reason_and_findings():
     finding = Finding(severity="blocking", category="architecture_concern",
                        description="changes control topology", requires_human_decision=True)

@@ -15,6 +15,8 @@ produces.
 
 from __future__ import annotations
 
+import os
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -34,9 +36,26 @@ app = FastAPI(title="AI Power Lab API", version="0.1.0")
 # The Next.js dev server runs on a different origin (localhost:3000)
 # than this API (localhost:8000); the browser enforces CORS between
 # them. Dev-only origins -- this is not a deployment configuration.
+#
+# SPEC-006 Resolved Decision 3: PEOS Runtime Verification runs both this
+# backend and the frontend on OS-assigned ephemeral ports, so the
+# frontend's origin is not known in advance and cannot be one of the two
+# literals above. `AI_POWER_LAB_EXTRA_CORS_ORIGINS` (comma-separated) lets
+# Runtime Verification's own backend subprocess launch append exactly the
+# one resolved frontend origin for that run -- additive only, never
+# replacing the two hardcoded origins above. Unset (the default for every
+# other way this app is started -- `npm run dev`, a deployment, a human
+# running the backend directly), this is a no-op and `allow_origins` is
+# byte-identical to before this change.
+_extra_cors_origins = [
+    origin.strip()
+    for origin in os.environ.get("AI_POWER_LAB_EXTRA_CORS_ORIGINS", "").split(",")
+    if origin.strip()
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000", *_extra_cors_origins],
     allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )

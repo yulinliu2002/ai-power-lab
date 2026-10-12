@@ -65,6 +65,31 @@ class StaticContextRef:
 
 
 @dataclass(frozen=True)
+class RuntimeCheckSummary:
+    """SPEC-006 Section 14: one line per check in this round's
+    RuntimeEvidence -- `check_id`/`kind`/`status`/`related_ac_ids`,
+    including any `NOT_EXECUTED` check (never silently omitted)."""
+
+    check_id: str
+    kind: str
+    status: str
+    related_ac_ids: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class RuntimeEvidenceRef:
+    """SPEC-006 Section 14 "Round Packet extension" -- the thirteenth
+    Round Packet element. `None` for a round where Runtime Verification
+    declared no checks (the documented no-op, SPEC-006 Section 8 step
+    1/2) -- never a placeholder claiming evidence that does not exist."""
+
+    staged_relative_path: str
+    evidence_json_sha256: str
+    execution_integrity_passed: bool
+    checks: tuple[RuntimeCheckSummary, ...] = field(default_factory=tuple)
+
+
+@dataclass(frozen=True)
 class RoundPacket:
     # 1. Original human task/intent, unchanged since Planning.
     task: str
@@ -101,6 +126,9 @@ class RoundPacket:
     # check_repository_safety`'s own `head_commit` -- the same value the
     # Run Ledger persists as `authoritative_baseline`.
     baseline_commit: str = ""
+    # 13. Runtime Evidence reference (SPEC-006 Section 14 -- NEW). `None`
+    # for a round where Runtime Verification declared no checks.
+    runtime_evidence: RuntimeEvidenceRef | None = None
 
 
 def build_round_packet(
@@ -120,6 +148,7 @@ def build_round_packet(
     static_context_artifacts: tuple[StaticContextRef, ...],
     governance_identities: tuple[tuple[str, str], ...],
     baseline_commit: str,
+    runtime_evidence: RuntimeEvidenceRef | None = None,
 ) -> RoundPacket:
     return RoundPacket(
         task=task,
@@ -135,6 +164,7 @@ def build_round_packet(
         register_snapshot=tuple(RegisterEntrySnapshot.from_entry(e) for e in register.all_entries()),
         active_disputes=active_disputes,
         acceptance_criteria_ids=acceptance_criteria_ids,
+        runtime_evidence=runtime_evidence,
         static_context_artifacts=static_context_artifacts,
         governance_identities=governance_identities,
         baseline_commit=baseline_commit,
@@ -179,6 +209,27 @@ def render_historical_dispositions_for_prompt(packet: RoundPacket) -> str:
     return "\n".join(lines)
 
 
+def render_runtime_evidence_for_prompt(packet: RoundPacket) -> str:
+    """SPEC-006 Section 14: rendered literal prompt text for this round's
+    `RuntimeEvidenceRef`, including any `NOT_EXECUTED` check -- never
+    silently omitted. `"(no runtime checks declared this round)"` for a
+    round where Runtime Verification found nothing to run (SPEC-006
+    Section 8 step 1/2's documented no-op), distinct from an actual
+    empty-evidence case, which cannot occur (a declared check always
+    produces a `RuntimeCheck` record, even a `NOT_EXECUTED` one)."""
+    ref = packet.runtime_evidence
+    if ref is None:
+        return "(no runtime checks declared this round)"
+    lines = [
+        f"Staged at: {ref.staged_relative_path} (hash {ref.evidence_json_sha256})",
+        f"Execution integrity: {'PASSED' if ref.execution_integrity_passed else 'FAILED'}",
+    ]
+    for c in ref.checks:
+        ac_ids = ", ".join(c.related_ac_ids) or "(none)"
+        lines.append(f"- [{c.check_id}] kind={c.kind} status={c.status} ac={ac_ids}")
+    return "\n".join(lines)
+
+
 def render_round_packet_header(packet: RoundPacket) -> str:
     """Render every element of `packet` that the register/dispute
     renderers above do not already cover, as literal text any Claude or
@@ -220,5 +271,6 @@ def render_round_packet_header(packet: RoundPacket) -> str:
         f"- Latest deterministic verification result: {verification_line}\n"
         f"- Complete governing acceptance-criteria set: {ac_ids}\n"
         f"- Static external-context artifact identities: {static_context}\n"
+        f"- Runtime Verification evidence this round: {render_runtime_evidence_for_prompt(packet)}\n"
         f"- Historical finding dispositions so far: {render_historical_dispositions_for_prompt(packet)}"
     )

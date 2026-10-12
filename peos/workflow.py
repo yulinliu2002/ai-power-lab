@@ -95,7 +95,16 @@ from peos.prompts import (
     build_rereview_prompt,
     build_review_prompt,
 )
-from peos.round_packet import ActiveDispute, RoundPacket, StaticContextRef, build_round_packet
+from peos.round_packet import (
+    ActiveDispute,
+    RoundPacket,
+    RuntimeCheckSummary,
+    RuntimeEvidenceRef,
+    StaticContextRef,
+    build_round_packet,
+)
+from peos.runtime_evidence import reverify_evidence_identity
+from peos.runtime_verification import RuntimeVerificationOutcome, run_runtime_verification
 from peos.sandbox import (
     CLAUDE_AUTH_ENV_VAR,
     CODEX_AUTH_HOME_ENV_VAR,
@@ -168,6 +177,11 @@ class RunResult:
     dispute_log: tuple[str, ...] = field(default_factory=tuple)
     run_id: str | None = None
     ledger_path: str | None = None
+    # SPEC-006 addition: every round's Runtime Verification outcome, in
+    # round order -- cycle 0 first, then each remediation cycle that ran
+    # one -- never only the latest, so the Delivery Report (peos/report.py)
+    # can show every round's own evidence, not just the final one.
+    runtime_verification_history: tuple["RuntimeVerificationOutcome", ...] = field(default_factory=tuple)
 
 
 def _verification_summary_text(report: VerificationReport) -> str:
@@ -214,6 +228,12 @@ GATE_UNRESOLVED_AFTER_REMEDIATION = "8"
 GATE_RELEASE_ACTION = "9"
 GATE_PERSISTENT_DISPUTE = "10"
 GATE_STATIC_CONTEXT_MISSING = "11"
+# SPEC-006 Section 15: a declared Runtime Verification check that cannot
+# be deterministically interpreted (an unsupported `kind`, a missing
+# required parameter, or an orphaned `ac=` reference) -- a decision-
+# bearing specification defect, never a capability gap (those are
+# execution-integrity `FAILED`, per SPEC-006 Section 6/15).
+GATE_RUNTIME_CHECK_UNSUPPORTED = "12"
 
 _CLAUDE_GATE_CATEGORY_TO_ID = {
     "physics": GATE_PHYSICS,
@@ -305,19 +325,23 @@ def _call_codex_runner(
     env: dict | None,
     active_dispute_references: frozenset,
     required_ac_ids: frozenset,
+    runtime_evidenced_ac_status: dict | None = None,
 ) -> CodexReviewResult:
-    """Only pass the SPEC-004 keyword arguments when non-empty, so every
-    pre-SPEC-004 `codex_runner` fake (the overwhelming majority of
-    existing tests, and any caller that injects a plain `(prompt, cwd,
-    env=None)` callable) keeps working unmodified -- those sets are
-    genuinely always empty for a `--max-cycles 1`/no-dispute/no-AC run
-    against this repository's own minimal test fixture specification.
+    """Only pass the SPEC-004/SPEC-006 keyword arguments when non-empty,
+    so every pre-SPEC-004/SPEC-006 `codex_runner` fake (the overwhelming
+    majority of existing tests, and any caller that injects a plain
+    `(prompt, cwd, env=None)` callable) keeps working unmodified -- those
+    sets are genuinely always empty for a `--max-cycles 1`/no-dispute/
+    no-AC/no-runtime-check run against this repository's own minimal test
+    fixture specification.
     """
     kwargs: dict = {}
     if active_dispute_references:
         kwargs["active_dispute_references"] = active_dispute_references
     if required_ac_ids:
         kwargs["required_ac_ids"] = required_ac_ids
+    if runtime_evidenced_ac_status:
+        kwargs["runtime_evidenced_ac_status"] = runtime_evidenced_ac_status
     return codex_runner(prompt, cwd, env=env, **kwargs)
 
 
@@ -334,12 +358,13 @@ def run_workflow(
     workspace_factory: WorkspaceFactory = create_isolated_workspace,
     environ: dict | None = None,
     max_cycles: int | None = None,
+    runtime_verifier: Callable[..., RuntimeVerificationOutcome] = run_runtime_verification,
 ) -> RunResult:
     try:
         return _run_workflow(
             task, repo_root, explicit_spec, specs_dir, log,
             spec_resolver, claude_runner, codex_runner, verifier, workspace_factory, environ,
-            max_cycles,
+            max_cycles, runtime_verifier,
         )
     except Exception as exc:  # noqa: BLE001 -- SPEC-001 Finding 11: never propagate a traceback
         # SPEC-004 remediation Finding 8: route the raw exception text
@@ -370,6 +395,7 @@ def _run_workflow(
     workspace_factory: WorkspaceFactory,
     environ: dict | None,
     max_cycles: int | None,
+    runtime_verifier: Callable[..., RuntimeVerificationOutcome] = run_runtime_verification,
 ) -> RunResult:
     # SPEC-004 Requirement 6/AC-4: an explicitly out-of-range --max-cycles
     # is a hard input-validation failure, checked before anything else --
@@ -427,6 +453,14 @@ def _run_workflow(
     staged_static_artifacts: tuple[StaticContextArtifact, ...] = ()
     preflight: PreflightResult | None = None
     spec_workspace_rel: str | None = None
+    # SPEC-006: the most recently completed round's Runtime Verification
+    # outcome -- consumed by `_round_packet`/`_runtime_evidenced_ac_status`
+    # for the very next Codex call, and reset to `None` at the start of
+    # every round before that round's own Runtime Verification runs, so a
+    # round that declares no checks never carries a prior round's
+    # evidence forward by accident.
+    runtime_outcome: RuntimeVerificationOutcome | None = None
+    runtime_verification_history: list[RuntimeVerificationOutcome] = []
 
     # SPEC-004 Requirement 20: one Run Ledger per run, at
     # .peos/runs/<run_id>/ledger.json. `run_id` is also reused as the
@@ -536,6 +570,7 @@ def _run_workflow(
             dispute_log=tuple(dispute_log),
             run_id=run_id,
             ledger_path=str(ledger_writer.run_dir / "ledger.json"),
+            runtime_verification_history=tuple(runtime_verification_history),
         )
 
     def _reconcile() -> tuple[ReconciliationResult | None, tuple[str, ...], str | None]:
@@ -665,6 +700,19 @@ def _run_workflow(
             )
         if plan.static_context.gate_reason is not None:
             return gate(GATE_STATIC_CONTEXT_MISSING, plan.static_context.gate_reason)
+
+        # SPEC-006 Section 8 step 1/Section 15: a Runtime Verification
+        # declaration that cannot be deterministically interpreted
+        # (unsupported kind, missing required parameter, orphaned ac=
+        # reference, or more than the fixed per-round check-count bound)
+        # gates here -- a decision-bearing specification defect, before
+        # any workspace is created or either agent invoked. Never a
+        # Human Gate merely because a check kind happens to be
+        # unsupported *and also* genuinely unavailable on this host --
+        # that distinct case is an execution-integrity FAILED, raised
+        # later, from inside Runtime Verification itself, not here.
+        if plan.runtime_plan.gate_reason is not None:
+            return gate(GATE_RUNTIME_CHECK_UNSUPPORTED, plan.runtime_plan.gate_reason)
 
         effective_max_cycles = (
             max_cycles if max_cycles is not None
@@ -804,6 +852,28 @@ def _run_workflow(
                     )
             return None
 
+        def _check_runtime_evidence_identity(before_what: str) -> RunResult | None:
+            """SPEC-006 Section 9 identity re-verification (Codex
+            implementation review Finding 4, closed): the previous
+            round's staged evidence copy is a consumable artifact, just
+            like a static-context artifact, and must be re-verified
+            before every subsequent Claude/Codex invocation that could
+            consume it -- a mismatch means it was altered by some means
+            since staging, and the run fails closed immediately, never a
+            silent re-hash and never a Human Gate. A `None`
+            `runtime_outcome` (no round has produced evidence yet, or the
+            most recent round declared no checks) is not a drift -- there
+            is nothing to re-verify.
+            """
+            if runtime_outcome is None or not runtime_outcome.ran or runtime_outcome.persisted is None:
+                return None
+            drift = reverify_evidence_identity(runtime_outcome.persisted, runtime_outcome.staged_dir)
+            if not drift.ok:
+                return fail(
+                    f"Runtime Verification evidence identity check failed before {before_what}: {drift.reason}"
+                )
+            return None
+
         def _codex_phase(
             name: str, prompt: str,
             active_dispute_references: frozenset = frozenset(),
@@ -831,6 +901,11 @@ def _run_workflow(
             result = _call_codex_runner(
                 codex_runner, prompt, workspace.path, codex_env,
                 active_dispute_references, required_ac_ids,
+                runtime_evidenced_ac_status=(
+                    runtime_outcome.evidence.runtime_evidenced_ac_status()
+                    if runtime_outcome is not None and runtime_outcome.evidence is not None
+                    else None
+                ),
             )
             if repo_state_fingerprint(repo_root) != pre_repo:
                 return None, fail(
@@ -876,6 +951,60 @@ def _run_workflow(
             for a in staged_static_artifacts
         )
 
+        def _run_runtime_verification_phase(cycle_label: str) -> RunResult | None:
+            """SPEC-006 Section 8: run this round's Runtime Verification
+            pass if the Runtime Plan declares any check, cycle 0 and
+            every remediation cycle alike -- after Local Verification has
+            already passed for this round, before the corresponding
+            Codex call. Sets the enclosing `runtime_outcome` (consumed by
+            `_round_packet`/`_codex_phase` for the *next* Codex call
+            only) and returns a `FAILED` `RunResult` if execution
+            integrity did not hold, or `None` to continue.
+            """
+            nonlocal runtime_outcome
+            if not plan.runtime_plan.declarations:
+                runtime_outcome = None
+                # SPEC-006 AC-001 / Codex implementation review (minor
+                # finding): the no-op is documented and visible in the
+                # Delivery Report, not silently skipped -- logged exactly
+                # like any other phase, just never started.
+                stage(f"Runtime verification ({cycle_label}): no runtime checks declared")
+                return None
+            stage(f"Runtime verification ({cycle_label})")
+            runtime_outcome = runtime_verifier(
+                plan.runtime_plan, cycle_label=cycle_label, run_id=run_id, repo_root=repo_root,
+                workspace=workspace, profile_dir=workspace.path.parent / "sandbox-profiles",
+                environ=environ, workspace_snapshot_identity=repo_state_fingerprint(workspace.path),
+                baseline_commit=baseline_commit,
+            )
+            runtime_verification_history.append(runtime_outcome)
+            if runtime_outcome.ran and not runtime_outcome.execution_integrity_passed:
+                return fail(
+                    f"Runtime Verification failed for {cycle_label}: {runtime_outcome.failure_reason}"
+                )
+            return None
+
+        def _runtime_evidence_ref() -> RuntimeEvidenceRef | None:
+            """SPEC-006 Section 14: the Round Packet's thirteenth element
+            for the *next* Claude/Codex call -- `None` if the most
+            recently completed round's Runtime Verification found no
+            checks to run (the documented no-op), never a placeholder.
+            """
+            if runtime_outcome is None or not runtime_outcome.ran or runtime_outcome.evidence is None:
+                return None
+            staged_relative = runtime_outcome.staged_dir.relative_to(workspace.path).as_posix()
+            return RuntimeEvidenceRef(
+                staged_relative_path=staged_relative,
+                evidence_json_sha256=runtime_outcome.persisted.evidence_json_sha256,
+                execution_integrity_passed=runtime_outcome.execution_integrity_passed,
+                checks=tuple(
+                    RuntimeCheckSummary(
+                        check_id=c.check_id, kind=c.kind, status=c.status, related_ac_ids=c.related_ac_ids,
+                    )
+                    for c in runtime_outcome.evidence.checks
+                ),
+            )
+
         def _round_packet(cycle_number: int, verification_passed: bool | None, verification_summary: str, active_disputes: tuple[ActiveDispute, ...]) -> RoundPacket:
             return build_round_packet(
                 task=task,
@@ -893,6 +1022,7 @@ def _run_workflow(
                 static_context_artifacts=static_context_refs,
                 governance_identities=governance_identities,
                 baseline_commit=baseline_commit,
+                runtime_evidence=_runtime_evidence_ref(),
             )
 
         # Phase 4 -- Claude implementation (cycle 0)
@@ -907,6 +1037,9 @@ def _run_workflow(
         # drift between Planning (where the artifact was pinned) and this
         # point could already have been consumed by cycle 0's Claude call
         # before any check caught it.
+        runtime_evidence_failure = _check_runtime_evidence_identity("Claude implementation")
+        if runtime_evidence_failure is not None:
+            return runtime_evidence_failure
         static_context_failure = _check_static_context_identity("Claude implementation")
         if static_context_failure is not None:
             return static_context_failure
@@ -955,6 +1088,14 @@ def _run_workflow(
         if static_context_failure is not None:
             return static_context_failure
 
+        # Phase 5b -- Runtime verification (cycle 0, SPEC-006)
+        runtime_failure = _run_runtime_verification_phase("cycle 0")
+        if runtime_failure is not None:
+            return runtime_failure
+        runtime_evidence_failure = _check_runtime_evidence_identity("Codex independent review")
+        if runtime_evidence_failure is not None:
+            return runtime_evidence_failure
+
         # Phase 6 -- Codex independent review (cycle 0)
         stage("Codex independent review")
         # SPEC-004 remediation Finding 4: cycle 0's Codex call also
@@ -998,6 +1139,9 @@ def _run_workflow(
             static_context_failure = _check_static_context_identity(f"Claude remediation cycle {remediation_cycle}")
             if static_context_failure is not None:
                 return static_context_failure
+            runtime_evidence_failure = _check_runtime_evidence_identity(f"Claude remediation cycle {remediation_cycle}")
+            if runtime_evidence_failure is not None:
+                return runtime_evidence_failure
 
             # SPEC-004 remediation Finding 4 (MAJOR): this round's packet
             # must carry the *actual* latest verification result once one
@@ -1072,6 +1216,15 @@ def _run_workflow(
             static_context_failure = _check_static_context_identity(f"Codex closure review (remediation cycle {remediation_cycle})")
             if static_context_failure is not None:
                 return static_context_failure
+
+            runtime_failure = _run_runtime_verification_phase(f"remediation cycle {remediation_cycle}")
+            if runtime_failure is not None:
+                return runtime_failure
+            runtime_evidence_failure = _check_runtime_evidence_identity(
+                f"Codex closure review (remediation cycle {remediation_cycle})"
+            )
+            if runtime_evidence_failure is not None:
+                return runtime_evidence_failure
 
             stage(f"Codex closure review (remediation cycle {cycle_label})")
             active_disputes_for_packet = tuple(

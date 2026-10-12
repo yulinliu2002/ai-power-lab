@@ -573,6 +573,60 @@ def _is_orchestrator_owned_run_state(rel: str) -> bool:
     return rel == RUNS_SUBDIR or rel.startswith(f"{RUNS_SUBDIR}/")
 
 
+# SPEC-006 Section 9: the fixed, cycle-qualified path Runtime
+# Verification stages its read-only evidence copy at inside the
+# isolated workspace -- see `peos.runtime_evidence.staged_evidence_path`
+# (".peos/runtime-evidence/<cycle_slug>/"). This is a *sibling* of
+# `RUNS_SUBDIR` (".peos/runs/"), not a descendant of it, so
+# `_is_orchestrator_owned_run_state` above does not cover it.
+STAGED_RUNTIME_EVIDENCE_SUBDIR = ".peos/runtime-evidence"
+
+
+def _is_staged_runtime_evidence_path(rel: str) -> bool:
+    """Codex implementation review Finding 5: without this check, the
+    staged evidence copy is ordinary untracked content from
+    reconciliation's point of view, and would be copied onto the
+    authoritative repository's working tree on any terminal outcome --
+    exactly the property Requirement 19's `.peos/runs/` exclusion
+    already prevents for the Run Ledger, for the identical reason (this
+    is orchestrator-written diagnostic/evidence state, never
+    implementation source). Treated the same way: excluded silently,
+    before `protected_relative_paths` is even consulted, never reported
+    as a blocked governance change (unlike `peos/` control-plane edits,
+    which *are* reported) -- staged evidence is expected, routine
+    per-round output, not a suspicious mutation.
+    """
+    return rel == STAGED_RUNTIME_EVIDENCE_SUBDIR or rel.startswith(f"{STAGED_RUNTIME_EVIDENCE_SUBDIR}/")
+
+
+PEOS_CONTROL_PLANE_SUBDIR = "peos"
+
+
+def _is_peos_control_plane_path(rel: str) -> bool:
+    """SPEC-006 Section 10 hardening item A / ADR-0003 Decision 6 (Codex
+    Round 1 Finding 1): `peos/` is the trusted PEOS control plane --
+    the check catalog, the harness, the classification/evidence-
+    integrity logic, and every other orchestrator module. A candidate
+    workspace's edit to any file under it is **reported** as a blocked
+    governance mutation (`blocked_governance_changes`), exactly like a
+    `CLAUDE.md`/`AGENTS.md`/`ENGINEERING.md` change already is -- never
+    silently copied back onto the authoritative repository's working
+    tree, under any outcome (`APPROVED`, `FAILED`, or `HUMAN_GATE`).
+
+    This closes a real gap: `reconcile_workspace_to_repo` already runs
+    on every terminal outcome, and before this check existed, nothing
+    stopped a candidate change to `peos/` itself from being copied back
+    as an ordinary, uncommitted working-tree change -- before any human
+    had reviewed it, let alone approved or merged it. Structural and
+    unconditional, like `_is_orchestrator_owned_run_state` above, but
+    reported (never silently skipped) -- an agent is allowed to *know*
+    it touched the control plane; it is just never allowed to have that
+    touch take effect without a human applying it, exactly like today's
+    governance-artifact treatment.
+    """
+    return rel == PEOS_CONTROL_PLANE_SUBDIR or rel.startswith(f"{PEOS_CONTROL_PLANE_SUBDIR}/")
+
+
 def reconcile_workspace_to_repo(
     workspace: IsolatedWorkspace,
     repo_root: Path,
@@ -591,7 +645,10 @@ def reconcile_workspace_to_repo(
     whether the path reached this function via a tracked change, an
     untracked file, or a tracked-but-deleted path (a rename is already
     split into a delete + an add by `_changed_paths`, so this one check
-    covers a rename into or out of that subtree too).
+    covers a rename into or out of that subtree too). Anything under
+    `peos/` itself (`_is_peos_control_plane_path`, SPEC-006 hardening
+    item A) is similarly excluded structurally, but -- unlike run-state
+    -- reported in `blocked_governance_changes`, never silently skipped.
     """
     tracked, untracked = _changed_paths(workspace)
 
@@ -600,9 +657,9 @@ def reconcile_workspace_to_repo(
     blocked: list[str] = []
 
     for status, rel in tracked:
-        if _is_orchestrator_owned_run_state(rel):
+        if _is_orchestrator_owned_run_state(rel) or _is_staged_runtime_evidence_path(rel):
             continue
-        if rel in protected_relative_paths:
+        if _is_peos_control_plane_path(rel) or rel in protected_relative_paths:
             blocked.append(rel)
             continue
         src = workspace.path / rel
@@ -618,9 +675,9 @@ def reconcile_workspace_to_repo(
             copied.append(rel)
 
     for rel in untracked:
-        if _is_orchestrator_owned_run_state(rel):
+        if _is_orchestrator_owned_run_state(rel) or _is_staged_runtime_evidence_path(rel):
             continue
-        if rel in protected_relative_paths:
+        if _is_peos_control_plane_path(rel) or rel in protected_relative_paths:
             blocked.append(rel)
             continue
         src = workspace.path / rel
@@ -811,6 +868,105 @@ def sandboxed_verification_command(
     profile_path = profile_dir / "verification.sb"
     profile_path.write_text(
         build_verification_sandbox_profile(workspace, repo_root, extra_deny_read_paths=extra_deny_read_paths),
+        encoding="utf-8",
+    )
+    return ["sandbox-exec", "-f", str(profile_path), *command]
+
+
+def build_runtime_verification_sandbox_profile(
+    workspace: IsolatedWorkspace,
+    repo_root: Path,
+    extra_deny_read_paths: tuple[Path, ...] = (),
+) -> str:
+    """Build the Seatbelt profile that confines the backend/frontend
+    service subprocesses PEOS Runtime Verification starts (SPEC-006
+    Section 11; extends `build_verification_sandbox_profile`'s pattern,
+    never replaces it -- deterministic verification's own profile above
+    is untouched by this function).
+
+    The write-allow set, the `repo_root` re-deny, the `.git`/credential-
+    path read-deny, and the loopback-only network exception are
+    identical in kind to the existing verification profile -- both
+    confine untrusted candidate-run code to the isolated workspace with
+    no network beyond loopback. This is a deliberately separate function
+    (not a reuse of `build_verification_sandbox_profile` under a second
+    name) so the two call sites can evolve independently without one
+    change silently affecting the other's guarantees.
+
+    The evidence output directory (`.peos/runs/<run_id>/runtime-
+    evidence/`) is deliberately **not** in the write-allow set here
+    (Codex Round 1 Finding 4): backend/frontend service subprocesses have
+    no legitimate reason to write there, and granting it would let
+    untrusted candidate-run code write directly into the evidence PEOS
+    is about to hand Codex. Only the orchestrator's own unsandboxed
+    process (`peos/runtime_evidence.py`) ever writes there.
+
+    `extra_deny_read_paths` (Codex Round 1 Finding 7): forwarded, exactly
+    like `build_verification_sandbox_profile` already does, so a
+    configured `PEOS_CODEX_AUTH_HOME` is denied to these service
+    processes too -- the fixed `CREDENTIAL_PATH_DENYLIST` alone does not
+    cover an arbitrarily-located Codex auth directory.
+    """
+    real_home = Path(os.environ.get("HOME", str(Path.home())))
+    credential_paths = [real_home / p for p in CREDENTIAL_PATH_DENYLIST]
+
+    process_tmp_dir = str(Path(tempfile.gettempdir()).resolve())
+    write_allow = "\n  ".join(
+        f'(subpath "{p}")' for p in (
+            str(workspace.path),
+            str(workspace.home_dir),
+            process_tmp_dir,
+            "/private/tmp",
+        )
+    )
+    read_deny = "\n  ".join(
+        f'(subpath "{p}")' for p in (
+            str((repo_root / ".git").resolve()) if (repo_root / ".git").exists() else str(repo_root / ".git"),
+            *[str(p) for p in credential_paths],
+            *[str(Path(p).resolve()) if Path(p).exists() else str(p) for p in extra_deny_read_paths],
+        )
+    )
+    repo_root_write_deny = str(repo_root.resolve())
+    return (
+        "(version 1)\n"
+        "(allow default)\n"
+        "(deny network*)\n"
+        '(allow network-bind (local ip "localhost:*"))\n'
+        '(allow network-inbound (local ip "localhost:*"))\n'
+        '(allow network-outbound (remote ip "localhost:*"))\n'
+        '(deny file-write* (subpath "/"))\n'
+        f"(allow file-write*\n  {write_allow}\n"
+        '  (literal "/dev/null")\n'
+        '  (literal "/dev/tty"))\n'
+        f'(deny file-write* (subpath "{repo_root_write_deny}"))\n'
+        f"(deny file-read*\n  {read_deny})\n"
+    )
+
+
+def sandboxed_runtime_verification_command(
+    command: list[str],
+    workspace: IsolatedWorkspace,
+    repo_root: Path,
+    profile_dir: Path,
+    extra_deny_read_paths: tuple[Path, ...] = (),
+) -> list[str]:
+    """Wrap `command` (a backend or frontend service launch) with the
+    Runtime Verification sandbox. Fails closed with
+    `SandboxUnavailableError` on any non-macOS platform or a missing
+    `sandbox-exec` -- never an unsandboxed fallback (SPEC-006 Section 11).
+    """
+    if sys.platform != "darwin" or shutil.which("sandbox-exec") is None:
+        raise SandboxUnavailableError(
+            "The Runtime Verification execution sandbox (macOS sandbox-exec) is not "
+            "available on this platform/host. PEOS Runtime Verification is "
+            "macOS-only (SPEC-006 Section 11, inheriting SPEC-001 Finding 1's "
+            "boundary); refusing to start a backend/frontend service process "
+            "unconfined rather than silently weakening the boundary."
+        )
+    profile_dir.mkdir(parents=True, exist_ok=True)
+    profile_path = profile_dir / "runtime-verification.sb"
+    profile_path.write_text(
+        build_runtime_verification_sandbox_profile(workspace, repo_root, extra_deny_read_paths=extra_deny_read_paths),
         encoding="utf-8",
     )
     return ["sandbox-exec", "-f", str(profile_path), *command]

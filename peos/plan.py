@@ -30,6 +30,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 
+from peos.runtime_plan import RuntimePlan, build_runtime_plan
 from peos.spec import SpecResolution, resolve_governing_spec
 from peos.static_context import StaticContextResolution, resolve_static_context
 
@@ -59,6 +60,14 @@ class PlanArtifact:
     max_cycles_override: int | None = None
     static_context: StaticContextResolution = field(default_factory=StaticContextResolution)
     acceptance_criteria_ids: tuple[str, ...] = field(default_factory=tuple)
+    # SPEC-006 Section 8 step 1: the resolved Runtime Plan, parsed the
+    # same deterministic-text-convention way as `static_context` and
+    # `max_cycles_override` above. Human Gate #12 (an unsupported `kind`,
+    # a missing required parameter, or an orphaned `ac=` reference) is
+    # surfaced via `runtime_plan.gate_reason`, checked by
+    # `peos/workflow.py` immediately after Planning, before any
+    # workspace runtime service is ever started.
+    runtime_plan: RuntimePlan = field(default_factory=RuntimePlan)
     # SPEC-004 remediation Finding 1 (BLOCKER): the SHA-256 content hash of
     # the *exact bytes* this Planning pass actually parsed
     # (`resolution.spec.path`), computed here and never recomputed later.
@@ -126,8 +135,10 @@ def build_plan(
     max_cycles_override = parse_max_cycles_override(spec_text)
     static_context = resolve_static_context(repo_root, spec_text)
     acceptance_criteria_ids = parse_acceptance_criteria_ids(spec_text)
+    runtime_plan = build_runtime_plan(spec_text, acceptance_criteria_ids)
     return PlanArtifact(
         resolution=resolution, max_cycles_override=max_cycles_override, static_context=static_context,
         acceptance_criteria_ids=acceptance_criteria_ids,
         governing_spec_content_hash=governing_spec_content_hash,
+        runtime_plan=runtime_plan,
     )
