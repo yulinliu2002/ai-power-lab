@@ -33,6 +33,9 @@ import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 
+import datetime
+
+from peos.checkpoint import ServiceProcessIdentity
 from peos.sandbox import IsolatedWorkspace, sandboxed_runtime_verification_command
 
 DEFAULT_READINESS_TIMEOUT_S = 45.0
@@ -91,6 +94,15 @@ class ServiceHandle:
     # original pid could already have been recycled by an unrelated
     # process, making a *fresh* lookup silently signal the wrong group.
     pgid: int
+    # SPEC-007 Decision 7: the exact argv actually passed to `Popen`,
+    # including the `sandbox-exec`/wrapper prefix -- distinct from
+    # `command` above (the caller's original, unwrapped command, used for
+    # human-facing evidence reporting). This is what
+    # `capture_service_process_identity`'s `ServiceProcessIdentity.
+    # command_argv` records, so a restarted orchestrator's later
+    # verification of a claimed identity compares against what was
+    # actually running, not a reconstruction.
+    sandboxed_command_argv: tuple[str, ...] = ()
 
 
 def start_service(
@@ -133,6 +145,7 @@ def start_service(
     return ServiceHandle(
         name=name, process=process, port=port, command=tuple(command),
         stdout_path=stdout_path, stderr_path=stderr_path, pgid=process.pid,
+        sandboxed_command_argv=tuple(sandboxed_command),
     )
 
 
@@ -244,3 +257,187 @@ def teardown_service(handle: ServiceHandle, grace_period_s: float = DEFAULT_TEAR
             return True
         time.sleep(0.2)
     return is_port_released(handle.port)
+
+
+def _process_start_time(pid: int) -> str | None:
+    """Best-effort process start time via `ps` (no new dependency --
+    macOS has no `/proc`). Returns `None` (never raises) if the process
+    is gone or `ps` cannot be consulted -- SPEC-007 Decision 7 explicitly
+    treats an unavailable start-time signal as "reclamation does not
+    proceed for that process", never as a reason to skip the check."""
+    try:
+        proc = subprocess.run(
+            ["ps", "-o", "lstart=", "-p", str(pid)], capture_output=True, text=True, timeout=5,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if proc.returncode != 0:
+        return None
+    value = proc.stdout.strip()
+    return value or None
+
+
+def capture_service_process_identity(handle: ServiceHandle, owning_run_id: str) -> ServiceProcessIdentity:
+    """Build the durable `ServiceProcessIdentity` checkpoint record for
+    `handle`, captured immediately after `start_service` returns (SPEC-007
+    Decision 7: "registration is written immediately after `start_service`
+    .../the browser-worker launch returns a handle, as its own small,
+    immediate checkpoint write"). A kill in the exact window between
+    `Popen` returning and that write completing leaves that one process
+    unreclaimable -- a named, accepted residual limitation, not solved in
+    V1 (see SPEC-007 "Known Limitations")."""
+    return ServiceProcessIdentity(
+        service_name=handle.name,
+        pid=handle.process.pid,
+        pgid=handle.pgid,
+        port=handle.port,
+        start_time=_process_start_time(handle.process.pid),
+        command_argv=handle.sandboxed_command_argv or handle.command,
+        owning_run_id=owning_run_id,
+        recorded_at=datetime.datetime.now(datetime.timezone.utc).isoformat(),
+    )
+
+
+def reclaim_orphaned_service(
+    identity: ServiceProcessIdentity, grace_period_s: float = DEFAULT_TEARDOWN_GRACE_PERIOD_S,
+) -> tuple[bool, str | None]:
+    """SPEC-007 "Process Ownership and Orphan Reclamation" -- a new
+    function, not a reuse of `teardown_service` (which requires a live
+    `Popen` object a restarted orchestrator does not have for a service
+    an earlier process instance launched). Uses the identical graceful-
+    SIGTERM -> bounded-grace -> SIGKILL -> verified-dead sequence, built
+    on `os.kill`/`os.killpg` plus a polling existence-probe loop in place
+    of `Popen.wait()`.
+
+    Returns `(True, None)` only once reclamation (including port-release
+    verification, for any service whose `port` is not `None`) is
+    positively confirmed. Returns `(False, reason)` for every other case,
+    **including the dead-process-group-leader-with-live-descendants
+    case** (SPEC-007 Round 2 Finding 9): this is explicitly an ambiguous-
+    ownership failure, fail-closed, never "nothing to reclaim" -- callers
+    (`peos/resume.py`) must treat `(False, ...)` as `FAILED`
+    ("ambiguous process ownership"), never a silent skip.
+    """
+    pgid = identity.pgid
+
+    # Step 1: group liveness probe.
+    try:
+        os.killpg(pgid, 0)
+    except ProcessLookupError:
+        return True, None  # Nothing to reclaim -- the ordinary post-reboot/post-crash case.
+    except PermissionError:
+        return False, f"process group {pgid} exists but cannot be signaled; ambiguous ownership."
+    except OSError as exc:
+        return False, f"could not probe process group {pgid}: {exc}; ambiguous ownership."
+
+    # Step 2: leader-identity verification -- every signal must hold
+    # (Codex implementation review, confirmed, major: an earlier
+    # revision verified only pid existence, start time, and a *prefix*
+    # match of the running command against `command_argv[0]` -- never
+    # the leader's actual, current pgid, nor the rest of `command_argv`.
+    # Both are now checked explicitly, closing the gap where a
+    # coincidentally similar process could pass verification).
+    try:
+        os.kill(identity.pid, 0)
+    except ProcessLookupError:
+        return False, (
+            f"process group {pgid} is alive but the specific recorded leader pid "
+            f"{identity.pid} is gone (dead leader with live descendants) -- ambiguous "
+            "ownership, cannot be positively established."
+        )
+    except OSError as exc:
+        return False, f"could not verify recorded leader pid {identity.pid}: {exc}"
+
+    try:
+        actual_pgid = os.getpgid(identity.pid)
+    except OSError as exc:
+        return False, f"could not verify recorded leader pid {identity.pid}'s process group: {exc}"
+    if actual_pgid != identity.pgid:
+        return False, (
+            f"recorded leader pid {identity.pid}'s current process group ({actual_pgid}) no longer "
+            f"matches the recorded pgid ({identity.pgid}) -- ambiguous ownership."
+        )
+
+    current_start_time = _process_start_time(identity.pid)
+    if identity.start_time is None or current_start_time is None or current_start_time != identity.start_time:
+        return False, (
+            f"recorded leader pid {identity.pid}'s start time could not be positively "
+            "re-verified -- ambiguous ownership."
+        )
+
+    try:
+        ps_proc = subprocess.run(
+            ["ps", "-o", "command=", "-p", str(identity.pid)], capture_output=True, text=True, timeout=5,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False, f"could not verify recorded leader pid {identity.pid}'s command line."
+    if ps_proc.returncode != 0 or not ps_proc.stdout.strip():
+        return False, f"recorded leader pid {identity.pid} could not be inspected for command-line verification."
+    running_command = ps_proc.stdout.strip()
+    if identity.command_argv:
+        search_pos = 0
+        for token in identity.command_argv:
+            found_at = running_command.find(token, search_pos)
+            if found_at == -1:
+                return False, (
+                    f"recorded leader pid {identity.pid}'s running command does not contain the full "
+                    "recorded command_argv, in order -- ambiguous ownership."
+                )
+            search_pos = found_at + len(token)
+
+    # Every signal in step 2 holds -- proceed with the identical
+    # graceful -> bounded-grace -> forced -> verified-dead sequence
+    # `teardown_service` uses, built on os.killpg/os.kill since there is
+    # no live Popen object.
+    try:
+        os.killpg(pgid, signal.SIGTERM)
+    except ProcessLookupError:
+        pass
+    except PermissionError:
+        # Observed in practice: a process group whose leader has just
+        # exited (but not yet been reaped) can make even a *signal*
+        # send -- not only the existence probe -- raise EPERM on some
+        # platforms, rather than ESRCH. Never let that escape as an
+        # uncaught exception (SPEC-001 Finding 11's "never propagate a
+        # traceback" discipline extends to this new function too); the
+        # `_group_alive()` polling loop below is what actually
+        # determines dead-vs-still-alive either way.
+        pass
+
+    deadline = time.monotonic() + grace_period_s
+
+    def _group_alive() -> bool:
+        try:
+            os.killpg(pgid, 0)
+            return True
+        except ProcessLookupError:
+            return False
+        except PermissionError:
+            return True
+
+    while time.monotonic() < deadline and _group_alive():
+        time.sleep(0.2)
+    if _group_alive():
+        try:
+            os.killpg(pgid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        except PermissionError:
+            pass
+        kill_deadline = time.monotonic() + grace_period_s
+        while time.monotonic() < kill_deadline and _group_alive():
+            time.sleep(0.2)
+    if _group_alive():
+        return False, f"process group {pgid} did not terminate after SIGTERM and SIGKILL -- unverifiable cleanup."
+
+    if identity.port is None:
+        return True, None
+
+    settle_deadline = time.monotonic() + grace_period_s
+    while time.monotonic() < settle_deadline:
+        if is_port_released(identity.port):
+            return True, None
+        time.sleep(0.2)
+    if is_port_released(identity.port):
+        return True, None
+    return False, f"port {identity.port} was not released after reclaiming process group {pgid}."

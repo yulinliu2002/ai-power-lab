@@ -16,7 +16,7 @@ persisted on every failure path; teardown guaranteed via `finally`).
 """
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import pytest
@@ -54,9 +54,24 @@ def _one_check_plan():
 
 
 @dataclass
+class _FakeProcess:
+    pid: int = 99999
+
+
+@dataclass
 class _FakeHandle:
+    """SPEC-007: `capture_service_process_identity` (called immediately
+    after every real `start_service` returns) expects the same shape a
+    real `peos.runtime_services.ServiceHandle` has -- these routing-test
+    fakes stand in for that real object, so they need the same minimal
+    surface, not a production code path that tolerates a malformed
+    handle."""
     name: str
     port: int
+    process: _FakeProcess = field(default_factory=_FakeProcess)
+    pgid: int = 99999
+    command: tuple = ()
+    sandboxed_command_argv: tuple = ()
 
 
 @dataclass
@@ -372,6 +387,64 @@ def test_happy_path_persists_and_stages_evidence(repo_root, workspace, tmp_path)
     assert outcome.evidence.all_checks_passed is True
     assert outcome.persisted.evidence_json_path.is_file()
     assert (outcome.staged_dir / "evidence.json").is_file()
+
+
+def test_service_identities_are_captured_immediately_and_cleared_after_successful_teardown(repo_root, workspace, tmp_path):
+    """SPEC-007 Decision 7 (Codex implementation review, confirmed,
+    major): `capture_service_process_identity` must actually be called,
+    immediately after each service handle is created -- via the new
+    `on_service_started` callback -- not merely exist unused. The
+    *callback* is what a real caller (peos/workflow.py) durably persists
+    to the checkpoint while the services were still potentially alive;
+    `peos/workflow.py`'s own `RUNTIME_VERIFICATION` `COMPLETED` write
+    separately clears its checkpoint copy back to empty once this
+    function's own teardown has confirmed both services dead (tested in
+    tests/test_peos_resume.py's checkpoint-shape coverage) -- this
+    function's own returned `service_process_identities` still reports
+    them for visibility/completeness, not already cleared.
+    """
+    ports = iter([1111, 2222])
+
+    def fake_starter(*, name, **kwargs):
+        return _FakeHandle(name=name, port=kwargs["port"])
+
+    def fake_waiter(handle, health_path, timeout_s):
+        return _FakeReadiness(ready=True)
+
+    class _OkBuild:
+        returncode = 0
+        stderr = ""
+        stdout = ""
+
+    check_dict = {
+        "check_id": "runtime.cycle-0.0.viewport_overflow", "kind": "viewport_overflow",
+        "catalog_version": "1.0.0", "related_ac_ids": ["AC-012"], "parameters": {"viewport": "mobile"},
+        "status": "PASS", "action_performed": "measured", "observation": "no overflow",
+        "measurements": {"scroll_width_px": 390, "client_width_px": 390},
+        "screenshot_filename": None, "console_errors": [], "page_errors": [],
+        "blocked_network_requests": [], "truncated": False, "omitted_reason": None,
+        "started_at": "", "finished_at": "",
+    }
+
+    started_identities = []
+
+    outcome = run_runtime_verification(
+        _one_check_plan(),
+        **_common_kwargs(
+            repo_root, workspace, tmp_path,
+            port_reserver=lambda: next(ports), service_starter=fake_starter, readiness_waiter=fake_waiter,
+            teardown=lambda handle: True, build_runner=lambda *a, **k: _OkBuild(),
+            browser_worker_runner=_passing_worker_runner_factory(check_results=[check_dict]),
+            on_service_started=started_identities.append,
+        ),
+    )
+    assert outcome.ran is True
+    # The callback fired for both backend and frontend, with the correct
+    # owning_run_id, immediately as each was started.
+    assert [i.service_name for i in started_identities] == ["backend", "frontend"]
+    assert all(i.owning_run_id == "run1" for i in started_identities)
+    # The outcome reports the same identities for visibility/completeness.
+    assert [i.service_name for i in outcome.service_process_identities] == ["backend", "frontend"]
 
 
 def test_default_browser_worker_runner_kills_whole_process_group_on_timeout(tmp_path):

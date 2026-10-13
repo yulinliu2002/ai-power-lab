@@ -66,10 +66,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Literal
 
+from peos.checkpoint import CheckpointManager, RuntimeEvidenceRefSnapshot
 from peos.claude_agent import ClaudeRunResult, run_claude
 from peos.codex_agent import CodexReviewResult, run_codex_review
 from peos.context import ContextRecoveryResult, run_context_recovery
-from peos.diagnostics import build_diagnostic
+from peos.diagnostics import build_diagnostic, classify_transient_failure
 from peos.findings_register import FindingsRegister, HUMAN_DECISION_REQUIRED
 from peos.gitutil import repo_state_fingerprint
 from peos.ledger import (
@@ -97,12 +98,14 @@ from peos.prompts import (
 )
 from peos.round_packet import (
     ActiveDispute,
+    RegisterEntrySnapshot,
     RoundPacket,
     RuntimeCheckSummary,
     RuntimeEvidenceRef,
     StaticContextRef,
     build_round_packet,
 )
+from peos.run_lock import RunLock, RunLockError, acquire_for_new_task
 from peos.runtime_evidence import reverify_evidence_identity
 from peos.runtime_verification import RuntimeVerificationOutcome, run_runtime_verification
 from peos.sandbox import (
@@ -112,11 +115,13 @@ from peos.sandbox import (
     IsolatedWorkspace,
     ReconciliationResult,
     WorkspaceError,
+    candidate_root_for_run,
     check_claude_auth_preflight,
     check_codex_auth_preflight,
     claude_sandboxed_env,
     codex_sandboxed_env,
     create_isolated_workspace,
+    discard_workspace,
     ensure_spec_in_workspace,
     reconcile_workspace_to_repo,
     sandboxed_env,
@@ -127,7 +132,11 @@ from peos.verification_plan import VerificationPlan, execute_plan, resolve_verif
 from peos.verify import VerificationReport
 from peos.workflow_disputes import parse_disputes_from_summary
 
-Outcome = Literal["APPROVED", "HUMAN_GATE", "FAILED"]
+# SPEC-007 Decision 9: MAX_CYCLES_REACHED is a distinct terminal outcome,
+# never HUMAN_GATE -- supersedes SPEC-004's GATE_UNRESOLVED_AFTER_
+# REMEDIATION encoding of convergence exhaustion (see "max_cycles_reached"
+# below and the removed call site in the remediation loop).
+Outcome = Literal["APPROVED", "HUMAN_GATE", "FAILED", "MAX_CYCLES_REACHED", "PAUSED_RETRYABLE"]
 
 ClaudeRunner = Callable[..., ClaudeRunResult]
 CodexRunner = Callable[..., CodexReviewResult]
@@ -136,6 +145,82 @@ SpecResolver = Callable[[str, Path, "Path | None"], SpecResolution]
 WorkspaceFactory = Callable[[Path, str], IsolatedWorkspace]
 
 DEFAULT_MAX_CYCLES = 3
+
+
+def _cycle_zero_already_completed(seed) -> bool:
+    """SPEC-007 resume re-entry: `True` iff cycle 0's `CODEX_INDEPENDENT_
+    REVIEW` phase had already reached `COMPLETED` by the time of
+    interruption -- i.e. resume must skip cycle 0 entirely and continue
+    straight into the remediation loop, never redoing a Claude call
+    whose result was already durably recorded (AC-006).
+
+    Codex implementation review (confirmed, major): an earlier revision
+    of this function tried to disambiguate `LOCAL_VERIFICATION`/
+    `RUNTIME_VERIFICATION` (the one phase *name* shared between cycle 0
+    and every remediation cycle alike) via "the immediately-preceding
+    completed phase" -- which is wrong specifically for the case where
+    cycle 0's own `LOCAL_VERIFICATION` has just completed and
+    `RUNTIME_VERIFICATION` is `ENTERED`: `last_safely_completed_phase`
+    then reads `"LOCAL_VERIFICATION"`, which that heuristic's exclusion
+    list did not recognize as "still cycle 0", wrongly concluding cycle 0
+    had already completed. **Fixed with a genuinely unambiguous signal
+    already in the schema**: `codex_review_verdict_history`'s first entry
+    is written *only* by `CODEX_INDEPENDENT_REVIEW`'s own `COMPLETED`
+    write (see the cycle-0 block below) -- before that entry exists,
+    cycle 0 cannot have completed, by construction; once it exists,
+    cycle 0 is done, regardless of whatever phase/state is currently
+    `active_phase`/`active_phase_state`.
+    """
+    return len(seed.codex_review_verdict_history) >= 1
+
+
+def _cycle_zero_claude_already_completed(seed) -> bool:
+    """SPEC-007 resume re-entry, within cycle 0 specifically (only ever
+    called once the caller has already established cycle 0 is *not*
+    fully done, i.e. `not _cycle_zero_already_completed(seed)` -- so
+    `active_phase` can only be one of `PLANNING`, `CLAUDE_IMPLEMENTATION`,
+    `LOCAL_VERIFICATION`, `RUNTIME_VERIFICATION`, or a not-yet-`COMPLETED`
+    `CODEX_INDEPENDENT_REVIEW`, with no ambiguity left to resolve).
+    `True` iff `CLAUDE_IMPLEMENTATION` had already reached `COMPLETED` --
+    resume must then skip re-issuing that Claude call, while still
+    rerunning verification and obtaining a fresh Codex review (AC-003/
+    AC-005). Codex implementation review (confirmed, major): an earlier
+    revision had no such middle state at all -- it either skipped all of
+    cycle 0, or redid all of it including a completed Claude call,
+    violating AC-003/AC-006 whenever interruption landed during
+    verification or the independent review specifically.
+    """
+    if seed.active_phase == "CLAUDE_IMPLEMENTATION":
+        return seed.active_phase_state == "COMPLETED"
+    return seed.active_phase in ("LOCAL_VERIFICATION", "RUNTIME_VERIFICATION", "CODEX_INDEPENDENT_REVIEW")
+
+
+def _remediation_claude_already_completed(seed) -> bool:
+    """The `CLAUDE_REMEDIATION` analogue of `_cycle_zero_claude_already_
+    completed`, for the one specific remediation cycle currently being
+    resumed (`resume_starting_cycle = seed.current_cycle + 1` -- only
+    safe to call for that one cycle, see its call site).
+
+    Codex closure review (confirmed, major): an earlier revision treated
+    `active_phase == "CODEX_CLOSURE_REVIEW"` as unconditional proof that
+    `resume_starting_cycle`'s own Claude call had completed -- true only
+    while that closure review is still `ENTERED` (it then belongs to
+    `resume_starting_cycle` itself, since `current_cycle` has not yet
+    advanced to reflect it). Once it reaches `COMPLETED`,
+    `current_cycle` *has* advanced, so that same closure review now
+    belongs to `resume_starting_cycle - 1` -- a different, already-
+    finished cycle -- and `resume_starting_cycle` is actually a brand
+    new cycle whose Claude call was never even issued. Treating it as
+    "already completed" in that case would wrongly skip a cycle's only
+    Claude call entirely.
+    """
+    if seed.active_phase == "CLAUDE_REMEDIATION":
+        return seed.active_phase_state == "COMPLETED"
+    if seed.active_phase in ("LOCAL_VERIFICATION", "RUNTIME_VERIFICATION"):
+        return True
+    if seed.active_phase == "CODEX_CLOSURE_REVIEW":
+        return seed.active_phase_state == "ENTERED"
+    return False
 
 
 class _LedgerWriteFailed(RuntimeError):
@@ -359,12 +444,31 @@ def run_workflow(
     environ: dict | None = None,
     max_cycles: int | None = None,
     runtime_verifier: Callable[..., RuntimeVerificationOutcome] = run_runtime_verification,
+    resume_seed=None,
+    resume_lock: RunLock | None = None,
 ) -> RunResult:
+    # SPEC-007 "Workspace Lifecycle and One-Run-Per-Repository": the
+    # shared run lock is acquired deep inside `_run_workflow` (immediately
+    # after `run_id` is generated, before any other run state is
+    # created) but must be released on *every* exit path from this
+    # function, including an exception `_run_workflow` itself does not
+    # catch -- a mutable one-element list, populated the instant
+    # acquisition succeeds, lets this outer `finally` release it
+    # regardless of how `_run_workflow` returns or raises, without
+    # reindenting that function's own large, pre-existing try/except
+    # structure around a second try/finally level.
+    #
+    # `resume_seed`/`resume_lock` (SPEC-007 `peos/resume.py`): a resumed
+    # run's lock was already acquired by `acquire_for_resume` before its
+    # own preflight ran (resume preflight itself needs the lock held) --
+    # `lock_holder` is pre-populated with it here instead of acquiring a
+    # fresh one via `acquire_for_new_task`.
+    lock_holder: list[RunLock] = [resume_lock] if resume_lock is not None else []
     try:
         return _run_workflow(
             task, repo_root, explicit_spec, specs_dir, log,
             spec_resolver, claude_runner, codex_runner, verifier, workspace_factory, environ,
-            max_cycles, runtime_verifier,
+            max_cycles, runtime_verifier, lock_holder, resume_seed,
         )
     except Exception as exc:  # noqa: BLE001 -- SPEC-001 Finding 11: never propagate a traceback
         # SPEC-004 remediation Finding 8: route the raw exception text
@@ -380,6 +484,12 @@ def run_workflow(
             phases=(PhaseLog(phase="Failure", detail=diagnostic),),
             gate_reason=f"Unhandled exception during orchestration: {diagnostic}",
         )
+    finally:
+        if lock_holder:
+            try:
+                lock_holder[0].release()
+            except Exception:  # noqa: BLE001 -- releasing the lock must never raise past this point.
+                pass
 
 
 def _run_workflow(
@@ -396,6 +506,8 @@ def _run_workflow(
     environ: dict | None,
     max_cycles: int | None,
     runtime_verifier: Callable[..., RuntimeVerificationOutcome] = run_runtime_verification,
+    lock_holder: list | None = None,
+    resume_seed=None,
 ) -> RunResult:
     # SPEC-004 Requirement 6/AC-4: an explicitly out-of-range --max-cycles
     # is a hard input-validation failure, checked before anything else --
@@ -429,7 +541,7 @@ def _run_workflow(
     claude_runs: list[ClaudeRunResult] = []
     verification_reports: list[VerificationReport] = []
     review_results: list[CodexReviewResult] = []
-    remediation_cycles_run = 0
+    remediation_cycles_run = resume_seed.current_cycle if resume_seed is not None else 0
     workspace: IsolatedWorkspace | None = None
     baseline_hashes: dict[str, str] = {}
     vplan: VerificationPlan | None = None
@@ -448,7 +560,23 @@ def _run_workflow(
     plan: PlanArtifact | None = None
     effective_max_cycles = 1
     register = FindingsRegister()
-    dispute_log: list[str] = []
+    if resume_seed is not None:
+        # SPEC-007 resume re-entry: rebuild the Outstanding Findings
+        # Register and dispute log from the durably-recorded checkpoint
+        # snapshot, never from any prior subprocess's transcript (there
+        # is none -- this is a fresh process).
+        from peos.findings_register import FindingRef, RegisterEntry
+        for snapshot in resume_seed.findings_register_entries:
+            ref = FindingRef.parse(snapshot.reference)
+            if ref is None:
+                continue
+            register.entries[snapshot.reference] = RegisterEntry(
+                ref=ref, severity=snapshot.severity, description=snapshot.description,
+                outstanding=snapshot.outstanding, disposition=snapshot.disposition,
+                disposition_note=snapshot.disposition_note,
+                human_decision_required_ever=snapshot.human_decision_required_ever,
+            )
+    dispute_log: list[str] = list(resume_seed.dispute_log) if resume_seed is not None else []
     required_ac_ids: frozenset = frozenset()
     staged_static_artifacts: tuple[StaticContextArtifact, ...] = ()
     preflight: PreflightResult | None = None
@@ -466,10 +594,60 @@ def _run_workflow(
     # .peos/runs/<run_id>/ledger.json. `run_id` is also reused as the
     # isolated workspace's identifier, so both artifacts of one run share
     # one identity.
-    run_id = uuid.uuid4().hex[:12]
-    ledger_writer = LedgerWriter(repo_root, run_id)
-    ledger_created_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
-    last_completed_phase = ""
+    if resume_seed is not None:
+        # SPEC-007 resume re-entry: `run_id` is the interrupted run's own
+        # id, and the shared run lock was already acquired by
+        # `peos.run_lock.acquire_for_resume` *before* this call (resume
+        # preflight itself needs the lock held) -- `lock_holder` was
+        # pre-populated with it by `run_workflow`, above. The checkpoint
+        # manager is seeded from the resumed checkpoint, not given a
+        # fresh PLANNING bootstrap write, and `require_fresh=False` lets
+        # it tolerantly reuse this run's own, already-existing directory.
+        run_id = resume_seed.run_id
+        ledger_writer = LedgerWriter(repo_root, run_id)
+        ledger_created_at = resume_seed.created_at
+        last_completed_phase = resume_seed.last_safely_completed_phase
+        checkpoint = CheckpointManager(repo_root, run_id, require_fresh=False)
+        checkpoint.seed_from(resume_seed)
+        checkpoint.load_resume_generation(resume_seed.resume_generation + 1)
+    else:
+        run_id = uuid.uuid4().hex[:12]
+
+        # SPEC-007 "Workspace Lifecycle and One-Run-Per-Repository": the
+        # shared run lock is acquired immediately after `run_id` is
+        # generated, before any other run state exists -- a failure here
+        # (another run is active/paused, or genuinely still bootstrapping)
+        # fails this attempt closed immediately, before Planning, naming
+        # the blocking run, with no ledger/checkpoint ever created for
+        # this attempted `run_id` (AC-034/035/059/060/061).
+        try:
+            run_lock = acquire_for_new_task(repo_root, run_id)
+        except RunLockError as exc:
+            reason = f"Could not start a new PEOS run: {exc}"
+            log(f"[PEOS GATE] {reason}")
+            return RunResult(task=task, outcome="FAILED", gate_reason=reason)
+        if lock_holder is not None:
+            lock_holder.append(run_lock)
+
+        ledger_writer = LedgerWriter(repo_root, run_id)
+        ledger_created_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        last_completed_phase = ""
+
+        # SPEC-007 "Durable Phase-State Semantics" §PLANNING: the
+        # checkpoint's own **first** write -- PLANNING's `ENTERED` record
+        # -- happens here, immediately after lock acquisition and before
+        # any spec resolution or other Planning work begins, carrying
+        # only the raw inputs already known at this instant. `peos/
+        # resume.py`'s bootstrap-gap handling depends on this ordering: a
+        # lock naming a `run_id` with no checkpoint behind it at all is
+        # exactly "an interruption in this narrow window."
+        checkpoint = CheckpointManager(repo_root, run_id)
+        checkpoint.enter(
+            "PLANNING",
+            task=task,
+            governing_spec_source="explicit_path" if explicit_spec is not None else "auto_detected",
+            governing_spec_original_path=str(explicit_spec) if explicit_spec is not None else "",
+        )
 
     try:
         cleanup_old_runs(repo_root, active_run_id=run_id, keep=DEFAULT_RETENTION)
@@ -576,13 +754,56 @@ def _run_workflow(
     def _reconcile() -> tuple[ReconciliationResult | None, tuple[str, ...], str | None]:
         if workspace is None:
             return None, (), None
+        checkpoint.enter("RECONCILIATION")
+
+        # SPEC-007 "Reconciliation Crash-Safety": if reconciliation
+        # itself was interrupted before this execution (the checkpoint's
+        # `active_phase` was still `RECONCILIATION` at the moment of
+        # interruption), reuse that *exact* durable manifest -- never
+        # rebuild one fresh. Codex implementation review (confirmed,
+        # major): rebuilding fresh recomputes `original_content_hash`
+        # from the authoritative file's *current* state, which can
+        # already reflect a partially-applied prior attempt (or any
+        # other change made during the pause) -- silently adopting that
+        # as the new "original" and losing the ability to ever detect it
+        # as unexplained interference. Reusing the old manifest's own
+        # recorded hashes, unchanged, is what lets
+        # `apply_reconciliation_operation`'s three-way classification
+        # actually catch that case.
+        resumed_manifest = (
+            resume_seed.reconciliation_manifest
+            if resume_seed is not None and resume_seed.active_phase == "RECONCILIATION" and resume_seed.reconciliation_manifest
+            else None
+        )
+        running_manifest: list = list(resumed_manifest) if resumed_manifest is not None else []
+
+        def _on_manifest_built(manifest) -> None:
+            running_manifest[:] = list(manifest)
+            checkpoint.enter("RECONCILIATION", reconciliation_manifest=tuple(running_manifest))
+
+        def _on_operation_applied(op) -> None:
+            # SPEC-007 "Reconciliation Crash-Safety" step 2: each applied
+            # operation's `applied=True` update is its own full, atomic
+            # checkpoint write -- the accepted cost of per-operation
+            # crash-safety (an interruption between any two operations
+            # still has a durable, exact record of which ones already
+            # completed).
+            for i, existing in enumerate(running_manifest):
+                if existing.relative_path == op.relative_path and existing.action == op.action:
+                    running_manifest[i] = op
+                    break
+            checkpoint.enter("RECONCILIATION", reconciliation_manifest=tuple(running_manifest))
+
         try:
             result = reconcile_workspace_to_repo(
                 workspace, repo_root, protected_relative_paths=frozenset(baseline_hashes.keys()),
+                run_id=run_id, manifest=resumed_manifest,
+                on_manifest_built=_on_manifest_built, on_operation_applied=_on_operation_applied,
             )
         except Exception as exc:  # noqa: BLE001
             log(f"[PEOS ERROR] Could not reconcile isolated workspace back to {repo_root}: {exc}")
             return None, (), str(exc)
+        checkpoint.complete("RECONCILIATION", reconciliation_manifest=result.manifest)
         if result.blocked_governance_changes:
             log(
                 "[PEOS GATE] Governance artifact(s) were modified inside the isolated "
@@ -590,11 +811,47 @@ def _run_workflow(
             )
         return result, result.blocked_governance_changes, None
 
+    def _discard_candidate_workspace() -> None:
+        # SPEC-007 "Workspace Lifecycle": discarded immediately upon
+        # reaching any terminal outcome, as part of that same
+        # transition, while ledger/checkpoint/evidence are retained
+        # under the existing cap. Best-effort -- never turns a
+        # successfully-determined terminal outcome into a different one.
+        #
+        # Safety guard: `discard_workspace`'s real, unmodified
+        # implementation is `shutil.rmtree(workspace.path.parent, ...)`,
+        # which is only safe when `workspace.path` is actually nested
+        # under this run's own dedicated `candidate/` directory (true for
+        # every real `create_isolated_workspace` call). A test (or any
+        # future caller) that injects a `workspace_factory` violating
+        # that convention -- e.g. one that reuses `repo_root` itself as
+        # "the workspace" -- must never have this call blindly `rmtree`
+        # whatever `workspace.path`'s *actual* parent happens to be; this
+        # containment check is what makes that structurally impossible
+        # rather than merely unlikely.
+        if workspace is None:
+            return
+        try:
+            expected_candidate_root = candidate_root_for_run(repo_root, run_id).resolve()
+            if workspace.path.parent.resolve() != expected_candidate_root:
+                log(
+                    "[PEOS] Skipping candidate workspace discard: workspace.path is not nested "
+                    f"under this run's expected candidate/ directory ({workspace.path!r}) -- "
+                    "never the case for the real create_isolated_workspace, so this is a non-fatal "
+                    "no-op here (e.g. a test's injected workspace_factory)."
+                )
+                return
+            discard_workspace(workspace)
+        except Exception as exc:  # noqa: BLE001
+            log(f"[PEOS] Could not discard the candidate workspace (non-fatal): {exc}")
+
     def gate(gate_id: str, reason: str) -> RunResult:
         log(f"[PEOS GATE] {reason}")
         phases.append(PhaseLog(phase="Human gate", detail=reason))
         _write_ledger(active_phase="Human gate", outcome="HUMAN_GATE", gate_id=gate_id, gate_reason=reason)
         reconciliation, blocked, recon_error = _reconcile()
+        checkpoint.terminal("HUMAN_GATE", gate_id=gate_id, gate_reason=reason)
+        _discard_candidate_workspace()
         return RunResult(
             **_base_kwargs(), outcome="HUMAN_GATE",
             gate_id=gate_id, gate_reason=reason,
@@ -607,11 +864,48 @@ def _run_workflow(
         phases.append(PhaseLog(phase="Failure", detail=reason))
         _write_ledger(active_phase="Failure", outcome="FAILED", gate_reason=reason)
         reconciliation, blocked, recon_error = _reconcile()
+        checkpoint.terminal("FAILED", gate_reason=reason)
+        _discard_candidate_workspace()
         return RunResult(
             **_base_kwargs(), outcome="FAILED", gate_reason=reason,
             reconciliation=reconciliation, blocked_governance_mutation=blocked,
             reconciliation_error=recon_error,
         )
+
+    def max_cycles_reached(reason: str) -> RunResult:
+        """SPEC-007 Decision 9: a distinct terminal outcome, never
+        `HUMAN_GATE` -- supersedes SPEC-004's `GATE_UNRESOLVED_AFTER_
+        REMEDIATION` encoding of convergence exhaustion (AC-043)."""
+        log(f"[PEOS] Remediation budget exhausted without convergence: {reason}")
+        phases.append(PhaseLog(phase="Max cycles reached", detail=reason))
+        _write_ledger(active_phase="Max cycles reached", outcome="MAX_CYCLES_REACHED", gate_reason=reason)
+        reconciliation, blocked, recon_error = _reconcile()
+        checkpoint.terminal("MAX_CYCLES_REACHED", gate_reason=reason)
+        _discard_candidate_workspace()
+        return RunResult(
+            **_base_kwargs(), outcome="MAX_CYCLES_REACHED", gate_reason=reason,
+            reconciliation=reconciliation, blocked_governance_mutation=blocked,
+            reconciliation_error=recon_error,
+        )
+
+    def pause_retryable(reason: str) -> RunResult:
+        """SPEC-007 "Resumable vs. Non-Resumable Interruption
+        Classification" / Decision 3: a positively-identified, stable-
+        signal transient agent-execution failure (`classify_transient_
+        failure(...) == "execution_not_completed"`) is resumable, never
+        `FAILED` -- deliberately does **not** call `checkpoint.
+        terminal(...)` (so `terminal_outcome` stays `None`, exactly like
+        any other interruption -- this is what makes the run
+        `PAUSED_RETRYABLE`) and does **not** discard the candidate
+        workspace or reconcile -- there is nothing yet to reconcile, and
+        the workspace must survive for `peos resume` to reuse. The
+        shared lock is still released on return (via `run_workflow`'s
+        own `finally`), representing "no one is actively executing this
+        right now", not "this run concluded".
+        """
+        log(f"[PEOS] Transient agent-execution failure classified resumable; pausing: {reason}")
+        phases.append(PhaseLog(phase="Paused (retryable)", detail=reason))
+        return RunResult(**_base_kwargs(), outcome="PAUSED_RETRYABLE", gate_reason=reason)
 
     def approve() -> RunResult:
         stage("Complete")
@@ -625,12 +919,16 @@ def _run_workflow(
             log(f"[PEOS ERROR] {reason}")
             phases.append(PhaseLog(phase="Failure", detail=reason))
             _write_ledger(active_phase="Failure", outcome="FAILED", gate_reason=reason)
+            checkpoint.terminal("FAILED", gate_reason=reason)
+            _discard_candidate_workspace()
             return RunResult(
                 **_base_kwargs(), outcome="FAILED", gate_reason=reason,
                 reconciliation=reconciliation, blocked_governance_mutation=blocked,
                 reconciliation_error=recon_error,
             )
         _write_ledger(active_phase="Complete", outcome="APPROVED")
+        checkpoint.terminal("APPROVED")
+        _discard_candidate_workspace()
         return RunResult(
             **_base_kwargs(), outcome="APPROVED",
             reconciliation=reconciliation, blocked_governance_mutation=blocked,
@@ -791,10 +1089,27 @@ def _run_workflow(
         if not claude_auth.ok:
             return fail(f"Claude Code authentication preflight failed: {claude_auth.reason}")
 
-        try:
-            workspace = workspace_factory(repo_root, run_id)
-        except WorkspaceError as exc:
-            return fail(f"Could not create isolated implementation workspace: {exc}")
+        if resume_seed is not None and resume_seed.workspace_root_relative_path:
+            # SPEC-007 "Workspace Lifecycle": PLANNING had already
+            # completed and created the candidate workspace before the
+            # interruption -- reuse it in place (it durably survived
+            # under `.peos/runs/<run_id>/candidate/`, exactly because it
+            # is nested there), never create a second, fresh one.
+            workspace = IsolatedWorkspace(
+                path=repo_root / resume_seed.workspace_root_relative_path,
+                home_dir=repo_root / resume_seed.workspace_home_dir_relative_path,
+                baseline_commit=resume_seed.workspace_baseline_commit,
+            )
+            if not workspace.path.is_dir():
+                return fail(
+                    f"Resumed run's preserved candidate workspace is missing: {workspace.path} "
+                    "(AC-018 -- failing closed, never silently reconstructing one)."
+                )
+        else:
+            try:
+                workspace = workspace_factory(repo_root, run_id)
+            except WorkspaceError as exc:
+                return fail(f"Could not create isolated implementation workspace: {exc}")
         log(f"[PEOS] Isolated workspace: {workspace.path}")
         base_env = sandboxed_env(workspace.home_dir, base_env=environ)
         claude_env = claude_sandboxed_env(base_env, environ[CLAUDE_AUTH_ENV_VAR])
@@ -951,6 +1266,35 @@ def _run_workflow(
             for a in staged_static_artifacts
         )
 
+        # SPEC-007 "Durable Phase-State Semantics" §PLANNING: the single
+        # atomic `COMPLETED` write carries every identity the checkpoint
+        # records about this run's starting point -- baseline, spec
+        # identity, decision/governance/static-context identities, AC
+        # set, effective max cycles, and the (now durable, candidate/-
+        # nested) workspace's own identity.
+        checkpoint.complete(
+            "PLANNING",
+            authoritative_baseline=baseline_commit,
+            governing_spec_relative_path=spec_workspace_rel or "",
+            governing_spec_content_hash=governing_spec_content_hash,
+            effective_max_cycles=effective_max_cycles,
+            workspace_root_relative_path=str(workspace.path.relative_to(repo_root)) if workspace.path.is_relative_to(repo_root) else "",
+            workspace_home_dir_relative_path=str(workspace.home_dir.relative_to(repo_root)) if workspace.home_dir.is_relative_to(repo_root) else "",
+            workspace_baseline_commit=workspace.baseline_commit,
+            current_workspace_snapshot_identity=repo_state_fingerprint(workspace.path),
+            decision_identities=decision_identities,
+            governance_identities=governance_identities,
+            static_context_artifacts=static_context_refs,
+            acceptance_criteria_ids=tuple(sorted(required_ac_ids)),
+            # SPEC-007 "Resume Preflight" check 15: a content-based
+            # fingerprint of the authoritative repository itself, so
+            # resume can detect an uncommitted/untracked edit made
+            # during the pause -- not just a HEAD commit change -- before
+            # reconciliation would otherwise silently adopt it as "the
+            # original" and overwrite it.
+            authoritative_repo_fingerprint=repo_state_fingerprint(repo_root),
+        )
+
         def _run_runtime_verification_phase(cycle_label: str) -> RunResult | None:
             """SPEC-006 Section 8: run this round's Runtime Verification
             pass if the Runtime Plan declares any check, cycle 0 and
@@ -971,17 +1315,80 @@ def _run_workflow(
                 stage(f"Runtime verification ({cycle_label}): no runtime checks declared")
                 return None
             stage(f"Runtime verification ({cycle_label})")
+            checkpoint.enter("RUNTIME_VERIFICATION")
+
+            def _on_service_started(identity) -> None:
+                # SPEC-007 Decision 7: a durable checkpoint write the
+                # instant each backend/frontend service handle is
+                # created -- before readiness waiting, the build, or
+                # anything else that could be interrupted -- so a
+                # process this orchestrator cannot itself tear down
+                # (because *it* was the one that got killed) still has a
+                # recorded identity for `peos resume`/`peos abandon` to
+                # reclaim. Codex implementation review (confirmed,
+                # major): an earlier revision built
+                # `capture_service_process_identity` but never called it
+                # from anywhere, leaving `service_process_identities`
+                # permanently empty.
+                checkpoint.enter(
+                    "RUNTIME_VERIFICATION",
+                    service_process_identities=checkpoint.current.service_process_identities + (identity,),
+                )
+
             runtime_outcome = runtime_verifier(
                 plan.runtime_plan, cycle_label=cycle_label, run_id=run_id, repo_root=repo_root,
                 workspace=workspace, profile_dir=workspace.path.parent / "sandbox-profiles",
                 environ=environ, workspace_snapshot_identity=repo_state_fingerprint(workspace.path),
-                baseline_commit=baseline_commit,
+                baseline_commit=baseline_commit, on_service_started=_on_service_started,
             )
             runtime_verification_history.append(runtime_outcome)
             if runtime_outcome.ran and not runtime_outcome.execution_integrity_passed:
                 return fail(
                     f"Runtime Verification failed for {cycle_label}: {runtime_outcome.failure_reason}"
                 )
+            # SPEC-007: `COMPLETED` is written only once both
+            # `persist_evidence` and `stage_evidence_into_workspace` have
+            # already succeeded -- true here by construction, since
+            # `runtime_verifier` (SPEC-006's `run_runtime_verification`)
+            # never returns `execution_integrity_passed=True` with
+            # `persisted`/`staged_dir` unset for a round that actually ran.
+            history_entry = None
+            if runtime_outcome.ran and runtime_outcome.persisted is not None and runtime_outcome.staged_dir is not None:
+                history_entry = RuntimeEvidenceRefSnapshot(
+                    cycle_label=cycle_label,
+                    staged_relative_path=runtime_outcome.staged_dir.relative_to(workspace.path).as_posix(),
+                    evidence_json_sha256=runtime_outcome.persisted.evidence_json_sha256,
+                    execution_integrity_passed=runtime_outcome.execution_integrity_passed,
+                )
+            checkpoint.complete(
+                "RUNTIME_VERIFICATION",
+                runtime_evidence_history=(
+                    checkpoint.current.runtime_evidence_history + (history_entry,)
+                    if history_entry is not None else checkpoint.current.runtime_evidence_history
+                ),
+                # This round's own services are already confirmed torn
+                # down by `run_runtime_verification`'s own `finally`
+                # (true whenever this point is reached at all -- the
+                # function never returns normally otherwise) -- cleared
+                # back to empty so a later resume's orphan-reclamation
+                # check never attempts a pointless no-op reclaim against
+                # a long-dead, already-cleaned-up round.
+                service_process_identities=(),
+                # Codex closure review (confirmed, major): Runtime
+                # Verification stages new, non-ignored evidence files
+                # directly into the candidate workspace
+                # (`.peos/runtime-evidence/<cycle>/...`, a sibling of
+                # `.peos/runs/`, not covered by that exclusion) -- a real,
+                # expected change to the workspace's own content
+                # fingerprint. Without refreshing it here, resume
+                # preflight's check 7 (non-mutating-phase snapshot
+                # integrity) would compare against the *stale*,
+                # pre-staging fingerprint recorded at
+                # CLAUDE_IMPLEMENTATION/CLAUDE_REMEDIATION's own
+                # COMPLETED write and wrongly fail closed on a resume
+                # interrupted during or after this phase.
+                current_workspace_snapshot_identity=repo_state_fingerprint(workspace.path),
+            )
             return None
 
         def _runtime_evidence_ref() -> RuntimeEvidenceRef | None:
@@ -1025,170 +1432,306 @@ def _run_workflow(
                 runtime_evidence=_runtime_evidence_ref(),
             )
 
-        # Phase 4 -- Claude implementation (cycle 0)
-        stage("Claude implementation")
-        identity_failure = _check_governing_spec_identity("Claude implementation", check_staged=True)
-        if identity_failure is not None:
-            return identity_failure
-        # SPEC-004 remediation Finding 5 (MAJOR): re-verify every staged
-        # static-context artifact's identity before this run's *very
-        # first* consuming invocation too -- not only before later Codex/
-        # remediation rounds, where this check already ran. Without this,
-        # drift between Planning (where the artifact was pinned) and this
-        # point could already have been consumed by cycle 0's Claude call
-        # before any check caught it.
-        runtime_evidence_failure = _check_runtime_evidence_identity("Claude implementation")
-        if runtime_evidence_failure is not None:
-            return runtime_evidence_failure
-        static_context_failure = _check_static_context_identity("Claude implementation")
-        if static_context_failure is not None:
-            return static_context_failure
-        # SPEC-004 remediation Finding 4 (MAJOR): cycle 0's Claude call
-        # receives a real Round Packet too -- register/disputes are
-        # empty by construction (nothing has happened yet) and
-        # verification_passed is explicitly None (no verification has
-        # run yet), but every other element (spec identity, governance/
-        # decision identities, workspace snapshot identity, the complete
-        # AC set, static-context identities) is real and rendered into
-        # the prompt, not merely held in this dataclass.
-        impl_packet = _round_packet(0, None, "", ())
-        impl_result = claude_runner(
-            build_implementation_prompt(task, spec_workspace_rel, impl_packet), workspace.path, env=claude_env,
-        )
-        claude_runs.append(impl_result)
-        if impl_result.status == "HUMAN_GATE":
-            gate_id = _CLAUDE_GATE_CATEGORY_TO_ID.get(impl_result.gate_category or "", GATE_HUMAN_OWNED_FINDING)
-            return gate(gate_id, f"Claude escalated during implementation [{impl_result.gate_category}]: {impl_result.gate_reason}")
-        if not impl_result.ok:
-            return fail(f"Claude implementation did not complete successfully: {impl_result.error}")
+        # Codex closure review (confirmed, major, new issue found during
+        # remediation of an earlier finding): `active_phase ==
+        # "RECONCILIATION"` can *only* mean the main engineering loop
+        # (cycle 0 and every remediation cycle) had *already* reached a
+        # terminal decision and was in the middle of `_reconcile()`
+        # itself when interrupted -- regardless of how much cycle budget
+        # happened to remain unused. Falling through to the ordinary
+        # cycle-0/remediation-loop re-entry logic below would have
+        # wrongly started a brand new remediation cycle (an extra Claude
+        # call Codex had never asked for) instead of recognizing the run
+        # was already done with its engineering work. This is the exact
+        # same "cannot safely re-enter this interruption point" situation
+        # as the max-cycles-exhausted-at-TERMINAL_DECISION case below,
+        # generalized to fire on `RECONCILIATION` specifically,
+        # regardless of remaining budget.
+        if resume_seed is not None and resume_seed.active_phase == "RECONCILIATION":
+            return fail(
+                "Resume cannot safely re-enter this exact interruption point: the engineering loop "
+                "had already reached a terminal decision and was in the middle of reconciling the "
+                "candidate workspace back onto the authoritative repository when interrupted. "
+                "Restarting the remediation loop from here would wrongly redo engineering work Codex "
+                "never asked for; this specific window (during RECONCILIATION itself) is a named, "
+                "accepted residual limitation of this resume implementation, not a HUMAN_GATE or a "
+                "guess -- inspect this run's checkpoint.json codex_review_verdict_history and "
+                "reconciliation_manifest and decide manually."
+            )
 
-        mutation_failure = _check_governance_mutation("implementation")
-        if mutation_failure is not None:
-            return mutation_failure
+        # SPEC-007 resume re-entry: skip cycle 0 entirely if its own
+        # CODEX_INDEPENDENT_REVIEW phase had already reached COMPLETED
+        # before the interruption -- never redo a Claude call whose
+        # result was already durably recorded (AC-006/AC-001).
+        if resume_seed is None or not _cycle_zero_already_completed(resume_seed):
+            # SPEC-007 resume re-entry: skip re-issuing the Claude
+            # call specifically if it already reached COMPLETED before
+            # the interruption -- verification and the Codex review
+            # below still always rerun (AC-003/AC-005).
+            if resume_seed is None or not _cycle_zero_claude_already_completed(resume_seed):
+                # Phase 4 -- Claude implementation (cycle 0)
+                stage("Claude implementation")
+                checkpoint.enter("CLAUDE_IMPLEMENTATION")
+                identity_failure = _check_governing_spec_identity("Claude implementation", check_staged=True)
+                if identity_failure is not None:
+                    return identity_failure
+                # SPEC-004 remediation Finding 5 (MAJOR): re-verify every staged
+                # static-context artifact's identity before this run's *very
+                # first* consuming invocation too -- not only before later Codex/
+                # remediation rounds, where this check already ran. Without this,
+                # drift between Planning (where the artifact was pinned) and this
+                # point could already have been consumed by cycle 0's Claude call
+                # before any check caught it.
+                runtime_evidence_failure = _check_runtime_evidence_identity("Claude implementation")
+                if runtime_evidence_failure is not None:
+                    return runtime_evidence_failure
+                static_context_failure = _check_static_context_identity("Claude implementation")
+                if static_context_failure is not None:
+                    return static_context_failure
+                # SPEC-004 remediation Finding 4 (MAJOR): cycle 0's Claude call
+                # receives a real Round Packet too -- register/disputes are
+                # empty by construction (nothing has happened yet) and
+                # verification_passed is explicitly None (no verification has
+                # run yet), but every other element (spec identity, governance/
+                # decision identities, workspace snapshot identity, the complete
+                # AC set, static-context identities) is real and rendered into
+                # the prompt, not merely held in this dataclass.
+                impl_packet = _round_packet(0, None, "", ())
+                impl_result = claude_runner(
+                    build_implementation_prompt(task, spec_workspace_rel, impl_packet), workspace.path, env=claude_env,
+                )
+                claude_runs.append(impl_result)
+                if impl_result.status == "HUMAN_GATE":
+                    gate_id = _CLAUDE_GATE_CATEGORY_TO_ID.get(impl_result.gate_category or "", GATE_HUMAN_OWNED_FINDING)
+                    return gate(gate_id, f"Claude escalated during implementation [{impl_result.gate_category}]: {impl_result.gate_reason}")
+                if not impl_result.ok:
+                    if classify_transient_failure(impl_result) == "execution_not_completed":
+                        return pause_retryable(f"Claude implementation did not complete execution: {impl_result.error}")
+                    return fail(f"Claude implementation did not complete successfully: {impl_result.error}")
 
-        # Phase 5 -- Local verification (cycle 0)
-        stage("Local verification")
-        identity_failure = _check_governing_spec_identity("local verification", check_staged=True)
-        if identity_failure is not None:
-            return identity_failure
-        vreport = verifier(workspace, repo_root, vplan)
-        verification_reports.append(vreport)
-        latest_verification = vreport
-        if not vreport.passed:
-            failing = ", ".join(r.name for r in vreport.failures)
-            return fail(f"Local verification failed after implementation: {failing}")
+                mutation_failure = _check_governance_mutation("implementation")
+                if mutation_failure is not None:
+                    return mutation_failure
+                checkpoint.complete("CLAUDE_IMPLEMENTATION", current_workspace_snapshot_identity=repo_state_fingerprint(workspace.path))
 
-        mutation_failure = _check_governance_mutation("post-implementation verification")
-        if mutation_failure is not None:
-            return mutation_failure
-        identity_failure = _check_governing_spec_identity("Codex independent review", check_staged=True)
-        if identity_failure is not None:
-            return identity_failure
-        static_context_failure = _check_static_context_identity("Codex independent review")
-        if static_context_failure is not None:
-            return static_context_failure
+            # Phase 5 -- Local verification (cycle 0)
+            stage("Local verification")
+            checkpoint.enter("LOCAL_VERIFICATION")
+            identity_failure = _check_governing_spec_identity("local verification", check_staged=True)
+            if identity_failure is not None:
+                return identity_failure
+            vreport = verifier(workspace, repo_root, vplan)
+            verification_reports.append(vreport)
+            latest_verification = vreport
+            if not vreport.passed:
+                failing = ", ".join(r.name for r in vreport.failures)
+                return fail(f"Local verification failed after implementation: {failing}")
+            checkpoint.complete("LOCAL_VERIFICATION")
 
-        # Phase 5b -- Runtime verification (cycle 0, SPEC-006)
-        runtime_failure = _run_runtime_verification_phase("cycle 0")
-        if runtime_failure is not None:
-            return runtime_failure
-        runtime_evidence_failure = _check_runtime_evidence_identity("Codex independent review")
-        if runtime_evidence_failure is not None:
-            return runtime_evidence_failure
+            mutation_failure = _check_governance_mutation("post-implementation verification")
+            if mutation_failure is not None:
+                return mutation_failure
+            identity_failure = _check_governing_spec_identity("Codex independent review", check_staged=True)
+            if identity_failure is not None:
+                return identity_failure
+            static_context_failure = _check_static_context_identity("Codex independent review")
+            if static_context_failure is not None:
+                return static_context_failure
 
-        # Phase 6 -- Codex independent review (cycle 0)
-        stage("Codex independent review")
-        # SPEC-004 remediation Finding 4: cycle 0's Codex call also
-        # receives a real Round Packet, now carrying the just-completed
-        # verification result (register/disputes still empty -- this is
-        # the initial review, before any historical finding exists).
-        review_packet = _round_packet(0, vreport.passed, _verification_summary_text(vreport), ())
-        review, gate_or_fail = _codex_phase(
-            "independent review", build_review_prompt(task, spec_workspace_rel, review_packet),
-        )
-        if gate_or_fail is not None:
-            return gate_or_fail
-        review_results.append(review)
-        if not review.ok:
-            return fail(f"Codex review produced uninterpretable output: {review.error}")
+            # Phase 5b -- Runtime verification (cycle 0, SPEC-006)
+            runtime_failure = _run_runtime_verification_phase("cycle 0")
+            if runtime_failure is not None:
+                return runtime_failure
+            runtime_evidence_failure = _check_runtime_evidence_identity("Codex independent review")
+            if runtime_evidence_failure is not None:
+                return runtime_evidence_failure
 
-        outcome_kind, detail = _evaluate_cycle(review, 0, register, frozenset())
-        if outcome_kind == "APPROVED":
-            return approve()
-        if outcome_kind == "FAILED":
-            return fail(detail or "Codex review payload failed convergence evaluation.")
-        if outcome_kind == "HUMAN_GATE_6":
-            return gate(GATE_HUMAN_OWNED_FINDING, detail or "Codex review requires a human-owned decision.")
-        # outcome_kind == "CHANGES_REQUIRED" (HUMAN_GATE_10 is unreachable
-        # at cycle 0 -- no dispute can exist before any remediation runs).
+            # Phase 6 -- Codex independent review (cycle 0)
+            stage("Codex independent review")
+            checkpoint.enter("CODEX_INDEPENDENT_REVIEW")
+            # SPEC-004 remediation Finding 4: cycle 0's Codex call also
+            # receives a real Round Packet, now carrying the just-completed
+            # verification result (register/disputes still empty -- this is
+            # the initial review, before any historical finding exists).
+            review_packet = _round_packet(0, vreport.passed, _verification_summary_text(vreport), ())
+            review, gate_or_fail = _codex_phase(
+                "independent review", build_review_prompt(task, spec_workspace_rel, review_packet),
+            )
+            if gate_or_fail is not None:
+                return gate_or_fail
+            review_results.append(review)
+            if not review.ok:
+                if classify_transient_failure(review) == "execution_not_completed":
+                    return pause_retryable(f"Codex independent review did not complete execution: {review.error}")
+                return fail(f"Codex review produced uninterpretable output: {review.error}")
+
+            outcome_kind, detail = _evaluate_cycle(review, 0, register, frozenset())
+            # SPEC-007: the single atomic `COMPLETED` write for a Codex phase
+            # carries the validated payload's hash, its verdict, and the
+            # Outstanding Findings Register exactly as this review's own
+            # `_evaluate_cycle` call just updated it -- all together, one
+            # write, after the register mutation above, before any terminal
+            # decision below is reached.
+            checkpoint.complete(
+                "CODEX_INDEPENDENT_REVIEW",
+                codex_review_payload_hashes=checkpoint.current.codex_review_payload_hashes + (hashlib.sha256(review.raw_stdout.encode("utf-8", errors="replace")).hexdigest(),),
+                codex_review_verdict_history=checkpoint.current.codex_review_verdict_history + (review.verdict,),
+                findings_register_entries=tuple(RegisterEntrySnapshot.from_entry(e) for e in register.all_entries()),
+            )
+            if outcome_kind == "APPROVED":
+                return approve()
+            if outcome_kind == "FAILED":
+                return fail(detail or "Codex review payload failed convergence evaluation.")
+            if outcome_kind == "HUMAN_GATE_6":
+                return gate(GATE_HUMAN_OWNED_FINDING, detail or "Codex review requires a human-owned decision.")
+            # outcome_kind == "CHANGES_REQUIRED" (HUMAN_GATE_10 is unreachable
+            # at cycle 0 -- no dispute can exist before any remediation runs).
 
         # SPEC-004 Phase 7-9 -- bounded remediation-cycle loop
         # (remediation cycles 1..effective_max_cycles). This is a direct
         # generalization of SPEC-001's unrolled single remediation cycle:
         # effective_max_cycles=1 reproduces that exact behavior.
-        for remediation_cycle in range(1, effective_max_cycles + 1):
+        #
+        # SPEC-007 "Remediation-cycle allocation, specified exactly":
+        # `checkpoint.current_cycle` only ever advances at a cycle's own
+        # CODEX_CLOSURE_REVIEW COMPLETED write, so `current_cycle + 1` is
+        # correct whether cycle `current_cycle + 1` never started at all,
+        # or started (CLAUDE_REMEDIATION ENTERED) but did not finish --
+        # either way, resuming at `current_cycle + 1` redoes that one
+        # cycle's full work exactly once, never allocating a second
+        # identity for the same logical cycle (AC-002/AC-008/AC-027).
+        resume_starting_cycle = (resume_seed.current_cycle + 1) if resume_seed is not None else 1
+        if resume_seed is not None and resume_starting_cycle > effective_max_cycles:
+            # SPEC-007 Final Delivery Gate / AC-054, the one narrow
+            # residual edge case this coarse-grained, cycle-boundary
+            # resume strategy does not re-enter surgically: the
+            # interruption happened between the *last* allocated cycle's
+            # CODEX_CLOSURE_REVIEW COMPLETED write and TERMINAL_DECISION
+            # itself -- every cycle's Claude/verification/review work is
+            # already durably recorded, but no terminal outcome was ever
+            # reached. A resumed run must never resume directly to
+            # APPROVED from a pre-interruption verdict alone (even an
+            # APPROVE) -- rather than guessing which terminal outcome the
+            # original run would have reached, this fails closed with an
+            # explicit, named reason, directing a human to inspect the
+            # checkpoint's own recorded verdict history and decide.
+            return fail(
+                "Resume cannot safely re-enter this exact interruption point: every allocated "
+                f"remediation cycle (1..{resume_seed.current_cycle}) already completed its own "
+                "Codex closure review before the interruption, but no terminal decision was ever "
+                "reached. Per the Final Delivery Gate, a resumed run may never proceed directly to "
+                "APPROVED from a pre-interruption verdict alone; this specific narrow window "
+                "(between a closure review's own COMPLETED write and TERMINAL_DECISION) is a named, "
+                "accepted residual limitation of this resume implementation, not a HUMAN_GATE or a "
+                "guess -- inspect this run's checkpoint.json codex_review_verdict_history and "
+                "decide manually."
+            )
+        for remediation_cycle in range(resume_starting_cycle, effective_max_cycles + 1):
             remediation_cycles_run = remediation_cycle
             cycle_label = f"{remediation_cycle}/{effective_max_cycles}"
 
-            stage(f"Claude remediation (remediation cycle {cycle_label})")
-            identity_failure = _check_governing_spec_identity(
-                f"Claude remediation cycle {remediation_cycle}", check_staged=True,
+            # SPEC-007 resume re-entry: skip re-issuing this cycle's
+            # Claude remediation call specifically if it already reached
+            # COMPLETED before the interruption -- only ever applies to
+            # the one cycle currently being resumed (AC-002/AC-003).
+            # Codex implementation review (confirmed, major): an earlier
+            # revision had no such middle state, unconditionally redoing
+            # a completed Claude call on resume. Disputes raised by an
+            # already-`COMPLETED` Claude remediation call must also
+            # survive resume even if `CODEX_CLOSURE_REVIEW` itself never
+            # completed -- fixed by persisting `active_disputes`/
+            # `dispute_log` as part of *this* phase's own `COMPLETED`
+            # write (a real durable consequence of this phase's result,
+            # not merely the workspace identity), reconstructed from the
+            # checkpoint here on the skip path instead of re-deriving
+            # from a Claude call this process never made.
+            skip_remediation_claude = (
+                resume_seed is not None and remediation_cycle == resume_starting_cycle
+                and _remediation_claude_already_completed(resume_seed)
             )
-            if identity_failure is not None:
-                return identity_failure
-            static_context_failure = _check_static_context_identity(f"Claude remediation cycle {remediation_cycle}")
-            if static_context_failure is not None:
-                return static_context_failure
-            runtime_evidence_failure = _check_runtime_evidence_identity(f"Claude remediation cycle {remediation_cycle}")
-            if runtime_evidence_failure is not None:
-                return runtime_evidence_failure
-
-            # SPEC-004 remediation Finding 4 (MAJOR): this round's packet
-            # must carry the *actual* latest verification result once one
-            # exists -- `latest_verification` was set after cycle 0's own
-            # verification (and, for remediation_cycle > 1, after the
-            # previous remediation cycle's) -- never a hardcoded `None`
-            # that misrepresents verification as never having happened.
-            remediation_packet = _round_packet(
-                remediation_cycle,
-                latest_verification.passed if latest_verification is not None else None,
-                _verification_summary_text(latest_verification) if latest_verification is not None else "",
-                (),
-            )
-            remediation_result = claude_runner(
-                build_remediation_prompt(task, spec_workspace_rel, remediation_packet), workspace.path, env=claude_env,
-            )
-            claude_runs.append(remediation_result)
-            if remediation_result.status == "HUMAN_GATE":
-                gate_id = _CLAUDE_GATE_CATEGORY_TO_ID.get(remediation_result.gate_category or "", GATE_HUMAN_OWNED_FINDING)
-                return gate(gate_id, f"Claude escalated during remediation [{remediation_result.gate_category}]: {remediation_result.gate_reason}")
-            if not remediation_result.ok:
-                return fail(f"Claude remediation did not complete successfully: {remediation_result.error}")
-
-            # SPEC-004 Requirement 8 (AC-22/AC-23): parse any DISPUTE[...]
-            # lines in this cycle's remediation summary against the
-            # register as it stood entering this cycle. SPEC-004
-            # remediation Finding 6: parsed from `dispute_attempt_lines`
-            # (extracted from the *raw* summary before its own
-            # destructive whole-string bound -- see
-            # peos/workflow_disputes.py), never by re-splitting the
-            # already-sanitized `summary` field, which could have lost a
-            # dispute attempt near its start to that truncation.
-            disputes, dispute_error = parse_disputes_from_summary(remediation_result.dispute_attempt_lines, register)
-            if dispute_error is not None:
-                return fail(
-                    f"Claude's remediation cycle {remediation_cycle} summary contained an "
-                    f"invalid DISPUTE[...] line: {dispute_error.reason} (line: {dispute_error.line!r})"
+            if not skip_remediation_claude:
+                stage(f"Claude remediation (remediation cycle {cycle_label})")
+                # SPEC-007 "Remediation-cycle allocation, specified exactly":
+                # cycle `remediation_cycle` is *allocated* by this `ENTERED`
+                # write but does not become *countable* -- i.e. `current_cycle`
+                # does not advance -- until this same cycle's `CODEX_CLOSURE_
+                # REVIEW` `COMPLETED` write, below. `checkpoint.current_cycle`
+                # deliberately still reads `remediation_cycle - 1` here.
+                checkpoint.enter("CLAUDE_REMEDIATION")
+                identity_failure = _check_governing_spec_identity(
+                    f"Claude remediation cycle {remediation_cycle}", check_staged=True,
                 )
-            active_dispute_refs = frozenset(d.reference for d in disputes)
-            for d in disputes:
-                dispute_log.append(f"DISPUTE[{d.reference}] raised in remediation cycle {remediation_cycle}: {d.evidence}")
+                if identity_failure is not None:
+                    return identity_failure
+                static_context_failure = _check_static_context_identity(f"Claude remediation cycle {remediation_cycle}")
+                if static_context_failure is not None:
+                    return static_context_failure
+                runtime_evidence_failure = _check_runtime_evidence_identity(f"Claude remediation cycle {remediation_cycle}")
+                if runtime_evidence_failure is not None:
+                    return runtime_evidence_failure
 
-            mutation_failure = _check_governance_mutation("remediation")
-            if mutation_failure is not None:
-                return mutation_failure
+                # SPEC-004 remediation Finding 4 (MAJOR): this round's packet
+                # must carry the *actual* latest verification result once one
+                # exists -- `latest_verification` was set after cycle 0's own
+                # verification (and, for remediation_cycle > 1, after the
+                # previous remediation cycle's) -- never a hardcoded `None`
+                # that misrepresents verification as never having happened.
+                remediation_packet = _round_packet(
+                    remediation_cycle,
+                    latest_verification.passed if latest_verification is not None else None,
+                    _verification_summary_text(latest_verification) if latest_verification is not None else "",
+                    (),
+                )
+                remediation_result = claude_runner(
+                    build_remediation_prompt(task, spec_workspace_rel, remediation_packet), workspace.path, env=claude_env,
+                )
+                claude_runs.append(remediation_result)
+                if remediation_result.status == "HUMAN_GATE":
+                    gate_id = _CLAUDE_GATE_CATEGORY_TO_ID.get(remediation_result.gate_category or "", GATE_HUMAN_OWNED_FINDING)
+                    return gate(gate_id, f"Claude escalated during remediation [{remediation_result.gate_category}]: {remediation_result.gate_reason}")
+                if not remediation_result.ok:
+                    if classify_transient_failure(remediation_result) == "execution_not_completed":
+                        return pause_retryable(f"Claude remediation did not complete execution: {remediation_result.error}")
+                    return fail(f"Claude remediation did not complete successfully: {remediation_result.error}")
+
+                # SPEC-004 Requirement 8 (AC-22/AC-23): parse any DISPUTE[...]
+                # lines in this cycle's remediation summary against the
+                # register as it stood entering this cycle. SPEC-004
+                # remediation Finding 6: parsed from `dispute_attempt_lines`
+                # (extracted from the *raw* summary before its own
+                # destructive whole-string bound -- see
+                # peos/workflow_disputes.py), never by re-splitting the
+                # already-sanitized `summary` field, which could have lost a
+                # dispute attempt near its start to that truncation.
+                disputes, dispute_error = parse_disputes_from_summary(remediation_result.dispute_attempt_lines, register)
+                if dispute_error is not None:
+                    return fail(
+                        f"Claude's remediation cycle {remediation_cycle} summary contained an "
+                        f"invalid DISPUTE[...] line: {dispute_error.reason} (line: {dispute_error.line!r})"
+                    )
+                active_dispute_refs = frozenset(d.reference for d in disputes)
+                for d in disputes:
+                    dispute_log.append(f"DISPUTE[{d.reference}] raised in remediation cycle {remediation_cycle}: {d.evidence}")
+                active_disputes_for_packet = tuple(
+                    ActiveDispute(reference=d.reference, evidence=d.evidence, raised_in_remediation_cycle=remediation_cycle)
+                    for d in disputes
+                )
+
+                mutation_failure = _check_governance_mutation("remediation")
+                if mutation_failure is not None:
+                    return mutation_failure
+                checkpoint.complete(
+                    "CLAUDE_REMEDIATION",
+                    current_workspace_snapshot_identity=repo_state_fingerprint(workspace.path),
+                    dispute_log=tuple(dispute_log), active_disputes=active_disputes_for_packet,
+                )
+            else:
+                log(f"[PEOS] Resuming: Claude remediation cycle {remediation_cycle} already completed; not redoing it.")
+                active_disputes_for_packet = resume_seed.active_disputes
+                active_dispute_refs = frozenset(d.reference for d in active_disputes_for_packet)
 
             stage(f"Local verification (remediation cycle {cycle_label})")
+            checkpoint.enter("LOCAL_VERIFICATION")
             identity_failure = _check_governing_spec_identity(
                 f"verification after remediation cycle {remediation_cycle}", check_staged=True,
             )
@@ -1204,6 +1747,7 @@ def _run_workflow(
                 # iteration exhaustion.
                 failing = ", ".join(r.name for r in vreport_n.failures)
                 return fail(f"Local verification failed after remediation cycle {remediation_cycle}: {failing}")
+            checkpoint.complete("LOCAL_VERIFICATION")
 
             mutation_failure = _check_governance_mutation(f"post-remediation-cycle-{remediation_cycle} verification")
             if mutation_failure is not None:
@@ -1227,10 +1771,12 @@ def _run_workflow(
                 return runtime_evidence_failure
 
             stage(f"Codex closure review (remediation cycle {cycle_label})")
-            active_disputes_for_packet = tuple(
-                ActiveDispute(reference=d.reference, evidence=d.evidence, raised_in_remediation_cycle=remediation_cycle)
-                for d in disputes
-            )
+            checkpoint.enter("CODEX_CLOSURE_REVIEW")
+            # `active_disputes_for_packet`/`active_dispute_refs` were
+            # already established above -- either freshly, from this
+            # cycle's own (just-made) Claude call, or reconstructed from
+            # the checkpoint if that call was already COMPLETED before
+            # resume and correctly skipped.
             closure_packet = _round_packet(
                 remediation_cycle, vreport_n.passed, _verification_summary_text(vreport_n), active_disputes_for_packet,
             )
@@ -1243,6 +1789,8 @@ def _run_workflow(
                 return gate_or_fail
             review_results.append(closure_review)
             if not closure_review.ok:
+                if classify_transient_failure(closure_review) == "execution_not_completed":
+                    return pause_retryable(f"Codex closure review did not complete execution: {closure_review.error}")
                 return fail(f"Codex closure review produced uninterpretable output: {closure_review.error}")
 
             if active_dispute_refs:
@@ -1252,6 +1800,21 @@ def _run_workflow(
                 )
 
             outcome_kind, detail = _evaluate_cycle(closure_review, remediation_cycle, register, active_dispute_refs)
+            # SPEC-007: the single atomic `COMPLETED` write for
+            # `CODEX_CLOSURE_REVIEW` carries the validated payload's
+            # hash, its verdict, the register state `_evaluate_cycle`
+            # just updated, and `current_cycle`'s own advancement --
+            # all together, one write. This is the instant cycle
+            # `remediation_cycle` becomes *countable* (SPEC-007
+            # "Remediation-cycle allocation, specified exactly").
+            checkpoint.complete(
+                "CODEX_CLOSURE_REVIEW",
+                current_cycle=remediation_cycle,
+                codex_review_payload_hashes=checkpoint.current.codex_review_payload_hashes + (hashlib.sha256(closure_review.raw_stdout.encode("utf-8", errors="replace")).hexdigest(),),
+                codex_review_verdict_history=checkpoint.current.codex_review_verdict_history + (closure_review.verdict,),
+                findings_register_entries=tuple(RegisterEntrySnapshot.from_entry(e) for e in register.all_entries()),
+                dispute_log=tuple(dispute_log),
+            )
             if outcome_kind == "APPROVED":
                 return approve()
             if outcome_kind == "FAILED":
@@ -1263,8 +1826,11 @@ def _run_workflow(
 
             if remediation_cycle == effective_max_cycles:
                 outstanding = ", ".join(str(e.ref) for e in register.outstanding()) or "(none)"
-                return gate(
-                    GATE_UNRESOLVED_AFTER_REMEDIATION,
+                # SPEC-007 Decision 9: convergence exhaustion is now its
+                # own distinct terminal outcome, never HUMAN_GATE --
+                # supersedes SPEC-004's GATE_UNRESOLVED_AFTER_REMEDIATION
+                # encoding (AC-043/AC-025).
+                return max_cycles_reached(
                     f"Codex still returned CHANGES_REQUIRED after {effective_max_cycles} remediation "
                     f"cycle(s) (the configured max_cycles): outstanding register entries: {outstanding}; "
                     f"active disputes: {sorted(active_dispute_refs) or '(none)'}."
@@ -1272,7 +1838,7 @@ def _run_workflow(
             # Otherwise: CHANGES_REQUIRED with budget remaining -- loop.
 
         # Unreachable: the loop above always returns on its last
-        # iteration (either converging or hitting GATE_UNRESOLVED_AFTER_REMEDIATION).
+        # iteration (either converging or reaching MAX_CYCLES_REACHED).
         return fail("Internal error: remediation loop exited without a terminal outcome.")
     except _LedgerWriteFailed as exc:
         # SPEC-004 remediation Finding 8: the ledger subsystem itself is
@@ -1285,6 +1851,11 @@ def _run_workflow(
         diagnostic = build_diagnostic(structured_message=str(exc), category_override="runtime")
         log(f"[PEOS ERROR] {diagnostic}")
         phases.append(PhaseLog(phase="Failure", detail=diagnostic))
+        try:
+            checkpoint.terminal("FAILED", gate_reason=diagnostic)
+        except Exception:  # noqa: BLE001 -- best-effort; never mask the already-determined outcome.
+            pass
+        _discard_candidate_workspace()
         return RunResult(**_base_kwargs(), outcome="FAILED", gate_reason=diagnostic)
     except Exception as exc:  # noqa: BLE001 -- SPEC-001 Finding 11, strengthened by SPEC-004:
         # never propagate a traceback, and never lose already-accumulated
@@ -1306,4 +1877,15 @@ def _run_workflow(
         log(f"[PEOS ERROR] Unhandled exception: {diagnostic}")
         phases.append(PhaseLog(phase="Failure", detail=reason))
         _safe_terminal_ledger_write(reason)
+        # SPEC-007: mirror the ledger's own "a genuine unexpected failure
+        # must never be left looking resumable" fix for the checkpoint --
+        # a `terminal_outcome` of `None` is exactly what resume preflight
+        # treats as a safely-resumable paused run (AC-061/AC-062), so an
+        # unhandled exception must positively record FAILED here, never
+        # leave it absent.
+        try:
+            checkpoint.terminal("FAILED", gate_reason=reason)
+        except Exception:  # noqa: BLE001 -- best-effort; never mask the already-determined outcome.
+            pass
+        _discard_candidate_workspace()
         return RunResult(**_base_kwargs(), outcome="FAILED", gate_reason=reason)

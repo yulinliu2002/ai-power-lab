@@ -62,11 +62,13 @@ from pathlib import Path
 
 from peos.diagnostics import sanitize_human_text, sanitize_identity_text
 from peos.fsguard import (
-    create_dir_exclusive_anchored,
+    fsync_dir_fd,
+    mkdir_tolerant_anchored,
     open_repo_root,
     remove_tree_dir_fd,
     stat_nofollow,
     traverse_dirs_anchored,
+    write_all,
 )
 
 SCHEMA_VERSION = "1"
@@ -77,8 +79,13 @@ DEFAULT_RETENTION = 20
 # SPEC-004 Requirement 20/Finding 10: the only outcomes a *valid* terminal
 # ledger may carry. Kept here (not imported from peos/workflow.py's
 # `Outcome` Literal) to avoid a ledger -> workflow import cycle -- this
-# module must stay importable standalone.
-_VALID_TERMINAL_OUTCOMES = frozenset({"APPROVED", "HUMAN_GATE", "FAILED"})
+# module must stay importable standalone. SPEC-007 Decision 9/"Terminal
+# and Non-Terminal State Taxonomy" additively extends this with
+# `MAX_CYCLES_REACHED` and `ABANDONED` -- both genuinely terminal and
+# safely eligible for this ledger's own retention sweep, unlike the new
+# `PAUSED_RETRYABLE` outcome (non-terminal, never written to this field
+# at all -- see `peos/checkpoint.py`'s `RunCheckpoint.terminal_outcome`).
+_VALID_TERMINAL_OUTCOMES = frozenset({"APPROVED", "HUMAN_GATE", "FAILED", "MAX_CYCLES_REACHED", "ABANDONED"})
 
 
 class LedgerError(RuntimeError):
@@ -184,14 +191,23 @@ class LedgerWriter:
         """First use only: create `.peos/runs/<run_id>` with every
         directory in the chain opened or created relative to the
         already-open parent fd the previous step returned (SPEC-004
-        remediation Finding 3) -- `.peos` and `.peos/runs` are created
-        tolerantly (`exist_ok`-equivalent, via `traverse_dirs_anchored(...,
-        create=True)`), but the run directory itself is created with
-        *exclusive* semantics (`create_dir_exclusive_anchored`): no reuse,
-        no silent overwrite of another run's state. Because `mkdir` and
-        the verifying `open` that follows it are both issued against the
-        same already-open parent fd, there is no window between them for
-        a symlink swapped into `name` to be followed instead.
+        remediation Finding 3) -- `.peos`, `.peos/runs`, and (as of
+        SPEC-007) the run directory itself are all created *tolerantly*
+        (`exist_ok`-equivalent). Because `mkdir` and the verifying `open`
+        that follows it are both issued against the same already-open
+        parent fd, there is no window between them for a symlink swapped
+        into `name` to be followed instead.
+
+        SPEC-007 note: the run directory's *exclusive*-creation
+        guarantee (no reuse, no silent overwrite of another run's state)
+        now lives in `peos.checkpoint.CheckpointWriter._ensure_dir`
+        instead -- the checkpoint's own first write happens before this
+        ledger's first write in every run's lifecycle (right after lock
+        acquisition, before Planning), so it is the one place a genuine
+        `run_id` collision is actually caught; duplicating that check
+        here a second time would only ever fail *because* the checkpoint
+        writer already (correctly) created this same directory moments
+        earlier, which is not a collision at all.
         """
         if self._dir_created:
             return
@@ -206,14 +222,9 @@ class LedgerWriter:
                 f"(an ancestor is a symlink, or not a directory): {self._repo_root / RUNS_SUBDIR}"
             )
         try:
-            try:
-                run_fd = create_dir_exclusive_anchored(runs_fd, self._run_id)
-            except FileExistsError as exc:
-                raise LedgerError(
-                    f"run directory already exists -- refusing to reuse another run's state: {self.run_dir}"
-                ) from exc
-            except OSError as exc:
-                raise LedgerError(f"could not create run directory {self.run_dir}: {exc}") from exc
+            run_fd = mkdir_tolerant_anchored(runs_fd, self._run_id)
+            if run_fd is None:
+                raise LedgerError(f"could not safely create/open run directory {self.run_dir}")
             os.close(run_fd)
         finally:
             os.close(runs_fd)
@@ -255,7 +266,7 @@ class LedgerWriter:
             except OSError as exc:
                 raise LedgerError(f"ledger temp-file create failed in {self.run_dir}: {exc}") from exc
             try:
-                os.write(tmp_fd, text)
+                write_all(tmp_fd, text)
                 os.fsync(tmp_fd)
             finally:
                 os.close(tmp_fd)
@@ -267,6 +278,18 @@ class LedgerWriter:
                 except OSError:
                     pass
                 raise LedgerError(f"ledger atomic rename failed in {self.run_dir}: {exc}") from exc
+            # SPEC-007 Decision 8 extension: the rename above changes
+            # `run_fd`'s own directory *entry* for LEDGER_FILENAME (its
+            # first-ever creation, or a replacement of the previous
+            # write) -- fsyncing the already-fsync'd temp file's content
+            # says nothing about that entry's own durability. Applied
+            # unconditionally (not only on first creation): a rename is
+            # always a directory-entry change, even when replacing an
+            # existing name.
+            try:
+                fsync_dir_fd(run_fd)
+            except OSError as exc:
+                raise LedgerError(f"ledger directory-entry fsync failed in {self.run_dir}: {exc}") from exc
         finally:
             os.close(run_fd)
         return self.run_dir / LEDGER_FILENAME

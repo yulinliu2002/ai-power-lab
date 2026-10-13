@@ -128,6 +128,17 @@ class RuntimeVerificationOutcome:
     evidence: RuntimeEvidence | None = None
     persisted: PersistedEvidence | None = None
     staged_dir: Path | None = None
+    # SPEC-007 Decision 7: every backend/frontend service handle this
+    # round actually started, captured immediately after `start_service`
+    # returns -- present here even on an early-return/failure path, so a
+    # caller that was interrupted *after* this function returns but
+    # *before* teardown could otherwise run still has a durable record
+    # to reclaim from. By the time this function returns normally (its
+    # own `finally` already tore every service down), these are already
+    # dead -- this field's real value is for the orchestrator-process-
+    # killed-mid-call scenario, where `on_service_started` (below) is
+    # what actually matters.
+    service_process_identities: tuple = ()
 
 
 PortReserver = Callable[[], int]
@@ -264,6 +275,7 @@ def run_runtime_verification(
     teardown: Teardown = teardown_service,
     build_runner: BuildRunner = subprocess.run,
     browser_worker_runner: BrowserWorkerRunner = _default_browser_worker_runner,
+    on_service_started: Callable[[object], None] | None = None,
 ) -> RuntimeVerificationOutcome:
     """Run one round's Runtime Verification pass (SPEC-006 Section 8).
 
@@ -290,6 +302,20 @@ def run_runtime_verification(
     base_env = _with_playwright_browsers_path(sandboxed_env(workspace.home_dir, base_env=environ), environ)
     log_dir = workspace.path.parent / "runtime-logs"
 
+    captured_identities: list = []
+
+    def _capture_started(handle) -> None:
+        # SPEC-007 Decision 7: registration is written immediately after
+        # `start_service` returns a handle -- a kill in the exact window
+        # between `Popen` returning and this call completing leaves that
+        # one process unreclaimable (a named, accepted residual
+        # limitation, not solved in V1).
+        from peos.runtime_services import capture_service_process_identity
+        identity = capture_service_process_identity(handle, owning_run_id=run_id)
+        captured_identities.append(identity)
+        if on_service_started is not None:
+            on_service_started(identity)
+
     def _not_executed_evidence(reason: str, service_readiness: tuple = ()) -> RuntimeVerificationOutcome:
         checks = tuple(_not_executed_check(d, cycle_slug) for d in runtime_plan.declarations)
         evidence = RuntimeEvidence(
@@ -304,6 +330,7 @@ def run_runtime_verification(
         return RuntimeVerificationOutcome(
             ran=True, execution_integrity_passed=False, failure_reason=reason,
             evidence=evidence, persisted=persisted, staged_dir=staged_dir,
+            service_process_identities=tuple(captured_identities),
         )
 
     # SPEC-006 Section 8 step 2 preflight: confirm the pinned Playwright/
@@ -342,6 +369,7 @@ def run_runtime_verification(
             )
         except SandboxUnavailableError as exc:
             return _not_executed_evidence(f"backend sandbox unavailable: {exc}")
+        _capture_started(backend_handle)
 
         backend_readiness = readiness_waiter(backend_handle, health_path=BACKEND_HEALTH_PATH, timeout_s=readiness_timeout_s)
         if not backend_readiness.ready:
@@ -381,6 +409,7 @@ def run_runtime_verification(
             )
         except SandboxUnavailableError as exc:
             return _not_executed_evidence(f"frontend sandbox unavailable: {exc}")
+        _capture_started(frontend_handle)
 
         frontend_readiness = readiness_waiter(frontend_handle, health_path=FRONTEND_HEALTH_PATH, timeout_s=readiness_timeout_s)
         if not frontend_readiness.ready:
@@ -447,6 +476,7 @@ def run_runtime_verification(
     return RuntimeVerificationOutcome(
         ran=True, execution_integrity_passed=execution_integrity_passed, failure_reason=failure_reason,
         evidence=evidence, persisted=persisted, staged_dir=staged_dir,
+        service_process_identities=tuple(captured_identities),
     )
 
 

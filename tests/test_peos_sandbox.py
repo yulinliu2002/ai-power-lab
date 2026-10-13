@@ -114,11 +114,21 @@ def test_isolated_workspace_carries_over_uncommitted_and_untracked_state(repo_ro
         discard_workspace(workspace)
 
 
-def test_isolated_workspace_is_a_separate_directory_from_repo_root(repo_root):
+def test_isolated_workspace_is_durably_nested_under_the_run_directory(repo_root):
+    """SPEC-007 "Workspace Lifecycle and One-Run-Per-Repository": the
+    workspace/home now live *under* `repo_root`, at
+    `.peos/runs/<run_id>/candidate/{workspace,home}` -- a deliberate
+    change from the prior system-temp-space placement, so the candidate
+    survives a process restart while ACTIVE/PAUSED_RETRYABLE. It is still
+    a distinct directory from `repo_root` itself, and `.peos/runs/` is
+    gitignored, so this nesting is invisible to `git status`/`git diff`
+    on `repo_root`."""
     workspace = create_isolated_workspace(repo_root, "testrun3")
     try:
         assert workspace.path != repo_root
-        assert not str(workspace.path).startswith(str(repo_root))
+        assert workspace.path.is_relative_to(repo_root)
+        assert workspace.path == repo_root / ".peos" / "runs" / "testrun3" / "candidate" / "workspace"
+        assert workspace.home_dir == repo_root / ".peos" / "runs" / "testrun3" / "candidate" / "home"
     finally:
         discard_workspace(workspace)
 
@@ -747,7 +757,12 @@ def test_runtime_verification_sandbox_profile_denies_network_and_confines_writes
     try:
         profile = build_runtime_verification_sandbox_profile(workspace, repo_root)
         assert "(deny network*)" in profile
-        assert str(workspace.path) in profile
+        # The write-allow covers the whole candidate directory
+        # (`workspace.path.parent`), not just `workspace.path` itself --
+        # `_run_browser_worker` writes its own transient temp directory
+        # as a sibling of `workspace.path` (live-run finding, final
+        # SPEC-007 delivery verification).
+        assert str(workspace.path.parent) in profile
         assert str((repo_root / ".git")) in profile or str(repo_root) in profile
         assert "runtime-evidence" not in profile
     finally:
@@ -842,5 +857,34 @@ class TestRuntimeVerificationSandboxEnforcement:
             )
             proc = subprocess.run(command, cwd=str(workspace.path), capture_output=True, text=True, timeout=30)
             assert proc.returncode != 0
+        finally:
+            discard_workspace(workspace)
+
+    def test_browser_worker_style_temp_directory_beside_workspace_is_writable(self, real_repo_root, tmp_path):
+        """Final SPEC-007 delivery verification, live-run finding: a real
+        end-to-end Runtime Verification run against this repository's
+        own frontend/backend failed at the preflight step with
+        `PermissionError: Operation not permitted`, because
+        `peos.runtime_verification._run_browser_worker` creates its own
+        transient input/output directory as a *sibling* of
+        `workspace.path` (`tempfile.TemporaryDirectory(dir=workspace.path.
+        parent)`) -- a path SPEC-007's `candidate/`-nested workspace
+        layout placed under `repo_root`, and the pre-fix write-allow set
+        only covered `workspace.path`/`workspace.home_dir` individually,
+        never their common parent. Reproduces exactly that write here."""
+        workspace = create_isolated_workspace(real_repo_root, "sbx-rv-sibling-temp")
+        try:
+            profile_dir = tmp_path / "profiles"
+            sibling_output_dir = workspace.path.parent / "worker-tmp" / "output"
+            command = sandboxed_runtime_verification_command(
+                [
+                    "python3", "-c",
+                    f"import pathlib; pathlib.Path({str(sibling_output_dir)!r}).mkdir(parents=True)",
+                ],
+                workspace, real_repo_root, profile_dir,
+            )
+            proc = subprocess.run(command, cwd=str(workspace.path), capture_output=True, text=True, timeout=30)
+            assert proc.returncode == 0, proc.stderr
+            assert sibling_output_dir.is_dir()
         finally:
             discard_workspace(workspace)

@@ -168,6 +168,8 @@ it; see that function's docstring.
 
 from __future__ import annotations
 
+import dataclasses
+import hashlib
 import os
 import shutil
 import subprocess
@@ -175,8 +177,23 @@ import sys
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Callable
 
+from peos.checkpoint import ReconciliationOperation
 from peos.ledger import RUNS_SUBDIR
+from peos.run_lock import LOCK_RELATIVE_PATH
+
+# SPEC-007 "Workspace Lifecycle and One-Run-Per-Repository": the
+# candidate workspace/home now live *under* the run's own durable
+# directory (`.peos/runs/<run_id>/candidate/{workspace,home}`), nested
+# specifically so `discard_workspace`'s real, unmodified
+# `shutil.rmtree(workspace.path.parent, ...)` removes exactly this
+# subtree -- never the sibling `ledger.json`/`checkpoint.json`/
+# `runtime-evidence/` -- and so it durably survives a process restart
+# while `ACTIVE`/`PAUSED_RETRYABLE` (SPEC-001/SPEC-003's accidental
+# system-temp-space durability is retired in favor of this explicit,
+# resume-aware placement).
+CANDIDATE_SUBDIR = "candidate"
 
 # Environment variables that can carry Git/GitHub/SSH push credentials.
 # This is a named, auditable deny-list, not a claim that every possible
@@ -309,6 +326,11 @@ class ReconciliationResult:
     copied: tuple[str, ...] = field(default_factory=tuple)
     deleted: tuple[str, ...] = field(default_factory=tuple)
     blocked_governance_changes: tuple[str, ...] = field(default_factory=tuple)
+    # SPEC-007 "Reconciliation Crash-Safety": the complete, durably-
+    # recordable manifest this reconciliation computed and applied --
+    # every entry's `applied` reflects its final state. Empty for a
+    # no-op reconciliation (no workspace, or nothing to reconcile).
+    manifest: tuple[ReconciliationOperation, ...] = field(default_factory=tuple)
 
 
 def sandboxed_env(home_dir: Path, base_env: dict | None = None) -> dict:
@@ -445,21 +467,40 @@ def _run_git(args: list[str], cwd: Path, check: bool = True, input_text: str | N
     return proc
 
 
+def candidate_root_for_run(repo_root: Path, run_id: str) -> Path:
+    """The durable `candidate/` directory for `run_id` -- a sibling of
+    `ledger.json`/`checkpoint.json` under the same run directory (SPEC-007
+    "Workspace Lifecycle"). Exposed so `peos/resume.py` and tests can
+    reference it without hardcoding the path convention twice."""
+    return repo_root / RUNS_SUBDIR / run_id / CANDIDATE_SUBDIR
+
+
 def create_isolated_workspace(repo_root: Path, run_id: str) -> IsolatedWorkspace:
     """Create a disposable local clone of `repo_root`, carrying over the
     exact uncommitted/untracked state the human had, with every remote
     removed and a local-only baseline commit recorded for later diffing.
 
+    SPEC-007: the workspace/home now live under the run's own durable
+    `candidate/` directory (`.peos/runs/<run_id>/candidate/...`), not
+    system temp space -- see `CANDIDATE_SUBDIR`'s module-level docstring
+    note. `.peos/runs/` is gitignored, so cloning `repo_root` into a path
+    nested beneath it does not self-reference: `git diff`/`git ls-files
+    --others --exclude-standard` (used below, and by reconciliation) both
+    respect `.gitignore` and never see the candidate directory itself.
+
     Raises WorkspaceError (fail closed) if any step cannot be completed;
     callers must treat that as a workflow failure, not a reason to fall
     back to operating on `repo_root` directly.
     """
-    tmp_root = Path(tempfile.mkdtemp(prefix=f"peos-{run_id}-"))
-    workspace = tmp_root / "workspace"
-    home_dir = tmp_root / "home"
-    home_dir.mkdir(parents=True)
+    candidate_root = candidate_root_for_run(repo_root, run_id)
+    workspace = candidate_root / "workspace"
+    home_dir = candidate_root / "home"
+    try:
+        home_dir.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        raise WorkspaceError(f"could not create isolated workspace home directory {home_dir}: {exc}") from exc
 
-    _run_git(["clone", "--no-hardlinks", "--quiet", str(repo_root), str(workspace)], tmp_root)
+    _run_git(["clone", "--no-hardlinks", "--quiet", str(repo_root), str(workspace)], candidate_root)
 
     remotes = _run_git(["remote"], workspace, check=False).stdout.split()
     for remote in remotes:
@@ -476,7 +517,7 @@ def create_isolated_workspace(repo_root: Path, run_id: str) -> IsolatedWorkspace
             cwd=str(workspace), input=diff.stdout, capture_output=True, text=True,
         )
         if apply_proc.returncode != 0:
-            shutil.rmtree(tmp_root, ignore_errors=True)
+            shutil.rmtree(candidate_root, ignore_errors=True)
             raise WorkspaceError(
                 "Could not reproduce the working tree's uncommitted changes in "
                 f"the isolated workspace: {apply_proc.stderr.strip()}"
@@ -573,6 +614,17 @@ def _is_orchestrator_owned_run_state(rel: str) -> bool:
     return rel == RUNS_SUBDIR or rel.startswith(f"{RUNS_SUBDIR}/")
 
 
+def _is_run_lock_path(rel: str) -> bool:
+    """SPEC-007 "Workspace Lifecycle": `.peos/run.lock` is orchestrator-
+    owned shared-lock state, a sibling of `.peos/runs/` that
+    `_is_orchestrator_owned_run_state` above does not cover (it only
+    matches paths under `.peos/runs/`). Excluded structurally, before
+    `protected_relative_paths` is even consulted, exactly like run-state
+    -- never copied, never reported as blocked (routine, expected
+    orchestrator state, not a suspicious mutation)."""
+    return rel == LOCK_RELATIVE_PATH
+
+
 # SPEC-006 Section 9: the fixed, cycle-qualified path Runtime
 # Verification stages its read-only evidence copy at inside the
 # isolated workspace -- see `peos.runtime_evidence.staged_evidence_path`
@@ -627,10 +679,204 @@ def _is_peos_control_plane_path(rel: str) -> bool:
     return rel == PEOS_CONTROL_PLANE_SUBDIR or rel.startswith(f"{PEOS_CONTROL_PLANE_SUBDIR}/")
 
 
+class ReconciliationConflictError(WorkspaceError):
+    """SPEC-007 "Reconciliation Crash-Safety" step 4: an authoritative
+    file matches neither a manifest entry's `target_content_hash` nor
+    its `original_content_hash`, and its path is not recognized
+    reconciliation debris -- some interference the manifest cannot
+    account for. Callers (`peos/workflow.py`) must treat this as
+    `FAILED`, naming `relative_path`, never guessing."""
+
+    def __init__(self, relative_path: str):
+        super().__init__(
+            f"reconciliation cannot safely proceed: {relative_path} matches neither the "
+            "manifest's recorded original nor target content, and is not recognized "
+            "reconciliation debris -- failing closed rather than guessing."
+        )
+        self.relative_path = relative_path
+
+
+def _hash_file_or_none(path: Path) -> str | None:
+    if not path.is_file():
+        return None
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _reconciliation_debris_name(run_id: str, relative_path: str) -> str:
+    """SPEC-007 Round 3 Finding 4: a fixed, recognizable temp-file naming
+    convention PEOS's own recovery logic specifically looks for and
+    safely removes -- excluded from "unexplained drift" by construction."""
+    return f".peos-reconcile-{run_id}-{hashlib.sha256(relative_path.encode('utf-8')).hexdigest()}.tmp"
+
+
+def is_reconciliation_debris_name(run_id: str, name: str) -> bool:
+    return name.startswith(f".peos-reconcile-{run_id}-") and name.endswith(".tmp")
+
+
+def build_reconciliation_manifest(
+    workspace: IsolatedWorkspace,
+    repo_root: Path,
+    protected_relative_paths: frozenset[str] = frozenset(),
+) -> tuple[tuple[ReconciliationOperation, ...], tuple[str, ...]]:
+    """Compute the full list of `ReconciliationOperation`s from the
+    candidate workspace's diff against `repo_root`, **before** any file
+    is touched (SPEC-007 "Reconciliation Crash-Safety" step 1) -- this is
+    what `RECONCILIATION`'s own `ENTERED` checkpoint write durably
+    records. Returns `(manifest, blocked_governance_changes)` -- a
+    governance/control-plane-path change is reported, never included in
+    the manifest at all (it is never applied, with or without a crash).
+    """
+    tracked, untracked = _changed_paths(workspace)
+    manifest: list[ReconciliationOperation] = []
+    blocked: list[str] = []
+    seen: set[str] = set()
+
+    def _consider(rel: str, is_delete: bool) -> None:
+        if rel in seen:
+            return
+        seen.add(rel)
+        if _is_orchestrator_owned_run_state(rel) or _is_staged_runtime_evidence_path(rel) or _is_run_lock_path(rel):
+            return
+        if _is_peos_control_plane_path(rel) or rel in protected_relative_paths:
+            blocked.append(rel)
+            return
+        dst = repo_root / rel
+        original_hash = _hash_file_or_none(dst)
+        if is_delete:
+            manifest.append(ReconciliationOperation(
+                relative_path=rel, action="delete", target_content_hash=None, original_content_hash=original_hash,
+            ))
+            return
+        src = workspace.path / rel
+        if not src.is_file():
+            return
+        manifest.append(ReconciliationOperation(
+            relative_path=rel, action="write",
+            target_content_hash=_hash_file_or_none(src), original_content_hash=original_hash,
+        ))
+
+    for status, rel in tracked:
+        _consider(rel, is_delete=(status == "D"))
+    for rel in untracked:
+        _consider(rel, is_delete=False)
+
+    return tuple(manifest), tuple(sorted(set(blocked)))
+
+
+def apply_reconciliation_operation(
+    op: ReconciliationOperation, workspace: IsolatedWorkspace, repo_root: Path, run_id: str,
+) -> ReconciliationOperation:
+    """Apply one not-yet-`applied` manifest entry (SPEC-007 "Reconciliation
+    Crash-Safety" steps 2/4), classifying the authoritative file's
+    *current* state against the durable manifest entry rather than
+    re-diffing or fingerprint-guessing:
+
+    - already matches `target_content_hash` (or already absent, for a
+      delete): correctly applied already -- confirmed, `applied=True`.
+    - matches `original_content_hash` (untouched) or is already correctly
+      absent for a not-yet-applied delete: safely (re-)applied now,
+      idempotently.
+    - matches neither, and is not recognized reconciliation debris: some
+      third, unexplained interference -- raises `ReconciliationConflictError`.
+
+    A `"write"` is applied via temp-file-in-the-target's-own-directory +
+    `os.replace` (atomic, never `shutil.copy2`'s in-place, non-atomic
+    write); a `"delete"` is an ordinary `os.unlink` (already atomic for a
+    single file).
+    Codex implementation review (confirmed, major): an earlier revision
+    returned an already-`applied=True` entry immediately, trusting the
+    flag without checking the authoritative file's *current* content at
+    all -- meaning anything that changed that file after the flag was
+    set (and before this call) would go completely unnoticed, exactly
+    the "unexplained interference" case this mechanism exists to catch.
+    This function therefore always re-derives the classification from
+    the file's current content, regardless of what `op.applied` claims:
+    an already-`applied` entry is only ever *confirmed* applied (never
+    trusted blindly), and a mismatch found after being marked applied is
+    itself an unexplained-interference failure.
+    """
+    dst = repo_root / op.relative_path
+    current_hash = _hash_file_or_none(dst)
+
+    if op.action == "delete":
+        if current_hash is None:
+            return dataclasses.replace(op, applied=True)
+        if op.applied:
+            raise ReconciliationConflictError(op.relative_path)
+        if current_hash == op.original_content_hash:
+            dst.unlink()
+            return dataclasses.replace(op, applied=True)
+        raise ReconciliationConflictError(op.relative_path)
+
+    # action == "write"
+    if current_hash == op.target_content_hash:
+        return dataclasses.replace(op, applied=True)
+    if op.applied:
+        # Previously confirmed applied, but the authoritative file no
+        # longer matches the recorded target -- something changed it
+        # since. Never silently re-apply over unexplained interference.
+        raise ReconciliationConflictError(op.relative_path)
+    if current_hash == op.original_content_hash:
+        src = workspace.path / op.relative_path
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        tmp_name = _reconciliation_debris_name(run_id, op.relative_path)
+        tmp_path = dst.parent / tmp_name
+        content = src.read_bytes()
+        tmp_fd = os.open(str(tmp_path), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o644)
+        try:
+            with os.fdopen(tmp_fd, "wb") as fh:
+                fh.write(content)
+                fh.flush()
+                os.fsync(fh.fileno())
+            os.replace(str(tmp_path), str(dst))
+        except OSError:
+            try:
+                tmp_path.unlink()
+            except OSError:
+                pass
+            raise
+        return dataclasses.replace(op, applied=True)
+    raise ReconciliationConflictError(op.relative_path)
+
+
+def cleanup_reconciliation_debris(
+    manifest: tuple[ReconciliationOperation, ...], repo_root: Path, run_id: str,
+) -> tuple[str, ...]:
+    """SPEC-007 Round 3 Finding 4: remove any leftover temp file matching
+    this run's recognized naming convention, in exactly the directories
+    this manifest could have written debris into -- never a broader,
+    unbounded filesystem walk. Called before reconciliation is reported
+    `COMPLETED`, and again by resume preflight (check 15) before any
+    drift comparison runs, so this debris never counts toward
+    "unexplained" dirtiness."""
+    removed: list[str] = []
+    candidate_dirs = {(repo_root / op.relative_path).parent for op in manifest}
+    for d in candidate_dirs:
+        if not d.is_dir():
+            continue
+        try:
+            entries = list(d.iterdir())
+        except OSError:
+            continue
+        for entry in entries:
+            if entry.is_file() and is_reconciliation_debris_name(run_id, entry.name):
+                try:
+                    entry.unlink()
+                    removed.append(str(entry.relative_to(repo_root)))
+                except OSError:
+                    pass
+    return tuple(sorted(removed))
+
+
 def reconcile_workspace_to_repo(
     workspace: IsolatedWorkspace,
     repo_root: Path,
     protected_relative_paths: frozenset[str] = frozenset(),
+    *,
+    run_id: str = "",
+    manifest: tuple[ReconciliationOperation, ...] | None = None,
+    on_manifest_built: Callable[[tuple[ReconciliationOperation, ...]], None] | None = None,
+    on_operation_applied: Callable[[ReconciliationOperation], None] | None = None,
 ) -> ReconciliationResult:
     """Copy the net working-tree changes made inside `workspace` back
     onto `repo_root`'s working tree for human review. Never stages,
@@ -640,58 +886,45 @@ def reconcile_workspace_to_repo(
     `blocked_governance_changes` instead so it is visible, not silently
     applied or silently dropped. Anything under `.peos/runs/`
     (`_is_orchestrator_owned_run_state`) is excluded structurally, before
-    `protected_relative_paths` is even consulted: it is never copied,
-    never used to delete/replace the authoritative ledger, regardless of
-    whether the path reached this function via a tracked change, an
-    untracked file, or a tracked-but-deleted path (a rename is already
-    split into a delete + an add by `_changed_paths`, so this one check
-    covers a rename into or out of that subtree too). Anything under
-    `peos/` itself (`_is_peos_control_plane_path`, SPEC-006 hardening
-    item A) is similarly excluded structurally, but -- unlike run-state
-    -- reported in `blocked_governance_changes`, never silently skipped.
-    """
-    tracked, untracked = _changed_paths(workspace)
+    `protected_relative_paths` is even consulted. Anything under `peos/`
+    itself (`_is_peos_control_plane_path`, SPEC-006 hardening item A) is
+    similarly excluded structurally, but -- unlike run-state -- reported
+    in `blocked_governance_changes`, never silently skipped.
 
+    SPEC-007 "Reconciliation Crash-Safety": restructured around a
+    durable, per-file manifest of atomically-applied operations rather
+    than `shutil.copy2`'s non-atomic in-place writes. `manifest`, when
+    given (a resume re-entering an interrupted reconciliation), is used
+    exactly as recorded -- no re-diffing, no fingerprint-guessing; the
+    manifest is otherwise (re-)computed fresh via
+    `build_reconciliation_manifest`. `on_manifest_built`/
+    `on_operation_applied` let a caller (`peos/workflow.py`) persist each
+    step as its own durable checkpoint write -- this function itself has
+    no checkpoint access, by design, so it stays unit-testable without one.
+    """
+    blocked: tuple[str, ...] = ()
+    if manifest is None:
+        manifest, blocked = build_reconciliation_manifest(workspace, repo_root, protected_relative_paths)
+        if on_manifest_built is not None:
+            on_manifest_built(manifest)
+
+    updated: list[ReconciliationOperation] = []
     copied: list[str] = []
     deleted: list[str] = []
-    blocked: list[str] = []
+    for op in manifest:
+        new_op = apply_reconciliation_operation(op, workspace, repo_root, run_id)
+        updated.append(new_op)
+        if on_operation_applied is not None and not op.applied:
+            on_operation_applied(new_op)
+        (copied if new_op.action == "write" else deleted).append(new_op.relative_path)
 
-    for status, rel in tracked:
-        if _is_orchestrator_owned_run_state(rel) or _is_staged_runtime_evidence_path(rel):
-            continue
-        if _is_peos_control_plane_path(rel) or rel in protected_relative_paths:
-            blocked.append(rel)
-            continue
-        src = workspace.path / rel
-        dst = repo_root / rel
-        if status == "D":
-            if dst.exists():
-                dst.unlink()
-                deleted.append(rel)
-            continue
-        if src.is_file():
-            dst.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(src, dst)
-            copied.append(rel)
-
-    for rel in untracked:
-        if _is_orchestrator_owned_run_state(rel) or _is_staged_runtime_evidence_path(rel):
-            continue
-        if _is_peos_control_plane_path(rel) or rel in protected_relative_paths:
-            blocked.append(rel)
-            continue
-        src = workspace.path / rel
-        if not src.is_file():
-            continue
-        dst = repo_root / rel
-        dst.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(src, dst)
-        copied.append(rel)
+    cleanup_reconciliation_debris(tuple(updated), repo_root, run_id)
 
     return ReconciliationResult(
         copied=tuple(sorted(set(copied))),
         deleted=tuple(sorted(set(deleted))),
-        blocked_governance_changes=tuple(sorted(set(blocked))),
+        blocked_governance_changes=blocked,
+        manifest=tuple(updated),
     )
 
 
@@ -787,12 +1020,26 @@ def build_verification_sandbox_profile(
     # write to the authoritative repo" guarantee for any repo_root that
     # happened to be under it.
     process_tmp_dir = str(Path(tempfile.gettempdir()).resolve())
-    write_allow = "\n  ".join(
+    # SPEC-007 Round 2 Finding 6 / ADR-0004 Decision 2: `workspace.path`/
+    # `workspace.home_dir` now live *under* `repo_root`
+    # (`.peos/runs/<run_id>/candidate/...`), so they cannot be granted in
+    # the same, single allow-before-deny block as the broader, pre-
+    # existing scratch-space allows below -- moving the *entire* combined
+    # block to after the `repo_root` write-deny (as an earlier revision
+    # did) would reopen writes to all of `repo_root` for any repository
+    # nested inside the broader temp-space allowances. Only this run's
+    # own narrow candidate paths move after the deny; the broader allows
+    # keep their original position, before it.
+    broad_write_allow = "\n  ".join(
+        f'(subpath "{p}")' for p in (
+            process_tmp_dir,
+            "/private/tmp",
+        )
+    )
+    narrow_write_allow = "\n  ".join(
         f'(subpath "{p}")' for p in (
             str(workspace.path),
             str(workspace.home_dir),
-            process_tmp_dir,
-            "/private/tmp",
         )
     )
     read_deny = "\n  ".join(
@@ -833,10 +1080,11 @@ def build_verification_sandbox_profile(
         '(allow network-inbound (local ip "localhost:*"))\n'
         '(allow network-outbound (remote ip "localhost:*"))\n'
         '(deny file-write* (subpath "/"))\n'
-        f"(allow file-write*\n  {write_allow}\n"
+        f"(allow file-write*\n  {broad_write_allow}\n"
         '  (literal "/dev/null")\n'
         '  (literal "/dev/tty"))\n'
         f'(deny file-write* (subpath "{repo_root_write_deny}"))\n'
+        f"(allow file-write*\n  {narrow_write_allow})\n"
         f"(deny file-read*\n  {read_deny})\n"
     )
 
@@ -911,14 +1159,33 @@ def build_runtime_verification_sandbox_profile(
     credential_paths = [real_home / p for p in CREDENTIAL_PATH_DENYLIST]
 
     process_tmp_dir = str(Path(tempfile.gettempdir()).resolve())
-    write_allow = "\n  ".join(
+    # SPEC-007 Round 2 Finding 6 / ADR-0004 Decision 2: `workspace.path`/
+    # `workspace.home_dir` now live *under* `repo_root`
+    # (`.peos/runs/<run_id>/candidate/...`), so they cannot be granted in
+    # the same, single allow-before-deny block as the broader, pre-
+    # existing scratch-space allows below -- moving the *entire* combined
+    # block to after the `repo_root` write-deny (as an earlier revision
+    # did) would reopen writes to all of `repo_root` for any repository
+    # nested inside the broader temp-space allowances. Only this run's
+    # own narrow candidate paths move after the deny; the broader allows
+    # keep their original position, before it.
+    broad_write_allow = "\n  ".join(
         f'(subpath "{p}")' for p in (
-            str(workspace.path),
-            str(workspace.home_dir),
             process_tmp_dir,
             "/private/tmp",
         )
     )
+    # The browser-worker subprocess (python -m peos.runtime_browser)
+    # writes its own transient input/output temp directory as a
+    # *sibling* of `workspace.path` (`_run_browser_worker`'s
+    # `tempfile.TemporaryDirectory(dir=workspace.path.parent)`), so the
+    # write-allow here is the whole candidate directory
+    # (`workspace.path.parent`), not just `workspace.path`/`home_dir`
+    # individually -- still strictly narrower than `repo_root` itself
+    # (test_ac032 below). A real `sandbox-exec` run first caught this:
+    # the narrower form denied that temp directory with
+    # `PermissionError: Operation not permitted`.
+    narrow_write_allow = f'(subpath "{workspace.path.parent}")'
     read_deny = "\n  ".join(
         f'(subpath "{p}")' for p in (
             str((repo_root / ".git").resolve()) if (repo_root / ".git").exists() else str(repo_root / ".git"),
@@ -935,10 +1202,11 @@ def build_runtime_verification_sandbox_profile(
         '(allow network-inbound (local ip "localhost:*"))\n'
         '(allow network-outbound (remote ip "localhost:*"))\n'
         '(deny file-write* (subpath "/"))\n'
-        f"(allow file-write*\n  {write_allow}\n"
+        f"(allow file-write*\n  {broad_write_allow}\n"
         '  (literal "/dev/null")\n'
         '  (literal "/dev/tty"))\n'
         f'(deny file-write* (subpath "{repo_root_write_deny}"))\n'
+        f"(allow file-write*\n  {narrow_write_allow})\n"
         f"(deny file-read*\n  {read_deny})\n"
     )
 

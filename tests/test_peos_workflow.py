@@ -28,7 +28,7 @@ from peos.codex_agent import CodexReviewResult, Finding
 from peos.sandbox import CLAUDE_AUTH_ENV_VAR, CODEX_AUTH_HOME_ENV_VAR, CODEX_AUTH_FILENAME, IsolatedWorkspace
 from peos.spec import SpecCandidate, SpecResolution
 from peos.verify import CommandResult, VerificationReport
-from peos.workflow import run_workflow
+from peos.workflow import _remediation_claude_already_completed, run_workflow
 
 from tests._peos_fixtures import make_minimal_repo
 
@@ -86,6 +86,19 @@ def _human_gate_claude(category="architecture", reason="needs a new architecture
 def _failed_claude(error="boom"):
     return ClaudeRunResult(
         returncode=1, stdout="", stderr="", status="FAILED",
+        gate_category=None, gate_reason=None, summary="", ok=False, error=error,
+    )
+
+
+def _execution_not_completed_claude(error="Claude Code subprocess failed to run: timed out"):
+    """SPEC-007 Decision 3: `returncode=-1` is `peos.claude_agent.run_claude`'s
+    own stable marker for "the subprocess itself never completed
+    execution" (set only when the `runner()` call raises `subprocess.
+    TimeoutExpired`/`FileNotFoundError`/`OSError`, never for any real
+    exit code) -- `peos.diagnostics.classify_transient_failure` keys off
+    exactly this."""
+    return ClaudeRunResult(
+        returncode=-1, stdout="", stderr="", status=None,
         gate_category=None, gate_reason=None, summary="", ok=False, error=error,
     )
 
@@ -498,9 +511,12 @@ def test_remediation_cycle_then_approve(tmp_path):
 
 def test_bounded_remediation_still_changes_required_gates(tmp_path):
     """SPEC-004 AC-1b: `--max-cycles 1` explicitly passed reproduces
-    SPEC-001/SPEC-003's exact one-remediation-cycle-then-gate behavior
+    SPEC-001/SPEC-003's exact one-remediation-cycle-then-stop behavior
     (the V2 default of 3 is covered separately by
     test_default_max_cycles_exhausts_after_three_remediation_cycles).
+
+    SPEC-007 Decision 9 supersedes the original HUMAN_GATE #8 encoding of
+    convergence exhaustion with the distinct MAX_CYCLES_REACHED outcome.
     """
     repo_root = make_minimal_repo(tmp_path)
     claude_calls = []
@@ -518,8 +534,8 @@ def test_bounded_remediation_still_changes_required_gates(tmp_path):
         max_cycles=1,
     )
 
-    assert result.outcome == "HUMAN_GATE"
-    assert result.gate_id == "8"
+    assert result.outcome == "MAX_CYCLES_REACHED"
+    assert result.gate_id is None
     assert result.remediation_performed is True
     assert result.max_cycles == 1
     # exactly one remediation cycle -- never a third Claude call or third review
@@ -573,6 +589,194 @@ def test_remediation_human_gate_maps_gate_category(tmp_path):
 
     assert result.outcome == "HUMAN_GATE"
     assert result.gate_id == "4"  # control/protection
+
+
+def test_remediation_claude_already_completed_disambiguates_closure_review_state():
+    """Codex closure review (confirmed, major): an earlier revision
+    treated `active_phase == "CODEX_CLOSURE_REVIEW"` as unconditional
+    proof that `resume_starting_cycle`'s own Claude call had already
+    completed -- true only while that review is still `ENTERED` (it then
+    belongs to `resume_starting_cycle` itself, since `current_cycle`
+    has not yet advanced). Once it reaches `COMPLETED`, `current_cycle`
+    *has* advanced, so that same closure review actually belongs to a
+    *different*, already-finished cycle, and `resume_starting_cycle` is
+    a brand new cycle whose Claude call was never issued at all."""
+    from peos.checkpoint import RunCheckpoint
+
+    def _seed(active_phase: str, active_phase_state: str) -> RunCheckpoint:
+        return RunCheckpoint(
+            schema_version="1", run_id="run1", resume_generation=0, created_at="t0", updated_at="t0",
+            task="", authoritative_baseline="", governing_spec_relative_path="", governing_spec_content_hash="",
+            governing_spec_source="auto_detected", governing_spec_original_path="", effective_max_cycles=3,
+            active_phase=active_phase, active_phase_state=active_phase_state, last_safely_completed_phase="",
+            current_cycle=1, workspace_root_relative_path="", workspace_home_dir_relative_path="",
+            workspace_baseline_commit="", current_workspace_snapshot_identity="",
+        )
+
+    # Closure review still ENTERED -- belongs to resume_starting_cycle
+    # (=current_cycle+1=2) itself; its Claude call really did complete.
+    assert _remediation_claude_already_completed(_seed("CODEX_CLOSURE_REVIEW", "ENTERED")) is True
+    # Closure review COMPLETED -- belongs to the *previous* cycle (the
+    # one that advanced current_cycle to 1); resume_starting_cycle (2)
+    # is a brand new cycle whose Claude call was never issued.
+    assert _remediation_claude_already_completed(_seed("CODEX_CLOSURE_REVIEW", "COMPLETED")) is False
+
+
+def test_resume_right_after_a_closure_review_completes_issues_the_next_cycles_claude_call(tmp_path):
+    """Integration reproduction of the same bug: a checkpoint recording
+    cycle 1's CODEX_CLOSURE_REVIEW as COMPLETED (CHANGES_REQUIRED,
+    budget remaining) must have resume actually invoke cycle 2's Claude
+    call -- never silently skip it."""
+    from peos.checkpoint import CheckpointManager
+    from peos.resume import resume_run
+    from peos.run_lock import acquire_for_new_task
+    from peos.sandbox import create_isolated_workspace
+
+    repo_root = make_minimal_repo(tmp_path)
+    run_id = "resumetestrun1"
+    lock = acquire_for_new_task(repo_root, run_id)
+    manager = CheckpointManager(repo_root, run_id)
+    manager.enter("PLANNING", task="task", governing_spec_source="auto_detected", governing_spec_original_path="")
+    workspace = create_isolated_workspace(repo_root, run_id)
+    manager.complete(
+        "PLANNING",
+        governing_spec_relative_path="docs/specifications/SPEC-001-x.md",
+        workspace_root_relative_path=str(workspace.path.relative_to(repo_root)),
+        workspace_home_dir_relative_path=str(workspace.home_dir.relative_to(repo_root)),
+        workspace_baseline_commit=workspace.baseline_commit,
+        effective_max_cycles=3,
+    )
+    manager.enter("CODEX_INDEPENDENT_REVIEW")
+    manager.complete("CODEX_INDEPENDENT_REVIEW", codex_review_verdict_history=("CHANGES_REQUIRED",))
+    manager.enter("CLAUDE_REMEDIATION")
+    manager.complete("CLAUDE_REMEDIATION")
+    manager.enter("LOCAL_VERIFICATION")
+    manager.complete("LOCAL_VERIFICATION")
+    manager.enter("CODEX_CLOSURE_REVIEW")
+    manager.complete(
+        "CODEX_CLOSURE_REVIEW",
+        current_cycle=1,
+        codex_review_verdict_history=("CHANGES_REQUIRED", "CHANGES_REQUIRED"),
+    )
+    lock.release()
+
+    cycle2_claude_calls = []
+
+    def claude_runner(prompt, cwd, env=None, **kwargs):
+        cycle2_claude_calls.append(prompt)
+        return _ok_claude()
+
+    result = resume_run(
+        repo_root, run_id, log=lambda msg: None,
+        spec_resolver=_resolver_returns(_spec_for(repo_root)),
+        claude_runner=claude_runner,
+        verifier=lambda workspace, repo_root, plan: _pass_verification(),
+        codex_runner=lambda prompt, cwd, env=None, **kwargs: _approve_review(),
+        environ=_valid_environ(tmp_path),
+    )
+    assert len(cycle2_claude_calls) == 1  # cycle 2's Claude call was actually issued, never skipped
+    assert result.outcome == "APPROVED"
+    assert result.remediation_cycles_run == 2
+
+
+def test_resuming_an_interrupted_reconciliation_never_restarts_the_engineering_loop(tmp_path):
+    """Codex closure review (confirmed, major, new issue): a checkpoint
+    whose `active_phase` is `RECONCILIATION` means the engineering loop
+    *already* reached a terminal decision -- regardless of how much
+    cycle budget happened to remain unused. Resume must fail closed
+    (a named, accepted residual limitation) rather than silently
+    starting a brand new remediation cycle Codex never asked for."""
+    from peos.checkpoint import CheckpointManager
+    from peos.resume import resume_run
+    from peos.run_lock import acquire_for_new_task
+    from peos.sandbox import create_isolated_workspace
+
+    repo_root = make_minimal_repo(tmp_path)
+    run_id = "resumetestrun2"
+    lock = acquire_for_new_task(repo_root, run_id)
+    manager = CheckpointManager(repo_root, run_id)
+    manager.enter("PLANNING", task="task", governing_spec_source="auto_detected", governing_spec_original_path="")
+    workspace = create_isolated_workspace(repo_root, run_id)
+    manager.complete(
+        "PLANNING",
+        governing_spec_relative_path="docs/specifications/SPEC-001-x.md",
+        workspace_root_relative_path=str(workspace.path.relative_to(repo_root)),
+        workspace_home_dir_relative_path=str(workspace.home_dir.relative_to(repo_root)),
+        workspace_baseline_commit=workspace.baseline_commit,
+        effective_max_cycles=3,  # budget NOT exhausted -- current_cycle stays 0
+    )
+    manager.enter("CODEX_INDEPENDENT_REVIEW")
+    manager.complete("CODEX_INDEPENDENT_REVIEW", codex_review_verdict_history=("APPROVE",))
+    # approve() reached _reconcile(), which got as far as ENTERED before
+    # the interruption -- current_cycle is still 0 (budget untouched).
+    manager.enter("RECONCILIATION")
+    lock.release()
+
+    claude_calls = []
+
+    def claude_runner(prompt, cwd, env=None, **kwargs):
+        claude_calls.append(prompt)
+        return _ok_claude()
+
+    result = resume_run(
+        repo_root, run_id, log=lambda msg: None,
+        spec_resolver=_resolver_returns(_spec_for(repo_root)),
+        claude_runner=claude_runner,
+        verifier=lambda workspace, repo_root, plan: _pass_verification(),
+        codex_runner=lambda prompt, cwd, env=None, **kwargs: _approve_review(),
+        environ=_valid_environ(tmp_path),
+    )
+    assert len(claude_calls) == 0  # never started a new remediation cycle
+    assert result.outcome == "FAILED"
+    assert "RECONCILIATION" in (result.gate_reason or "") or "reconcil" in (result.gate_reason or "").lower()
+
+
+def test_claude_execution_not_completed_pauses_retryable_never_failed(tmp_path):
+    """SPEC-007 Decision 3/"Resumable vs. Non-Resumable Interruption
+    Classification": a positively-identified, stable-signal transient
+    agent-execution failure (the Claude subprocess itself never
+    completed, `returncode=-1`) must pause as `PAUSED_RETRYABLE`, never
+    `FAILED` -- distinct from an ordinary CLI failure with a real exit
+    code, which still fails closed as before (SPEC-003's existing
+    `test_governance_mutation_during_implementation_fails_closed` and
+    friends cover that unchanged case)."""
+    repo_root = make_minimal_repo(tmp_path)
+    result = run_workflow(
+        "task", repo_root, log=lambda msg: None,
+        spec_resolver=_resolver_returns(_spec_for(repo_root)),
+        claude_runner=lambda prompt, cwd, env=None: _execution_not_completed_claude(),
+        verifier=lambda workspace, repo_root, plan: _pass_verification(),
+        codex_runner=lambda prompt, cwd, env=None: _approve_review(),
+        workspace_factory=_fake_workspace_factory,
+        environ=_valid_environ(tmp_path),
+    )
+    assert result.outcome == "PAUSED_RETRYABLE"
+    assert result.gate_id is None
+
+    from peos.report import build_report
+    report = build_report(result, repo_root)
+    assert "PAUSED_RETRYABLE" in report
+
+
+def test_codex_execution_not_completed_pauses_retryable_never_failed(tmp_path):
+    repo_root = make_minimal_repo(tmp_path)
+
+    def exploding_codex(prompt, cwd, env=None, **kwargs):
+        return CodexReviewResult(
+            returncode=-1, verdict=None, summary="", findings=(), acceptance_criteria=(),
+            raw_stdout="", raw_stderr="", ok=False, error="Codex subprocess failed to run: timed out",
+        )
+
+    result = run_workflow(
+        "task", repo_root, log=lambda msg: None,
+        spec_resolver=_resolver_returns(_spec_for(repo_root)),
+        claude_runner=lambda prompt, cwd, env=None: _ok_claude(),
+        verifier=lambda workspace, repo_root, plan: _pass_verification(),
+        codex_runner=exploding_codex,
+        workspace_factory=_fake_workspace_factory,
+        environ=_valid_environ(tmp_path),
+    )
+    assert result.outcome == "PAUSED_RETRYABLE"
 
 
 def test_governance_mutation_during_implementation_fails_closed(tmp_path):
@@ -791,7 +995,7 @@ def test_reconciliation_failure_never_produces_approved(tmp_path, monkeypatch):
 
     repo_root = make_minimal_repo(tmp_path)
 
-    def exploding_reconcile(workspace, repo_root, protected_relative_paths=frozenset()):
+    def exploding_reconcile(workspace, repo_root, protected_relative_paths=frozenset(), **kwargs):
         raise RuntimeError("disk full, could not copy workspace changes back")
 
     monkeypatch.setattr(workflow_module, "reconcile_workspace_to_repo", exploding_reconcile)
@@ -824,7 +1028,7 @@ def test_reconciliation_failure_during_a_gate_is_reported_but_keeps_the_gate_out
 
     repo_root = make_minimal_repo(tmp_path)
 
-    def exploding_reconcile(workspace, repo_root, protected_relative_paths=frozenset()):
+    def exploding_reconcile(workspace, repo_root, protected_relative_paths=frozenset(), **kwargs):
         raise RuntimeError("copy-back exploded")
 
     monkeypatch.setattr(workflow_module, "reconcile_workspace_to_repo", exploding_reconcile)
@@ -1161,9 +1365,13 @@ def test_ac1_default_max_cycles_converges_using_two_remediation_cycles(tmp_path)
 
 def test_ac1_same_fixture_under_explicit_max_cycles_1_gates_instead():
     """Same scenario as above but with --max-cycles 1 explicit: must
-    stop at HUMAN_GATE #8 after exactly one remediation cycle -- this is
-    what catches a silent reintroduction of "default behaves like
-    max_cycles=1"."""
+    stop after exactly one remediation cycle -- this is what catches a
+    silent reintroduction of "default behaves like max_cycles=1".
+
+    SPEC-007 Decision 9 supersedes SPEC-004's original HUMAN_GATE #8
+    encoding of convergence exhaustion with a distinct, non-gate terminal
+    outcome, MAX_CYCLES_REACHED (AC-043) -- updated here accordingly.
+    """
     import tempfile
     tmp_path = Path(tempfile.mkdtemp())
     repo_root = make_minimal_repo(tmp_path)
@@ -1182,8 +1390,8 @@ def test_ac1_same_fixture_under_explicit_max_cycles_1_gates_instead():
         max_cycles=1,
     )
 
-    assert result.outcome == "HUMAN_GATE"
-    assert result.gate_id == "8"
+    assert result.outcome == "MAX_CYCLES_REACHED"
+    assert result.gate_id is None
     assert len(claude_calls) == 2
     assert len(codex_calls) == 2
 
@@ -1220,9 +1428,10 @@ def test_ac2_converges_only_on_the_last_of_three_remediation_cycles(tmp_path):
 
 
 def test_ac3_exhausting_max_cycles_always_changes_required_gates_never_approves(tmp_path):
-    """AC-3: max_cycles=3, Codex always CHANGES_REQUIRED -> HUMAN_GATE #8
-    after exactly 1 initial + 3 closure Codex calls, never a 4th
-    remediation cycle, never APPROVED."""
+    """AC-3: max_cycles=3, Codex always CHANGES_REQUIRED -> MAX_CYCLES_
+    REACHED (SPEC-007 Decision 9 -- see AC-043) after exactly 1 initial +
+    3 closure Codex calls, never a 4th remediation cycle, never
+    APPROVED."""
     repo_root = make_minimal_repo(tmp_path)
     codex_calls = []
 
@@ -1243,8 +1452,8 @@ def test_ac3_exhausting_max_cycles_always_changes_required_gates_never_approves(
         max_cycles=3,
     )
 
-    assert result.outcome == "HUMAN_GATE"
-    assert result.gate_id == "8"
+    assert result.outcome == "MAX_CYCLES_REACHED"
+    assert result.gate_id is None
     assert len(claude_calls) == 4  # implementation + 3 remediation cycles, never a 4th
     assert len(codex_calls) == 4  # initial + 3 closure reviews, never a 5th
     assert "3" in result.gate_reason

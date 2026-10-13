@@ -120,6 +120,24 @@ _NEXT_ACTION = {
         "uninterpretable agent output. Inspect the failure detail and the "
         "repository state below before re-running."
     ),
+    # SPEC-007 Decision 9/Resumable-Interruption Classification: both new
+    # outcomes. Codex implementation review (confirmed): an earlier
+    # revision added these outcomes to `peos/workflow.py` without adding
+    # the corresponding entries here, which `build_report` (called
+    # unconditionally by `peos/cli.py`'s `main()` for whatever outcome
+    # `run_workflow` returns) looks up with a bare `[]`, not `.get(...)`
+    # -- a real `KeyError` crash in production for either outcome.
+    "MAX_CYCLES_REACHED": (
+        "This run exhausted its configured remediation-cycle budget without Codex ever "
+        "reaching APPROVE. Inspect the Outstanding Findings Register below, then either "
+        "resolve the remaining findings yourself or re-run PEOS with a larger --max-cycles."
+    ),
+    "PAUSED_RETRYABLE": (
+        "This run paused after a transient agent-execution failure (the subprocess itself "
+        "never completed) -- it is not FAILED. Run `./bin/peos resume <run_id>` to continue "
+        "it, `./bin/peos inspect <run_id>` to see its current state, or `./bin/peos abandon "
+        "<run_id>` to give up on it."
+    ),
 }
 
 
