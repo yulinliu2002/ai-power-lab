@@ -19,6 +19,17 @@ export interface ScenarioThresholds {
   capacitance_f: number;
 }
 
+/**
+ * Additive extension of `ScenarioThresholds` (SPEC-008 §11) with the
+ * config fields Scenarios B-E's Protection Timelines cite that
+ * Scenario A's existing thresholds shape does not.
+ */
+export interface ProtectionScenarioThresholds extends ScenarioThresholds {
+  thermal_trip_time_s: number;
+  derate_factor_min: number;
+  floor_voltage_v: number;
+}
+
 export interface EventMarker {
   time_s: number;
   label: string;
@@ -38,12 +49,69 @@ export interface LoadStepTimeseries {
   grid_available: boolean[];
 }
 
+/** Mirrors `backend/schemas.py: StateSegmentModel` field-for-field. */
+export interface StateSegment {
+  state: string;
+  start_time_s: number;
+  end_time_s: number;
+  duration_s: number;
+  is_open_ended: boolean;
+}
+
+/** Mirrors `backend/schemas.py: TimelineEventModel` field-for-field. */
+export interface TimelineEvent {
+  time_s: number;
+  category: "protection_state" | "input_event" | "bus_energy";
+  label: string;
+  cause: string;
+  detail: string;
+}
+
+/**
+ * Mirrors `backend/schemas.py: ProtectionTimelineModel` field-for-field.
+ * `outcome_label`/`outcome_detail`/`recovery_label` are backend-owned
+ * display strings this frontend reads verbatim (SPEC-008 §11/§12) --
+ * never recomputed or rephrased here (AC-011, AC-014).
+ */
+export interface ProtectionTimeline {
+  segments: StateSegment[];
+  events: TimelineEvent[];
+  outcome: "RIDE_THROUGH" | "PROTECTION_TRIP" | "BUS_COLLAPSE_UNPROTECTED";
+  outcome_event_time_s: number | null;
+  outcome_label: string;
+  outcome_detail: string;
+  recovery: "RECOVERED" | "NOT_RECOVERED" | "NOT_APPLICABLE";
+  recovery_label: string;
+}
+
 export interface LoadStepResponse {
-  scenario: string;
+  scenario: "load_step";
   thresholds: ScenarioThresholds;
   events: EventMarker[];
   timeseries: LoadStepTimeseries;
+  protection_timeline: ProtectionTimeline;
 }
+
+export type ProtectionScenarioName =
+  | "sustained_high_load"
+  | "thermal_trip"
+  | "grid_sag"
+  | "grid_loss";
+
+export interface ProtectionScenarioResponse {
+  scenario: ProtectionScenarioName;
+  thresholds: ProtectionScenarioThresholds;
+  events: EventMarker[];
+  timeseries: LoadStepTimeseries;
+  protection_timeline: ProtectionTimeline;
+}
+
+export type ScenarioName = "load_step" | ProtectionScenarioName;
+
+/** Either response shape -- both share `timeseries`/`events`/
+ * `protection_timeline`, read generically everywhere except the
+ * Scenario-A-only sections that need `LoadStepResponse` specifically. */
+export type ScenarioRunResponse = LoadStepResponse | ProtectionScenarioResponse;
 
 /** One instant of the run -- every field read from the same index. */
 export interface Sample {
@@ -61,8 +129,9 @@ export interface Sample {
 /**
  * Selects one instant from an already-loaded run. This is pure index
  * selection -- no interpolation, no recomputation, no new physics.
+ * Accepts either response shape -- both share the same `timeseries`.
  */
-export function sampleAt(data: LoadStepResponse, index: number): Sample {
+export function sampleAt(data: { timeseries: LoadStepTimeseries }, index: number): Sample {
   const t = data.timeseries;
   return {
     t_s: t.time_s[index],
@@ -112,4 +181,33 @@ export async function fetchLoadStep(
   }
 
   return response.json();
+}
+
+/**
+ * Runs one of Scenarios B-E (fixed preset, no parameters -- SPEC-008
+ * §11 Engineering Lead Decision 6) via the one shared GET endpoint.
+ */
+export async function fetchProtectionScenario(
+  scenario: ProtectionScenarioName,
+): Promise<ProtectionScenarioResponse> {
+  const response = await fetch(
+    `${API_BASE_URL}/api/v1/simulations/protection-scenarios/${scenario}`,
+  );
+
+  if (!response.ok) {
+    throw new Error(`Simulation request failed: HTTP ${response.status}`);
+  }
+
+  return response.json();
+}
+
+/**
+ * Dispatches to the correct endpoint for any of the five named
+ * scenarios (SPEC-008 §12) -- Load Step keeps using its existing
+ * endpoint/behavior unchanged; the other four share the one new
+ * endpoint above.
+ */
+export async function fetchScenario(scenario: ScenarioName): Promise<ScenarioRunResponse> {
+  if (scenario === "load_step") return fetchLoadStep();
+  return fetchProtectionScenario(scenario);
 }

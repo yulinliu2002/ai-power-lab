@@ -11,14 +11,19 @@ import {
 } from "./components/ExperimentPanel";
 import { KpiReadout } from "./components/KpiTile";
 import { PowerFlowSchematic } from "./components/PowerFlowSchematic";
+import { ProtectionTimeline } from "./components/ProtectionTimeline";
+import { SCENARIO_OPTIONS, ScenarioSelector } from "./components/ScenarioSelector";
 import { SensitivityStudy } from "./components/SensitivityStudy";
 import { TelemetryChart } from "./components/TelemetryChart";
 import { TimeScrubber } from "./components/TimeScrubber";
 import { TransientMetricsPanel } from "./components/TransientMetricsPanel";
 import {
   fetchLoadStep,
+  fetchScenario,
   sampleAt,
   type LoadStepResponse,
+  type ScenarioName,
+  type ScenarioRunResponse,
   type Sample,
 } from "./lib/simulationApi";
 import { busStatus, sstStatus } from "./lib/statusRoles";
@@ -58,21 +63,38 @@ function defaultIndexFor(data: LoadStepResponse): number {
 type LoadState =
   | { status: "loading" }
   | { status: "error"; message: string }
-  | { status: "ready"; data: LoadStepResponse };
+  | { status: "ready"; data: ScenarioRunResponse };
+
+const SCENARIO_LABEL: Record<ScenarioName, string> = Object.fromEntries(
+  SCENARIO_OPTIONS.map((option) => [option.key, option.label]),
+) as Record<ScenarioName, string>;
 
 export default function Home() {
   const [state, setState] = useState<LoadState>({ status: "loading" });
+  const [activeScenario, setActiveScenario] = useState<ScenarioName>("load_step");
   const [index, setIndex] = useState(0);
   const [draftParams, setDraftParams] = useState<ExperimentParams>(BASELINE_EXPERIMENT_PARAMS);
   const [isRunning, setIsRunning] = useState(false);
   const [runError, setRunError] = useState<string | null>(null);
   const requestedRef = useRef(false);
 
+  // Monotonically increasing request generation. Every fetch-starting
+  // action (initial load, a scenario selection, an experiment run)
+  // takes the next number and only applies its result if it is still
+  // the most recent request when it resolves -- so a slow RUN
+  // EXPERIMENT response can never land after (and overwrite) a
+  // scenario switched to in the meantime, or vice versa (SPEC-008
+  // AC-009: no stale value is ever shown, regardless of which request
+  // started it or finishes last).
+  const requestGenerationRef = useRef(0);
+
   // Shared by the initial load and every later RUN EXPERIMENT /
   // RESET click -- one fetch, one returned dataset, one place that
   // replaces `state`. No component below this ever fetches on its
-  // own.
+  // own. Only reachable while Load Step is selected (the Advanced
+  // Experiment panel is Scenario-A-only, §12).
   const runExperiment = useCallback((params: ExperimentParams) => {
+    const generation = ++requestGenerationRef.current;
     setIsRunning(true);
     setRunError(null);
     fetchLoadStep({
@@ -81,14 +103,49 @@ export default function Home() {
       time_constant_s: params.timeConstantS,
     })
       .then((data) => {
+        if (requestGenerationRef.current !== generation) return;
         setState({ status: "ready", data });
         setIndex(defaultIndexFor(data));
       })
       .catch((error: unknown) => {
+        if (requestGenerationRef.current !== generation) return;
         setRunError(error instanceof Error ? error.message : "Unknown error");
       })
       .finally(() => {
-        setIsRunning(false);
+        if (requestGenerationRef.current === generation) setIsRunning(false);
+      });
+  }, []);
+
+  // Selecting any scenario option (SPEC-008 AC-009): clears to the
+  // same "loading" placeholder the initial mount uses, so no stale
+  // KPI/schematic/chart/Timeline value from the previous scenario is
+  // ever visible underneath the new fetch, then dispatches to the
+  // matching endpoint (Load Step's existing one, or the one shared
+  // GET endpoint for Scenarios B-E).
+  const selectScenario = useCallback((scenario: ScenarioName) => {
+    const generation = ++requestGenerationRef.current;
+    setActiveScenario(scenario);
+    setState({ status: "loading" });
+    // Supersedes any in-flight RUN EXPERIMENT request (its own stale
+    // generation check will now skip applying its result) -- also
+    // clear its "Running…" state directly, since that request's own
+    // `finally` will no longer run it (the experiment panel this
+    // guards is Load Step-only, so this is a no-op unless one was
+    // actually in flight).
+    setIsRunning(false);
+    setRunError(null);
+    fetchScenario(scenario)
+      .then((data) => {
+        if (requestGenerationRef.current !== generation) return;
+        setState({ status: "ready", data });
+        setIndex(scenario === "load_step" ? defaultIndexFor(data as LoadStepResponse) : 0);
+      })
+      .catch((error: unknown) => {
+        if (requestGenerationRef.current !== generation) return;
+        setState({
+          status: "error",
+          message: error instanceof Error ? error.message : "Unknown error",
+        });
       });
   }, []);
 
@@ -100,12 +157,15 @@ export default function Home() {
     if (requestedRef.current) return;
     requestedRef.current = true;
 
+    const generation = ++requestGenerationRef.current;
     fetchLoadStep()
       .then((data) => {
+        if (requestGenerationRef.current !== generation) return;
         setState({ status: "ready", data });
         setIndex(defaultIndexFor(data));
       })
       .catch((error: unknown) => {
+        if (requestGenerationRef.current !== generation) return;
         setState({
           status: "error",
           message: error instanceof Error ? error.message : "Unknown error",
@@ -130,9 +190,15 @@ export default function Home() {
           </p>
         </div>
         <p className="text-[11px] font-semibold uppercase tracking-[0.04em] text-muted">
-          Scenario A &mdash; AI Load Step
+          {SCENARIO_LABEL[activeScenario]}
         </p>
       </header>
+
+      <ScenarioSelector
+        selected={activeScenario}
+        onSelect={selectScenario}
+        disabled={state.status === "loading"}
+      />
 
       {state.status === "loading" && (
         <p className="font-mono text-xs text-muted">LOADING TELEMETRY&hellip;</p>
@@ -172,7 +238,7 @@ function Console({
   isRunning,
   runError,
 }: {
-  data: LoadStepResponse;
+  data: ScenarioRunResponse;
   index: number;
   onIndexChange: (index: number) => void;
   draftParams: ExperimentParams;
@@ -183,6 +249,7 @@ function Console({
   runError: string | null;
 }) {
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  const isLoadStep = data.scenario === "load_step";
 
   // One index selected from the already-loaded run -- no new
   // simulation run, no new API request, no interpolation.
@@ -192,8 +259,14 @@ function Console({
   const event = data.events[0];
 
   // Fixed analysis over the whole run, computed once per fetched
-  // response -- not recomputed on every scrubber move.
-  const metrics = useMemo(() => computeTransientMetrics(data), [data]);
+  // response -- not recomputed on every scrubber move. Scenario-A-only
+  // (SPEC-008 §12): `computeTransientMetrics` anchors to `events[0]`,
+  // which is absent or protection-derived (not a load event) for
+  // Scenarios B-E, so it is never called for them.
+  const metrics = useMemo(
+    () => (isLoadStep ? computeTransientMetrics(data as LoadStepResponse) : null),
+    [data, isLoadStep],
+  );
 
   // The initial (pre-step) P_load sample is always real engine
   // output, never a hardcoded "160" -- and since INITIAL_FRACTION is
@@ -205,7 +278,7 @@ function Console({
 
   return (
     <div className="flex flex-col gap-3">
-      {event && (
+      {isLoadStep && event && (
         <EventBanner initialKw={initialPLoadKw} finalKw={finalPLoadKw} stepTimeS={event.time_s} />
       )}
 
@@ -224,6 +297,8 @@ function Console({
           voltageReferenceV={data.thresholds.voltage_reference_v}
         />
       )}
+
+      <ProtectionTimeline timeline={data.protection_timeline} />
 
       <TimeScrubber timeS={timeS} index={index} onChange={onIndexChange} />
 
@@ -302,30 +377,32 @@ function Console({
         />
       )}
 
-      <div className="flex flex-col gap-1.5 border-t border-hairline pt-2">
-        <button
-          type="button"
-          onClick={() => setAdvancedOpen((open) => !open)}
-          className="flex items-center gap-1.5 self-start font-sans text-[10.5px] font-semibold uppercase tracking-[0.04em] text-muted"
-        >
-          <span className="font-mono text-[12px] leading-none">{advancedOpen ? "−" : "+"}</span>
-          Advanced Experiment
-        </button>
-        {advancedOpen && (
-          <ExperimentPanel
-            draft={draftParams}
-            onDraftChange={onDraftChange}
-            onRun={onRun}
-            onReset={onReset}
-            isRunning={isRunning}
-            initialPLoadKw={initialPLoadKw}
-            loadRatedPowerW={loadRatedPowerW}
-            error={runError}
-          />
-        )}
-      </div>
+      {isLoadStep && (
+        <div className="flex flex-col gap-1.5 border-t border-hairline pt-2">
+          <button
+            type="button"
+            onClick={() => setAdvancedOpen((open) => !open)}
+            className="flex items-center gap-1.5 self-start font-sans text-[10.5px] font-semibold uppercase tracking-[0.04em] text-muted"
+          >
+            <span className="font-mono text-[12px] leading-none">{advancedOpen ? "−" : "+"}</span>
+            Advanced Experiment
+          </button>
+          {advancedOpen && (
+            <ExperimentPanel
+              draft={draftParams}
+              onDraftChange={onDraftChange}
+              onRun={onRun}
+              onReset={onReset}
+              isRunning={isRunning}
+              initialPLoadKw={initialPLoadKw}
+              loadRatedPowerW={loadRatedPowerW}
+              error={runError}
+            />
+          )}
+        </div>
+      )}
 
-      <SensitivityStudy draft={draftParams} />
+      {isLoadStep && <SensitivityStudy draft={draftParams} />}
     </div>
   );
 }

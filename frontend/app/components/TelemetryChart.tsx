@@ -102,8 +102,11 @@ export function TelemetryChart({
   const xMax = timeS[timeS.length - 1];
 
   const allValues = series.flatMap((s) => s.values).concat(referenceLines.map((r) => r.value));
-  const dataMin = Math.min(...allValues);
-  const dataMax = Math.max(...allValues);
+  // A plain reduce, not Math.min(...allValues) -- spreading a long
+  // series (e.g. Sustained High Load's ~200,000 samples) as call
+  // arguments exceeds the engine's call-stack/argument-count limit.
+  const dataMin = allValues.reduce((min, v) => Math.min(min, v), Infinity);
+  const dataMax = allValues.reduce((max, v) => Math.max(max, v), -Infinity);
   const span = dataMax - dataMin || 1;
   const yMin = dataMin - span * 0.1;
   const yMax = dataMax + span * 0.1;

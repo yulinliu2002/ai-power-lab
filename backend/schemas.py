@@ -102,6 +102,47 @@ class LoadStepTimeseries(BaseModel):
     grid_available: list[bool]
 
 
+class StateSegmentModel(BaseModel):
+    """Mirrors `dashboard.adapters.protection_timeline.StateSegment`
+    field-for-field -- see that module for units/governing rules.
+    """
+
+    state: str
+    start_time_s: float
+    end_time_s: float
+    duration_s: float
+    is_open_ended: bool
+
+
+class TimelineEventModel(BaseModel):
+    """Mirrors `dashboard.adapters.protection_timeline.TimelineEvent`
+    field-for-field.
+    """
+
+    time_s: float
+    category: str
+    label: str
+    cause: str
+    detail: str
+
+
+class ProtectionTimelineModel(BaseModel):
+    """Mirrors `dashboard.adapters.protection_timeline.ProtectionTimeline`
+    field-for-field. `outcome`/`recovery` are the enum's string value;
+    `outcome_label`/`outcome_detail`/`recovery_label` are backend-owned
+    display strings the frontend reads verbatim (SPEC-008 §11/§12).
+    """
+
+    segments: list[StateSegmentModel]
+    events: list[TimelineEventModel]
+    outcome: str
+    outcome_event_time_s: float | None
+    outcome_label: str
+    outcome_detail: str
+    recovery: str
+    recovery_label: str
+
+
 class LoadStepResponse(BaseModel):
     """Response body for POST /api/v1/simulations/load-step."""
 
@@ -109,6 +150,32 @@ class LoadStepResponse(BaseModel):
     thresholds: ScenarioThresholds
     events: list[EventMarker]
     timeseries: LoadStepTimeseries
+    protection_timeline: ProtectionTimelineModel
+
+
+class ProtectionScenarioThresholds(ScenarioThresholds):
+    """Additive extension of `ScenarioThresholds` (SPEC-008 §11) with
+    the config fields Scenarios B-E's Protection Timelines cite that
+    Scenario A's existing thresholds shape does not.
+    """
+
+    thermal_trip_time_s: float
+    derate_factor_min: float
+    floor_voltage_v: float
+
+
+class ProtectionScenarioResponse(BaseModel):
+    """Response body for GET /api/v1/simulations/protection-scenarios/{scenario}.
+
+    Mirrors `LoadStepResponse`'s shape exactly, with
+    `ProtectionScenarioThresholds` in place of `ScenarioThresholds`.
+    """
+
+    scenario: str
+    thresholds: ProtectionScenarioThresholds
+    events: list[EventMarker]
+    timeseries: LoadStepTimeseries
+    protection_timeline: ProtectionTimelineModel
 
 
 class HealthResponse(BaseModel):
