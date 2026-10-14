@@ -9,6 +9,12 @@ authority are defined in `AGENTS.md`. This file covers the process itself.
 The repository, specifications, tests, and validation evidence are the
 shared engineering source of truth. **Chat history is not.**
 
+Before proposing a new specification, prioritizing roadmap work, or evaluating a
+scope change, consult `PROJECT_CHARTER.md` for the project's strategic direction
+(product and career ROI, maturity progression, anti-feature-creep rule). The
+charter defines *why*; this file defines *how*. It does not add process for
+routine implementation work.
+
 ## Purpose
 
 PEOS must improve engineering traceability, implementation consistency,
