@@ -134,6 +134,104 @@ class RecoveryStatus(Enum):
     NOT_APPLICABLE = "NOT_APPLICABLE"  # outcome == PROTECTION_TRIP only, §9
 
 
+class CoordinationResult(Enum):
+    """SPEC-009 §6 -- a fixed, five-member, non-causal classification of
+    the ordering of `trip_event_time_s` and `bus_collapse_event_time_s`.
+    Strictly more granular than `RideThroughOutcome`: it is the one
+    place that also records whether protection ever acted at all, even
+    when it acted after an already-determined bus collapse.
+    """
+
+    NO_TERMINAL_EVENT = "NO_TERMINAL_EVENT"
+    PROTECTION_ACTED_NO_VIABILITY_LOSS = "PROTECTION_ACTED_NO_VIABILITY_LOSS"
+    PROTECTION_ACTED_BEFORE_VIABILITY_LOSS = "PROTECTION_ACTED_BEFORE_VIABILITY_LOSS"
+    VIABILITY_LOST_NO_PROTECTION_ACTION = "VIABILITY_LOST_NO_PROTECTION_ACTION"
+    VIABILITY_LOST_BEFORE_PROTECTION_ACTION = "VIABILITY_LOST_BEFORE_PROTECTION_ACTION"
+
+
+@dataclass(frozen=True)
+class EventSeparation:
+    """One non-negative time interval between two named events (SPEC-009
+    §6.1). `label` states the chronological direction except for the
+    one tied case, where it is a fixed, non-directional label and
+    `duration_s == 0.0`.
+    """
+
+    label: str
+    from_time_s: float
+    to_time_s: float
+    duration_s: float
+
+
+@dataclass(frozen=True)
+class CoordinationAnalysis:
+    """SPEC-009 §6 -- derived, additive classification of the two
+    already-computed terminal-event candidate times. Adds no new
+    telemetry scan and no new physical quantity.
+    """
+
+    result: CoordinationResult
+    result_label: str  # backend-owned, verbatim (SPEC-009 §8)
+    result_detail: str  # backend-owned, verbatim (SPEC-009 §8)
+    derating_preceded_terminal_event: bool | None
+    separations: tuple[EventSeparation, ...]
+
+
+@dataclass(frozen=True)
+class CoverageEntry:
+    """One row of the static protection-coverage matrix (SPEC-009 §5)."""
+
+    function: str
+    modeled: bool
+    detail: str
+
+
+#: Static, run-independent fact about `src/protection.py`'s
+#: implementation (SPEC-009 §5) -- the same five rows for every run.
+#: Every `modeled=False` row traces to a sentence already in
+#: `src/protection.py`'s own docstring or to the literal absence of a
+#: corresponding parameter/branch there -- never inferred from a
+#: particular scenario's telemetry, and never a claim about real
+#: hardware.
+PROTECTION_COVERAGE: tuple[CoverageEntry, ...] = (
+    CoverageEntry(
+        function="Sustained thermal overtemperature",
+        modeled=True,
+        detail="src/protection.py: debounced (thermal_trip_time_s), latched TRIPPED state.",
+    ),
+    CoverageEntry(
+        function="DC-bus undervoltage",
+        modeled=False,
+        detail=(
+            "No voltage-based trip exists in src/protection.py. The numerical energy floor "
+            "(dashboard bus_energy events) is an observation of src/dc_bus.py's energy "
+            "floor, never a protection action."
+        ),
+    ),
+    CoverageEntry(
+        function="DC-bus overvoltage",
+        modeled=False,
+        detail="Same basis as DC-bus undervoltage: no voltage-based trip of any kind exists.",
+    ),
+    CoverageEntry(
+        function="Automatic trip reset",
+        modeled=False,
+        detail=(
+            "src/protection.py's own module docstring: 'No reset mechanism... TRIPPED state "
+            "stays TRIPPED for the rest of the scenario.'"
+        ),
+    ),
+    CoverageEntry(
+        function="Grid-availability-based protection",
+        modeled=False,
+        detail=(
+            "No grid_available-driven protection logic exists in src/protection.py; "
+            "grid loss is handled only as a load/source condition in src/simulation.py."
+        ),
+    ),
+)
+
+
 @dataclass(frozen=True)
 class ProtectionTimeline:
     segments: tuple[StateSegment, ...]
@@ -148,6 +246,16 @@ class ProtectionTimeline:
     recovery: RecoveryStatus
     recovery_label: str  # backend-owned plain-English label --
     # frontend reads verbatim.
+    trip_event_time_s: float | None  # SPEC-009 §3 -- the first
+    # `trip_active=True` sample, exposed from `_classify_outcome`'s own
+    # internal computation; None if the run never trips.
+    bus_collapse_event_time_s: float | None  # SPEC-009 §3 -- the first
+    # numerical-floor-contact sample, exposed from `_classify_outcome`'s
+    # own internal computation; None if the bus never reaches the floor.
+    coordination: CoordinationAnalysis  # SPEC-009 §6.
+    coverage: tuple[CoverageEntry, ...]  # SPEC-009 §5 -- always
+    # `PROTECTION_COVERAGE`, attached per-run for presentation
+    # uniformity only (static, identical across every call).
 
 
 def build_protection_timeline(
@@ -205,6 +313,10 @@ def build_protection_timeline(
     recovery = _classify_recovery(telemetry, outcome, config.controller.voltage_reference_v)
     recovery_label = _RECOVERY_LABELS[recovery]
 
+    coordination = classify_coordination(
+        trip_event_time_s, bus_collapse_event_time_s, segments, outcome_event_time_s
+    )
+
     return ProtectionTimeline(
         segments=segments,
         events=events,
@@ -214,6 +326,10 @@ def build_protection_timeline(
         outcome_detail=outcome_detail,
         recovery=recovery,
         recovery_label=recovery_label,
+        trip_event_time_s=trip_event_time_s,
+        bus_collapse_event_time_s=bus_collapse_event_time_s,
+        coordination=coordination,
+        coverage=PROTECTION_COVERAGE,
     )
 
 
@@ -495,3 +611,214 @@ def _classify_recovery(
     if last_breach_idx == n - 1:
         return RecoveryStatus.NOT_RECOVERED
     return RecoveryStatus.RECOVERED
+
+
+_COORDINATION_LABELS = {
+    CoordinationResult.NO_TERMINAL_EVENT: "No terminal protection or bus-energy event",
+    CoordinationResult.PROTECTION_ACTED_NO_VIABILITY_LOSS: (
+        "Thermal protection acted; DC-bus viability was never lost"
+    ),
+    CoordinationResult.PROTECTION_ACTED_BEFORE_VIABILITY_LOSS: (
+        "Thermal protection acted before DC-bus viability was lost"
+    ),
+    CoordinationResult.VIABILITY_LOST_NO_PROTECTION_ACTION: (
+        "DC-bus viability was lost; thermal protection never acted"
+    ),
+    CoordinationResult.VIABILITY_LOST_BEFORE_PROTECTION_ACTION: (
+        "DC-bus viability was lost before the modeled thermal trip"
+    ),
+}
+
+
+def _describe_coordination(
+    result: CoordinationResult,
+    trip_event_time_s: float | None,
+    bus_collapse_event_time_s: float | None,
+) -> tuple[str, str]:
+    """Backend-owned label/detail text for `CoordinationResult` (SPEC-009
+    §6) -- no causal language anywhere; the tied case (§6 case 3a) is
+    worded to state the two events share the exact same recorded
+    sample, and must never contain the word "before".
+    """
+    if (
+        result is CoordinationResult.PROTECTION_ACTED_BEFORE_VIABILITY_LOSS
+        and trip_event_time_s is not None
+        and trip_event_time_s == bus_collapse_event_time_s
+    ):
+        # Exact-timestep tie (§6 case 3a) -- the label must never say
+        # "before" either, not only the detail text.
+        label = "Thermal protection acted at the same recorded sample as DC-bus viability loss"
+    else:
+        label = _COORDINATION_LABELS[result]
+
+    if result is CoordinationResult.NO_TERMINAL_EVENT:
+        detail = (
+            "No terminal protection action or bus-energy-floor event occurred at any point "
+            "in this run -- equivalent to outcome == RIDE_THROUGH."
+        )
+    elif result is CoordinationResult.PROTECTION_ACTED_NO_VIABILITY_LOSS:
+        assert trip_event_time_s is not None
+        detail = (
+            f"Thermal protection latched TRIPPED at t = {trip_event_time_s:.3f} s; the DC bus "
+            "never reached its numerical energy floor at any point in this run."
+        )
+    elif result is CoordinationResult.PROTECTION_ACTED_BEFORE_VIABILITY_LOSS:
+        assert trip_event_time_s is not None and bus_collapse_event_time_s is not None
+        if trip_event_time_s == bus_collapse_event_time_s:
+            detail = (
+                "Thermal protection latched TRIPPED at the same recorded sample the bus "
+                f"reached its numerical energy floor (t = {trip_event_time_s:.3f} s) -- an "
+                "exact-timestep tie, resolved toward 'protection acted' by an explicit, "
+                "non-causal convention (SPEC-008 §9), not because one event preceded or "
+                "caused the other."
+            )
+        else:
+            detail = (
+                f"Thermal protection latched TRIPPED at t = {trip_event_time_s:.3f} s, before "
+                "the DC bus reached its numerical energy floor at "
+                f"t = {bus_collapse_event_time_s:.3f} s."
+            )
+    elif result is CoordinationResult.VIABILITY_LOST_NO_PROTECTION_ACTION:
+        assert bus_collapse_event_time_s is not None
+        detail = (
+            "The DC bus reached its numerical energy floor at "
+            f"t = {bus_collapse_event_time_s:.3f} s; thermal protection never latched TRIPPED "
+            "at any point in this run."
+        )
+    else:  # VIABILITY_LOST_BEFORE_PROTECTION_ACTION
+        assert trip_event_time_s is not None and bus_collapse_event_time_s is not None
+        detail = (
+            "The DC bus reached its numerical energy floor at "
+            f"t = {bus_collapse_event_time_s:.3f} s, before thermal protection later latched "
+            f"TRIPPED at t = {trip_event_time_s:.3f} s."
+        )
+
+    return label, detail
+
+
+def _classify_coordination_result(
+    trip_event_time_s: float | None,
+    bus_collapse_event_time_s: float | None,
+) -> CoordinationResult:
+    """Total function over the four nullability/ordering combinations
+    (SPEC-009 §6). The exact-timestep tie (§6 case 3a) reuses
+    `_classify_outcome`'s own `<=` tie-break convention exactly, so
+    `CoordinationResult` never disagrees with `outcome` about which
+    classification a tie resolves to.
+    """
+    if trip_event_time_s is None and bus_collapse_event_time_s is None:
+        return CoordinationResult.NO_TERMINAL_EVENT
+    if trip_event_time_s is not None and bus_collapse_event_time_s is None:
+        return CoordinationResult.PROTECTION_ACTED_NO_VIABILITY_LOSS
+    if trip_event_time_s is None and bus_collapse_event_time_s is not None:
+        return CoordinationResult.VIABILITY_LOST_NO_PROTECTION_ACTION
+    assert trip_event_time_s is not None and bus_collapse_event_time_s is not None
+    if trip_event_time_s <= bus_collapse_event_time_s:
+        return CoordinationResult.PROTECTION_ACTED_BEFORE_VIABILITY_LOSS
+    return CoordinationResult.VIABILITY_LOST_BEFORE_PROTECTION_ACTION
+
+
+def _derating_preceded_terminal_event(
+    first_derated_start_s: float | None,
+    outcome_event_time_s: float | None,
+) -> bool | None:
+    """SPEC-009 §6.1 -- one comparison target (`outcome_event_time_s`),
+    an explicit rule for every case. `None` if either side of the
+    comparison does not exist; otherwise a strict `<` comparison.
+    """
+    if outcome_event_time_s is None or first_derated_start_s is None:
+        return None
+    return first_derated_start_s < outcome_event_time_s
+
+
+def _build_separations(
+    trip_event_time_s: float | None,
+    bus_collapse_event_time_s: float | None,
+    derating_preceded_terminal_event: bool | None,
+    first_derated_start_s: float | None,
+    outcome_event_time_s: float | None,
+) -> tuple[EventSeparation, ...]:
+    """SPEC-009 §6.1 -- exactly two small, explicit rules; never a loop
+    populating every possible pair, and never a negative `duration_s`.
+    """
+    separations: list[EventSeparation] = []
+
+    if trip_event_time_s is not None and bus_collapse_event_time_s is not None:
+        if trip_event_time_s == bus_collapse_event_time_s:
+            separations.append(
+                EventSeparation(
+                    label="Thermal trip / bus energy floor — same recorded sample",
+                    from_time_s=trip_event_time_s,
+                    to_time_s=trip_event_time_s,
+                    duration_s=0.0,
+                )
+            )
+        elif bus_collapse_event_time_s < trip_event_time_s:
+            separations.append(
+                EventSeparation(
+                    label="Bus energy floor -> thermal trip",
+                    from_time_s=bus_collapse_event_time_s,
+                    to_time_s=trip_event_time_s,
+                    duration_s=trip_event_time_s - bus_collapse_event_time_s,
+                )
+            )
+        else:
+            separations.append(
+                EventSeparation(
+                    label="Thermal trip -> bus energy floor",
+                    from_time_s=trip_event_time_s,
+                    to_time_s=bus_collapse_event_time_s,
+                    duration_s=bus_collapse_event_time_s - trip_event_time_s,
+                )
+            )
+
+    if derating_preceded_terminal_event is True:
+        assert first_derated_start_s is not None and outcome_event_time_s is not None
+        separations.append(
+            EventSeparation(
+                label="Derating begins -> terminal event",
+                from_time_s=first_derated_start_s,
+                to_time_s=outcome_event_time_s,
+                duration_s=outcome_event_time_s - first_derated_start_s,
+            )
+        )
+
+    return tuple(separations)
+
+
+def classify_coordination(
+    trip_event_time_s: float | None,
+    bus_collapse_event_time_s: float | None,
+    segments: tuple[StateSegment, ...],
+    outcome_event_time_s: float | None,
+) -> CoordinationAnalysis:
+    """Derive `CoordinationAnalysis` from the two already-computed
+    terminal-event candidate times plus `segments` (SPEC-009 §6/§6.1).
+    Performs no telemetry scan of its own.
+    """
+    result = _classify_coordination_result(trip_event_time_s, bus_collapse_event_time_s)
+    result_label, result_detail = _describe_coordination(
+        result, trip_event_time_s, bus_collapse_event_time_s
+    )
+
+    first_derated_start_s = next(
+        (s.start_time_s for s in segments if s.state == "DERATED"), None
+    )
+    derating_preceded_terminal_event = _derating_preceded_terminal_event(
+        first_derated_start_s, outcome_event_time_s
+    )
+    separations = _build_separations(
+        trip_event_time_s,
+        bus_collapse_event_time_s,
+        derating_preceded_terminal_event,
+        first_derated_start_s,
+        outcome_event_time_s,
+    )
+
+    return CoordinationAnalysis(
+        result=result,
+        result_label=result_label,
+        result_detail=result_detail,
+        derating_preceded_terminal_event=derating_preceded_terminal_event,
+        separations=separations,
+    )

@@ -44,6 +44,27 @@ def _timeline_to_dict(timeline) -> dict:
         "outcome_detail": timeline.outcome_detail,
         "recovery": timeline.recovery.value,
         "recovery_label": timeline.recovery_label,
+        "trip_event_time_s": timeline.trip_event_time_s,
+        "bus_collapse_event_time_s": timeline.bus_collapse_event_time_s,
+        "coordination": {
+            "result": timeline.coordination.result.value,
+            "result_label": timeline.coordination.result_label,
+            "result_detail": timeline.coordination.result_detail,
+            "derating_preceded_terminal_event": timeline.coordination.derating_preceded_terminal_event,
+            "separations": [
+                {
+                    "label": sep.label,
+                    "from_time_s": sep.from_time_s,
+                    "to_time_s": sep.to_time_s,
+                    "duration_s": sep.duration_s,
+                }
+                for sep in timeline.coordination.separations
+            ],
+        },
+        "coverage": [
+            {"function": c.function, "modeled": c.modeled, "detail": c.detail}
+            for c in timeline.coverage
+        ],
     }
 
 
@@ -301,7 +322,8 @@ def test_protection_scenario_response_schema_shape() -> None:
     }
     assert set(body["protection_timeline"].keys()) == {
         "segments", "events", "outcome", "outcome_event_time_s", "outcome_label", "outcome_detail",
-        "recovery", "recovery_label",
+        "recovery", "recovery_label", "trip_event_time_s", "bus_collapse_event_time_s",
+        "coordination", "coverage",
     }
 
 

@@ -15,12 +15,20 @@ import re
 import numpy as np
 import pytest
 
+import inspect
+
 from dashboard.adapters import simulation_adapter as adapter
 from dashboard.adapters.protection_timeline import (
+    CoordinationResult,
+    PROTECTION_COVERAGE,
     RecoveryStatus,
     RideThroughOutcome,
+    _first_floor_contact_time,
+    _first_true_time,
     build_protection_timeline,
 )
+from src.dc_bus import voltage_from_energy
+from src.protection import OperatingState, step_protection
 from src.config import (
     Config,
     ControllerConfig,
@@ -411,3 +419,280 @@ def test_exact_timestep_tie_breaks_toward_protection_trip() -> None:
     # exactly equal.
     assert "before" not in timeline.outcome_detail
     assert "tie" in timeline.outcome_detail.lower()
+
+
+# --------------------------------------------------------------------------
+# SPEC-009 AC-027: new fields exposed, real scenarios
+# --------------------------------------------------------------------------
+
+
+def test_thermal_trip_exposes_both_terminal_event_times() -> None:
+    result = adapter.run_thermal_trip()
+    timeline = build_protection_timeline(result.telemetry, result.config, [])
+    assert timeline.trip_event_time_s == pytest.approx(46.147, abs=1e-3)
+    assert timeline.bus_collapse_event_time_s == pytest.approx(14.446, abs=1e-3)
+
+
+@pytest.mark.parametrize(
+    "scenario_fn,input_events_filtered",
+    [
+        (adapter.run_load_step, False),
+        (adapter.run_sustained_high_load, False),
+        (adapter.run_thermal_trip, True),
+        (adapter.run_grid_sag, False),
+        (adapter.run_grid_loss, False),
+    ],
+)
+def test_real_scenarios_terminal_event_times_match_direct_computation(
+    scenario_fn, input_events_filtered: bool
+) -> None:
+    """AC-027: for each of the five scenarios, the exposed fields match
+    direct computation via `_first_true_time`/`_first_floor_contact_time`
+    on that scenario's real telemetry -- no synthetic fixtures, and no
+    weaker "is not None" substitute for the real value."""
+    result = scenario_fn()
+    input_events = [] if input_events_filtered else result.events
+    telemetry = result.telemetry
+    config = result.config
+    timeline = build_protection_timeline(telemetry, config, input_events)
+
+    floor_v = voltage_from_energy(config.dc_bus.min_energy_j, config.dc_bus.capacitance_f)
+    expected_trip = _first_true_time(telemetry.trip_active, telemetry.time_s)
+    expected_collapse = _first_floor_contact_time(telemetry, floor_v)
+
+    assert timeline.trip_event_time_s == expected_trip
+    assert timeline.bus_collapse_event_time_s == expected_collapse
+
+
+# --------------------------------------------------------------------------
+# SPEC-009 AC-028: coordination classification, real scenarios
+# --------------------------------------------------------------------------
+
+
+def test_thermal_trip_coordination_classification_and_separations() -> None:
+    result = adapter.run_thermal_trip()
+    timeline = build_protection_timeline(result.telemetry, result.config, [])
+    coordination = timeline.coordination
+
+    assert coordination.result is CoordinationResult.VIABILITY_LOST_BEFORE_PROTECTION_ACTION
+    assert len(coordination.separations) == 2
+
+    by_label = {s.label: s for s in coordination.separations}
+    assert set(by_label) == {"Bus energy floor -> thermal trip", "Derating begins -> terminal event"}
+    assert by_label["Bus energy floor -> thermal trip"].duration_s == pytest.approx(31.701, abs=1e-3)
+    assert by_label["Derating begins -> terminal event"].duration_s == pytest.approx(2.728, abs=1e-3)
+
+
+@pytest.mark.parametrize(
+    "scenario_fn,input_events_filtered,expected_result",
+    [
+        (adapter.run_load_step, False, CoordinationResult.NO_TERMINAL_EVENT),
+        (adapter.run_sustained_high_load, False, CoordinationResult.NO_TERMINAL_EVENT),
+        (adapter.run_grid_sag, False, CoordinationResult.VIABILITY_LOST_NO_PROTECTION_ACTION),
+        (adapter.run_grid_loss, False, CoordinationResult.VIABILITY_LOST_NO_PROTECTION_ACTION),
+    ],
+)
+def test_real_scenarios_coordination_result_and_empty_separations(
+    scenario_fn, input_events_filtered: bool, expected_result: CoordinationResult
+) -> None:
+    result = scenario_fn()
+    input_events = [] if input_events_filtered else result.events
+    timeline = build_protection_timeline(result.telemetry, result.config, input_events)
+    assert timeline.coordination.result is expected_result
+    assert timeline.coordination.separations == ()
+
+
+# --------------------------------------------------------------------------
+# SPEC-009 AC-029: coordination classification, constructed fixtures
+# --------------------------------------------------------------------------
+
+
+def test_coordination_protection_acted_no_viability_loss_fixture() -> None:
+    """Trip occurs; the bus never reaches its numerical floor."""
+    config = _make_config(capacitance_f=0.02, min_energy_j=1.0)  # floor_v = 10.0 V
+    telemetry = _make_telemetry(
+        time_s=[0.0, 1.0],
+        operating_state=["RUNNING", "TRIPPED"],
+        trip_active=[False, True],
+        trip_reason=["", "sustained_overtemperature"],
+        temperature_c=[50.0, 105.0],
+        v_dc_v=[800.0, 800.0],
+    )
+    timeline = build_protection_timeline(telemetry, config, [])
+    assert timeline.coordination.result is CoordinationResult.PROTECTION_ACTED_NO_VIABILITY_LOSS
+    assert timeline.coordination.separations == ()
+
+
+def test_coordination_protection_acted_before_viability_loss_strict_fixture() -> None:
+    """Trip strictly precedes a later floor contact (never reached by
+    any of today's five real scenario presets, SPEC-009 §0/§11)."""
+    config = _make_config(capacitance_f=0.02, min_energy_j=1.0)  # floor_v = 10.0 V
+    telemetry = _make_telemetry(
+        time_s=[0.0, 1.0, 2.0],
+        operating_state=["RUNNING", "TRIPPED", "TRIPPED"],
+        trip_active=[False, True, True],
+        trip_reason=["", "sustained_overtemperature", "sustained_overtemperature"],
+        temperature_c=[50.0, 105.0, 105.0],
+        v_dc_v=[800.0, 800.0, 5.0],
+    )
+    timeline = build_protection_timeline(telemetry, config, [])
+    coordination = timeline.coordination
+    assert coordination.result is CoordinationResult.PROTECTION_ACTED_BEFORE_VIABILITY_LOSS
+
+    assert len(coordination.separations) == 1
+    sep = coordination.separations[0]
+    assert sep.label == "Thermal trip -> bus energy floor"
+    assert sep.from_time_s == pytest.approx(1.0)
+    assert sep.to_time_s == pytest.approx(2.0)
+    assert sep.duration_s == pytest.approx(1.0)
+
+
+def test_coordination_exact_timestep_tie_wording_and_separation() -> None:
+    """SPEC-009 §6 case 3a: the detail/label must state "same recorded
+    sample" and never the word "before"; the separation entry is the
+    one legitimate `duration_s == 0.0` case, with the fixed tie label."""
+    config = _make_config(capacitance_f=0.02, min_energy_j=1.0)  # floor_v = 10.0 V
+    telemetry = _make_telemetry(
+        time_s=[0.0, 1.0, 2.0],
+        operating_state=["RUNNING", "TRIPPED", "TRIPPED"],
+        trip_active=[False, True, True],
+        trip_reason=["", "sustained_overtemperature", "sustained_overtemperature"],
+        temperature_c=[50.0, 105.0, 105.0],
+        v_dc_v=[800.0, 5.0, 5.0],
+    )
+    timeline = build_protection_timeline(telemetry, config, [])
+    coordination = timeline.coordination
+
+    assert coordination.result is CoordinationResult.PROTECTION_ACTED_BEFORE_VIABILITY_LOSS
+    assert "before" not in coordination.result_label
+    assert "before" not in coordination.result_detail
+    assert "same recorded sample" in coordination.result_label
+    assert "same recorded sample" in coordination.result_detail
+
+    assert len(coordination.separations) == 1
+    sep = coordination.separations[0]
+    assert sep.label == "Thermal trip / bus energy floor — same recorded sample"
+    assert sep.duration_s == 0.0
+    assert sep.from_time_s == sep.to_time_s == pytest.approx(1.0)
+
+
+# --------------------------------------------------------------------------
+# SPEC-009 AC-030: derating_preceded_terminal_event, all four cases
+# --------------------------------------------------------------------------
+
+
+def test_derating_preceded_terminal_event_none_via_no_terminal_event() -> None:
+    result = adapter.run_load_step()
+    timeline = build_protection_timeline(result.telemetry, result.config, result.events)
+    assert timeline.outcome is RideThroughOutcome.RIDE_THROUGH
+    assert timeline.coordination.derating_preceded_terminal_event is None
+
+
+def test_derating_preceded_terminal_event_none_via_no_derated_segment() -> None:
+    result = adapter.run_grid_sag()
+    timeline = build_protection_timeline(result.telemetry, result.config, result.events)
+    assert timeline.outcome is RideThroughOutcome.BUS_COLLAPSE_UNPROTECTED
+    segment_states = {s.state for s in timeline.segments}
+    assert "DERATED" not in segment_states
+    assert timeline.coordination.derating_preceded_terminal_event is None
+
+
+def test_derating_preceded_terminal_event_true_real_thermal_trip() -> None:
+    result = adapter.run_thermal_trip()
+    timeline = build_protection_timeline(result.telemetry, result.config, [])
+    first_derated = next(s for s in timeline.segments if s.state == "DERATED")
+    assert first_derated.start_time_s == pytest.approx(11.718, abs=1e-3)
+    assert timeline.coordination.derating_preceded_terminal_event is True
+
+
+def test_derating_preceded_terminal_event_false_constructed_fixture() -> None:
+    """A bus-floor terminal event occurring at or before any `DERATED`
+    segment's start -- a real, reachable branch (SPEC-009 §6.1), not
+    dead code."""
+    config = _make_config(capacitance_f=0.02, min_energy_j=1.0)  # floor_v = 10.0 V
+    telemetry = _make_telemetry(
+        time_s=[0.0, 1.0, 2.0],
+        operating_state=["RUNNING", "RUNNING", "DERATED"],
+        trip_active=[False, False, False],
+        trip_reason=["", "", ""],
+        temperature_c=[50.0, 50.0, 75.0],
+        v_dc_v=[5.0, 5.0, 800.0],
+    )
+    timeline = build_protection_timeline(telemetry, config, [])
+    assert timeline.outcome is RideThroughOutcome.BUS_COLLAPSE_UNPROTECTED
+    assert timeline.outcome_event_time_s == pytest.approx(0.0)
+    first_derated_start_s = next(s.start_time_s for s in timeline.segments if s.state == "DERATED")
+    assert first_derated_start_s >= timeline.outcome_event_time_s
+    assert timeline.coordination.derating_preceded_terminal_event is False
+    assert all(s.label != "Derating begins -> terminal event" for s in timeline.coordination.separations)
+
+
+# --------------------------------------------------------------------------
+# SPEC-009 AC-031: separations never fabricated or negative
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "scenario_fn,input_events_filtered",
+    [
+        (adapter.run_load_step, False),
+        (adapter.run_sustained_high_load, False),
+        (adapter.run_thermal_trip, True),
+        (adapter.run_grid_sag, False),
+        (adapter.run_grid_loss, False),
+    ],
+)
+def test_separations_never_negative_real_scenarios(scenario_fn, input_events_filtered: bool) -> None:
+    result = scenario_fn()
+    input_events = [] if input_events_filtered else result.events
+    timeline = build_protection_timeline(result.telemetry, result.config, input_events)
+    for sep in timeline.coordination.separations:
+        assert sep.duration_s >= 0.0
+
+
+def test_grid_sag_and_grid_loss_never_derate_so_no_derating_separation() -> None:
+    for scenario_fn in (adapter.run_grid_sag, adapter.run_grid_loss):
+        result = scenario_fn()
+        timeline = build_protection_timeline(result.telemetry, result.config, result.events)
+        assert all(
+            s.label != "Derating begins -> terminal event" for s in timeline.coordination.separations
+        )
+
+
+# --------------------------------------------------------------------------
+# SPEC-009 AC-032: coverage matrix traceability
+# --------------------------------------------------------------------------
+
+
+def test_protection_coverage_is_static_and_present_across_scenarios() -> None:
+    scenarios = [
+        adapter.run_load_step(),
+        adapter.run_sustained_high_load(),
+        adapter.run_thermal_trip(),
+        adapter.run_grid_sag(),
+        adapter.run_grid_loss(),
+    ]
+    for result in scenarios:
+        timeline = build_protection_timeline(result.telemetry, result.config, [])
+        assert timeline.coverage == PROTECTION_COVERAGE
+    assert len(PROTECTION_COVERAGE) == 5
+    assert {c.function for c in PROTECTION_COVERAGE} == {
+        "Sustained thermal overtemperature",
+        "DC-bus undervoltage",
+        "DC-bus overvoltage",
+        "Automatic trip reset",
+        "Grid-availability-based protection",
+    }
+
+
+def test_protection_coverage_structural_regression_against_src_protection() -> None:
+    """Supplemental evidence only (SPEC-009 §5): detects a new
+    voltage/current/grid-availability *parameter* appearing on
+    `step_protection`'s signature, or the enum gaining a member --
+    not every possible future behavioral change."""
+    assert len(OperatingState) == 3
+    assert {s.name for s in OperatingState} == {"RUNNING", "DERATED", "TRIPPED"}
+
+    params = set(inspect.signature(step_protection).parameters)
+    for forbidden in ("voltage", "current", "grid_available", "grid_voltage"):
+        assert not any(forbidden in p for p in params), params

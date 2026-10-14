@@ -67,11 +67,49 @@ export interface TimelineEvent {
   detail: string;
 }
 
+/** Mirrors `backend/schemas.py: EventSeparationModel` field-for-field
+ * (SPEC-009 §7). */
+export interface EventSeparation {
+  label: string;
+  from_time_s: number;
+  to_time_s: number;
+  duration_s: number;
+}
+
+/**
+ * Mirrors `backend/schemas.py: CoordinationAnalysisModel` field-for-field.
+ * `result_label`/`result_detail` are backend-owned display strings
+ * this frontend reads verbatim (SPEC-009 §8) -- never recomputed or
+ * rephrased here.
+ */
+export interface CoordinationAnalysis {
+  result:
+    | "NO_TERMINAL_EVENT"
+    | "PROTECTION_ACTED_NO_VIABILITY_LOSS"
+    | "PROTECTION_ACTED_BEFORE_VIABILITY_LOSS"
+    | "VIABILITY_LOST_NO_PROTECTION_ACTION"
+    | "VIABILITY_LOST_BEFORE_PROTECTION_ACTION";
+  result_label: string;
+  result_detail: string;
+  derating_preceded_terminal_event: boolean | null;
+  separations: EventSeparation[];
+}
+
+/** Mirrors `backend/schemas.py: CoverageEntryModel` field-for-field
+ * (SPEC-009 §5/§7). `detail` is backend-owned, read verbatim. */
+export interface CoverageEntry {
+  function: string;
+  modeled: boolean;
+  detail: string;
+}
+
 /**
  * Mirrors `backend/schemas.py: ProtectionTimelineModel` field-for-field.
  * `outcome_label`/`outcome_detail`/`recovery_label` are backend-owned
  * display strings this frontend reads verbatim (SPEC-008 §11/§12) --
  * never recomputed or rephrased here (AC-011, AC-014).
+ * `trip_event_time_s`/`bus_collapse_event_time_s`/`coordination`/
+ * `coverage` are SPEC-009's additive fields (§7).
  */
 export interface ProtectionTimeline {
   segments: StateSegment[];
@@ -82,6 +120,10 @@ export interface ProtectionTimeline {
   outcome_detail: string;
   recovery: "RECOVERED" | "NOT_RECOVERED" | "NOT_APPLICABLE";
   recovery_label: string;
+  trip_event_time_s: number | null;
+  bus_collapse_event_time_s: number | null;
+  coordination: CoordinationAnalysis;
+  coverage: CoverageEntry[];
 }
 
 export interface LoadStepResponse {

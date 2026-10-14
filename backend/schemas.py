@@ -126,11 +126,47 @@ class TimelineEventModel(BaseModel):
     detail: str
 
 
+class EventSeparationModel(BaseModel):
+    """Mirrors `dashboard.adapters.protection_timeline.EventSeparation`
+    field-for-field (SPEC-009 §7).
+    """
+
+    label: str
+    from_time_s: float
+    to_time_s: float
+    duration_s: float
+
+
+class CoordinationAnalysisModel(BaseModel):
+    """Mirrors `dashboard.adapters.protection_timeline.CoordinationAnalysis`
+    field-for-field. `result_label`/`result_detail` are backend-owned
+    display strings the frontend reads verbatim (SPEC-009 §8).
+    """
+
+    result: str
+    result_label: str
+    result_detail: str
+    derating_preceded_terminal_event: bool | None
+    separations: list[EventSeparationModel]
+
+
+class CoverageEntryModel(BaseModel):
+    """Mirrors `dashboard.adapters.protection_timeline.CoverageEntry`
+    field-for-field (SPEC-009 §5/§7).
+    """
+
+    function: str
+    modeled: bool
+    detail: str
+
+
 class ProtectionTimelineModel(BaseModel):
     """Mirrors `dashboard.adapters.protection_timeline.ProtectionTimeline`
     field-for-field. `outcome`/`recovery` are the enum's string value;
     `outcome_label`/`outcome_detail`/`recovery_label` are backend-owned
     display strings the frontend reads verbatim (SPEC-008 §11/§12).
+    `trip_event_time_s`/`bus_collapse_event_time_s`/`coordination`/
+    `coverage` are SPEC-009's additive fields (§7).
     """
 
     segments: list[StateSegmentModel]
@@ -141,6 +177,10 @@ class ProtectionTimelineModel(BaseModel):
     outcome_detail: str
     recovery: str
     recovery_label: str
+    trip_event_time_s: float | None
+    bus_collapse_event_time_s: float | None
+    coordination: CoordinationAnalysisModel
+    coverage: list[CoverageEntryModel]
 
 
 class LoadStepResponse(BaseModel):

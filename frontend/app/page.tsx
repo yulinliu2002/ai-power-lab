@@ -11,6 +11,7 @@ import {
 } from "./components/ExperimentPanel";
 import { KpiReadout } from "./components/KpiTile";
 import { PowerFlowSchematic } from "./components/PowerFlowSchematic";
+import { ProtectionCoordination } from "./components/ProtectionCoordination";
 import { ProtectionTimeline } from "./components/ProtectionTimeline";
 import { SCENARIO_OPTIONS, ScenarioSelector } from "./components/ScenarioSelector";
 import { SensitivityStudy } from "./components/SensitivityStudy";
@@ -299,6 +300,7 @@ function Console({
       )}
 
       <ProtectionTimeline timeline={data.protection_timeline} />
+      <ProtectionCoordination timeline={data.protection_timeline} />
 
       <TimeScrubber timeS={timeS} index={index} onChange={onIndexChange} />
 

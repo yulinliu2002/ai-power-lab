@@ -26,7 +26,10 @@ from dashboard.adapters.protection_timeline import ProtectionTimeline, build_pro
 from src.dc_bus import voltage_from_energy
 
 from .schemas import (
+    CoordinationAnalysisModel,
+    CoverageEntryModel,
     EventMarker,
+    EventSeparationModel,
     HealthResponse,
     LoadStepRequest,
     LoadStepResponse,
@@ -111,6 +114,27 @@ def _serialize_protection_timeline(timeline: ProtectionTimeline) -> ProtectionTi
         outcome_detail=timeline.outcome_detail,
         recovery=timeline.recovery.value,
         recovery_label=timeline.recovery_label,
+        trip_event_time_s=timeline.trip_event_time_s,
+        bus_collapse_event_time_s=timeline.bus_collapse_event_time_s,
+        coordination=CoordinationAnalysisModel(
+            result=timeline.coordination.result.value,
+            result_label=timeline.coordination.result_label,
+            result_detail=timeline.coordination.result_detail,
+            derating_preceded_terminal_event=timeline.coordination.derating_preceded_terminal_event,
+            separations=[
+                EventSeparationModel(
+                    label=sep.label,
+                    from_time_s=sep.from_time_s,
+                    to_time_s=sep.to_time_s,
+                    duration_s=sep.duration_s,
+                )
+                for sep in timeline.coordination.separations
+            ],
+        ),
+        coverage=[
+            CoverageEntryModel(function=c.function, modeled=c.modeled, detail=c.detail)
+            for c in timeline.coverage
+        ],
     )
 
 

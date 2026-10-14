@@ -1,3 +1,4 @@
+import { formatSeconds } from "../lib/formatSeconds";
 import type {
   ProtectionTimeline as ProtectionTimelineData,
   StateSegment,
@@ -37,13 +38,6 @@ const OUTCOME_ROLE: Record<ProtectionTimelineData["outcome"], StatusRole> = {
   PROTECTION_TRIP: "warning",
   BUS_COLLAPSE_UNPROTECTED: "critical",
 };
-
-/** One shared formatter for every `time_s`/`duration_s` value this
- * component displays (SPEC-008 §12) -- presentation rounding of an
- * already-correct value, never new wording. */
-function formatSeconds(value: number): string {
-  return `${value.toFixed(3)} s`;
-}
 
 export function ProtectionTimeline({ timeline }: { timeline: ProtectionTimelineData }) {
   const totalDurationS = timeline.segments.reduce((sum, s) => sum + s.duration_s, 0);
