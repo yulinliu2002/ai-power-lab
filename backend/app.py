@@ -23,6 +23,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from dashboard.adapters import simulation_adapter as adapter
 from dashboard.adapters.protection_timeline import ProtectionTimeline, build_protection_timeline
+from dashboard.adapters.scenario_comparison import StressProfile, build_stress_profile
+from src.config import Config
 from src.dc_bus import voltage_from_energy
 
 from .schemas import (
@@ -37,8 +39,11 @@ from .schemas import (
     ProtectionScenarioResponse,
     ProtectionScenarioThresholds,
     ProtectionTimelineModel,
+    ScenarioComparisonEntry,
+    ScenarioComparisonResponse,
     ScenarioThresholds,
     StateSegmentModel,
+    StressProfileModel,
     TimelineEventModel,
 )
 
@@ -136,6 +141,60 @@ def _serialize_protection_timeline(timeline: ProtectionTimeline) -> ProtectionTi
             for c in timeline.coverage
         ],
     )
+
+
+def _protection_scenario_thresholds(config: Config) -> ProtectionScenarioThresholds:
+    """Builds `ProtectionScenarioThresholds` from any of the five fixed
+    scenarios' `Config` -- every `Config` this adapter layer produces
+    carries `thermal_trip_time_s`/`derate_factor_min`/`min_energy_j`
+    regardless of which scenario ran (SPEC-010 §7), so this is a wider
+    reuse of the existing Scenarios B-E thresholds shape, not a new one.
+    """
+    return ProtectionScenarioThresholds(
+        voltage_reference_v=config.controller.voltage_reference_v,
+        rated_power_w=config.sst.rated_power_w,
+        thermal_derate_start_c=config.protection.thermal_derate_start_c,
+        thermal_trip_c=config.protection.thermal_trip_c,
+        capacitance_f=config.dc_bus.capacitance_f,
+        thermal_trip_time_s=config.protection.thermal_trip_time_s,
+        derate_factor_min=config.protection.derate_factor_min,
+        floor_voltage_v=voltage_from_energy(config.dc_bus.min_energy_j, config.dc_bus.capacitance_f),
+    )
+
+
+def _serialize_stress_profile(profile: StressProfile) -> StressProfileModel:
+    """Explicit field-by-field mapping, same style as
+    `_serialize_protection_timeline` (SPEC-010 §7).
+    """
+    return StressProfileModel(
+        min_v_dc_v=profile.min_v_dc_v,
+        max_v_dc_v=profile.max_v_dc_v,
+        max_voltage_deviation_v=profile.max_voltage_deviation_v,
+        max_voltage_deviation_percent=profile.max_voltage_deviation_percent,
+        peak_power_deficit_w=profile.peak_power_deficit_w,
+        dc_link_energy_excursion_j=profile.dc_link_energy_excursion_j,
+        max_temperature_c=profile.max_temperature_c,
+        grid_ever_unavailable=profile.grid_ever_unavailable,
+        min_grid_voltage_pu=profile.min_grid_voltage_pu,
+        protection_states_reached=list(profile.protection_states_reached),
+        dominant_stress=profile.dominant_stress.value,
+        dominant_stress_label=profile.dominant_stress_label,
+        dominant_stress_detail=profile.dominant_stress_detail,
+    )
+
+
+#: Fixed dispatch order for GET /api/v1/simulations/comparison (SPEC-010
+#: §7/§8) -- `load_step`, `sustained_high_load`, `thermal_trip`,
+#: `grid_sag`, `grid_loss`. Each adapter is called with zero overrides,
+#: the same defaults `backend/app.py` already uses for Scenarios A-E
+#: elsewhere in this module.
+_COMPARISON_SCENARIOS: tuple[tuple[str, Callable[[], adapter.ScenarioResult]], ...] = (
+    ("load_step", adapter.run_load_step),
+    ("sustained_high_load", adapter.run_sustained_high_load),
+    ("thermal_trip", adapter.run_thermal_trip),
+    ("grid_sag", adapter.run_grid_sag),
+    ("grid_loss", adapter.run_grid_loss),
+)
 
 
 @app.get("/api/v1/health", response_model=HealthResponse)
@@ -244,3 +303,39 @@ def simulate_protection_scenario(scenario: ProtectionScenarioName) -> Protection
         ),
         protection_timeline=_serialize_protection_timeline(timeline),
     )
+
+
+@app.get("/api/v1/simulations/comparison", response_model=ScenarioComparisonResponse)
+def simulate_comparison() -> ScenarioComparisonResponse:
+    """Run all five fixed scenarios (adapter defaults, no overrides,
+    SPEC-010 §7) and return each one's existing `thresholds` +
+    `protection_timeline` shape plus the new `stress_profile`, in the
+    fixed order `_COMPARISON_SCENARIOS` declares. Builds exactly one
+    `ProtectionTimeline` per scenario -- the same single result is
+    reused for both the response's `protection_timeline` field and as
+    `build_stress_profile`'s input (AC-043).
+    """
+    entries: list[ScenarioComparisonEntry] = []
+    for scenario, scenario_fn in _COMPARISON_SCENARIOS:
+        result = scenario_fn()
+        telemetry = result.telemetry
+        config = result.config
+
+        # Same §11 input-event reconciliation rule as
+        # `simulate_protection_scenario` above: thermal_trip's own
+        # adapter-provided events are protection-derived, not genuine
+        # load/grid inputs; every other scenario's are genuine.
+        input_events = [] if scenario == "thermal_trip" else result.events
+        timeline = build_protection_timeline(telemetry, config, input_events)
+        stress_profile = build_stress_profile(telemetry, config, timeline)
+
+        entries.append(
+            ScenarioComparisonEntry(
+                scenario=scenario,
+                thresholds=_protection_scenario_thresholds(config),
+                protection_timeline=_serialize_protection_timeline(timeline),
+                stress_profile=_serialize_stress_profile(stress_profile),
+            )
+        )
+
+    return ScenarioComparisonResponse(scenarios=entries)

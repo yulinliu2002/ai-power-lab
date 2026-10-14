@@ -15,6 +15,7 @@ from fastapi.testclient import TestClient
 from backend.app import app
 from dashboard.adapters import simulation_adapter as adapter
 from dashboard.adapters.protection_timeline import build_protection_timeline
+from dashboard.adapters.scenario_comparison import build_stress_profile
 
 client = TestClient(app)
 
@@ -392,3 +393,89 @@ def test_protection_scenario_grid_sag_includes_genuine_input_events() -> None:
     timeline = response.json()["protection_timeline"]
     input_labels = [e["label"] for e in timeline["events"] if e["category"] == "input_event"]
     assert input_labels == [label for _, label in direct.events]
+
+
+# --------------------------------------------------------------------------
+# GET /api/v1/simulations/comparison (SPEC-010)
+# --------------------------------------------------------------------------
+
+_COMPARISON_SCENARIOS = [
+    ("load_step", adapter.run_load_step, False),
+    ("sustained_high_load", adapter.run_sustained_high_load, False),
+    ("thermal_trip", adapter.run_thermal_trip, True),
+    ("grid_sag", adapter.run_grid_sag, False),
+    ("grid_loss", adapter.run_grid_loss, False),
+]
+
+_STRESS_PROFILE_FIELDS = {
+    "min_v_dc_v", "max_v_dc_v", "max_voltage_deviation_v", "max_voltage_deviation_percent",
+    "peak_power_deficit_w", "dc_link_energy_excursion_j", "max_temperature_c",
+    "grid_ever_unavailable", "min_grid_voltage_pu", "protection_states_reached",
+    "dominant_stress", "dominant_stress_label", "dominant_stress_detail",
+}
+
+
+def _stress_profile_to_dict(profile) -> dict:
+    return {
+        "min_v_dc_v": profile.min_v_dc_v,
+        "max_v_dc_v": profile.max_v_dc_v,
+        "max_voltage_deviation_v": profile.max_voltage_deviation_v,
+        "max_voltage_deviation_percent": profile.max_voltage_deviation_percent,
+        "peak_power_deficit_w": profile.peak_power_deficit_w,
+        "dc_link_energy_excursion_j": profile.dc_link_energy_excursion_j,
+        "max_temperature_c": profile.max_temperature_c,
+        "grid_ever_unavailable": profile.grid_ever_unavailable,
+        "min_grid_voltage_pu": profile.min_grid_voltage_pu,
+        "protection_states_reached": list(profile.protection_states_reached),
+        "dominant_stress": profile.dominant_stress.value,
+        "dominant_stress_label": profile.dominant_stress_label,
+        "dominant_stress_detail": profile.dominant_stress_detail,
+    }
+
+
+def test_comparison_returns_all_five_scenarios_in_fixed_order() -> None:
+    """AC-044: exactly five entries, fixed order."""
+    response = client.get("/api/v1/simulations/comparison")
+    assert response.status_code == 200
+    body = response.json()
+    assert [entry["scenario"] for entry in body["scenarios"]] == [
+        name for name, _, _ in _COMPARISON_SCENARIOS
+    ]
+
+
+def test_comparison_response_schema_shape() -> None:
+    """AC-045: top-level and nested key-set assertions."""
+    response = client.get("/api/v1/simulations/comparison")
+    body = response.json()
+
+    assert set(body.keys()) == {"scenarios"}
+    for entry in body["scenarios"]:
+        assert set(entry.keys()) == {"scenario", "thresholds", "protection_timeline", "stress_profile"}
+        assert set(entry["thresholds"].keys()) == {
+            "voltage_reference_v", "rated_power_w", "thermal_derate_start_c", "thermal_trip_c",
+            "capacitance_f", "thermal_trip_time_s", "derate_factor_min", "floor_voltage_v",
+        }
+        assert set(entry["stress_profile"].keys()) == _STRESS_PROFILE_FIELDS
+
+
+@pytest.mark.parametrize("scenario,scenario_fn,input_events_filtered", _COMPARISON_SCENARIOS)
+def test_comparison_entry_matches_direct_build(scenario, scenario_fn, input_events_filtered) -> None:
+    """AC-044: each entry's `protection_timeline`/`stress_profile`
+    matches direct computation on the same adapter call."""
+    direct = scenario_fn()
+    input_events = [] if input_events_filtered else direct.events
+    expected_timeline = _timeline_to_dict(
+        build_protection_timeline(direct.telemetry, direct.config, input_events)
+    )
+    expected_profile = _stress_profile_to_dict(
+        build_stress_profile(
+            direct.telemetry,
+            direct.config,
+            build_protection_timeline(direct.telemetry, direct.config, input_events),
+        )
+    )
+
+    response = client.get("/api/v1/simulations/comparison")
+    entry = next(e for e in response.json()["scenarios"] if e["scenario"] == scenario)
+    assert entry["protection_timeline"] == expected_timeline
+    assert entry["stress_profile"] == expected_profile

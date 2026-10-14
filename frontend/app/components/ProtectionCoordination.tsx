@@ -1,6 +1,7 @@
 import { formatSeconds } from "../lib/formatSeconds";
 import type { ProtectionTimeline as ProtectionTimelineData } from "../lib/simulationApi";
 import { type StatusRole } from "../lib/statusRoles";
+import { CoverageChecklist } from "./ProtectionCoverageChecklist";
 
 /**
  * Renders the backend-derived Protection Coordination / Event Analysis
@@ -66,26 +67,5 @@ export function ProtectionCoordination({ timeline }: { timeline: ProtectionTimel
 
       <CoverageChecklist coverage={coverage} />
     </section>
-  );
-}
-
-function CoverageChecklist({ coverage }: { coverage: ProtectionTimelineData["coverage"] }) {
-  return (
-    <div className="flex flex-col gap-1">
-      <span className="font-sans text-[10.5px] font-semibold uppercase tracking-[0.04em] text-muted">
-        Protection Coverage (V1 model)
-      </span>
-      <ul className="flex flex-col gap-1">
-        {coverage.map((entry, i) => (
-          <li key={i} className="flex flex-wrap items-baseline gap-x-2 font-mono text-[10.5px]">
-            <span className={entry.modeled ? "text-status-good" : "text-status-critical"}>
-              {entry.modeled ? "✓" : "✕"}
-            </span>
-            <span className="font-semibold text-primary">{entry.function}</span>
-            <span className="text-muted">{entry.detail}</span>
-          </li>
-        ))}
-      </ul>
-    </div>
   );
 }

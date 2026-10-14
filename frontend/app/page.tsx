@@ -14,15 +14,19 @@ import { PowerFlowSchematic } from "./components/PowerFlowSchematic";
 import { ProtectionCoordination } from "./components/ProtectionCoordination";
 import { ProtectionTimeline } from "./components/ProtectionTimeline";
 import { SCENARIO_OPTIONS, ScenarioSelector } from "./components/ScenarioSelector";
+import { ScenarioComparison } from "./components/ScenarioComparison";
 import { SensitivityStudy } from "./components/SensitivityStudy";
 import { TelemetryChart } from "./components/TelemetryChart";
 import { TimeScrubber } from "./components/TimeScrubber";
 import { TransientMetricsPanel } from "./components/TransientMetricsPanel";
+import { ViewModeToggle, type ViewMode } from "./components/ViewModeToggle";
 import {
   fetchLoadStep,
   fetchScenario,
+  fetchScenarioComparison,
   sampleAt,
   type LoadStepResponse,
+  type ScenarioComparisonResponse,
   type ScenarioName,
   type ScenarioRunResponse,
   type Sample,
@@ -66,6 +70,12 @@ type LoadState =
   | { status: "error"; message: string }
   | { status: "ready"; data: ScenarioRunResponse };
 
+type ComparisonState =
+  | { status: "idle" }
+  | { status: "loading" }
+  | { status: "error"; message: string }
+  | { status: "ready"; data: ScenarioComparisonResponse };
+
 const SCENARIO_LABEL: Record<ScenarioName, string> = Object.fromEntries(
   SCENARIO_OPTIONS.map((option) => [option.key, option.label]),
 ) as Record<ScenarioName, string>;
@@ -78,6 +88,14 @@ export default function Home() {
   const [isRunning, setIsRunning] = useState(false);
   const [runError, setRunError] = useState<string | null>(null);
   const requestedRef = useRef(false);
+
+  // "Compare All" is a separate view mode, not a sixth scenario
+  // (SPEC-010 §8) -- it never touches `activeScenario`/`state` above,
+  // so returning to "Single Scenario" always restores exactly what was
+  // there before, unchanged.
+  const [viewMode, setViewMode] = useState<ViewMode>("single");
+  const [comparisonState, setComparisonState] = useState<ComparisonState>({ status: "idle" });
+  const comparisonRequestGenerationRef = useRef(0);
 
   // Monotonically increasing request generation. Every fetch-starting
   // action (initial load, a scenario selection, an experiment run)
@@ -179,6 +197,35 @@ export default function Home() {
     runExperiment(BASELINE_EXPERIMENT_PARAMS);
   }, [runExperiment]);
 
+  // Selecting "Compare All" fetches the comparison endpoint once per
+  // entry into this mode; its own request-generation guard means a
+  // rapid double-toggle back to "Compare All" can never let an earlier,
+  // slower fetch overwrite a later one's result (same race-prevention
+  // pattern as `selectScenario`/`runExperiment` above -- this is a
+  // second, independent lane, not a change to either of theirs).
+  const selectViewMode = useCallback(
+    (mode: ViewMode) => {
+      setViewMode(mode);
+      if (mode !== "compare") return;
+
+      const generation = ++comparisonRequestGenerationRef.current;
+      setComparisonState({ status: "loading" });
+      fetchScenarioComparison()
+        .then((data) => {
+          if (comparisonRequestGenerationRef.current !== generation) return;
+          setComparisonState({ status: "ready", data });
+        })
+        .catch((error: unknown) => {
+          if (comparisonRequestGenerationRef.current !== generation) return;
+          setComparisonState({
+            status: "error",
+            message: error instanceof Error ? error.message : "Unknown error",
+          });
+        });
+    },
+    [],
+  );
+
   return (
     <main className="mx-auto flex w-full max-w-[1320px] flex-1 flex-col gap-3 px-6 py-4">
       <header className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-hairline pb-2">
@@ -195,34 +242,55 @@ export default function Home() {
         </p>
       </header>
 
-      <ScenarioSelector
-        selected={activeScenario}
-        onSelect={selectScenario}
-        disabled={state.status === "loading"}
-      />
-
-      {state.status === "loading" && (
-        <p className="font-mono text-xs text-muted">LOADING TELEMETRY&hellip;</p>
-      )}
-
-      {state.status === "error" && (
-        <p className="border border-status-critical bg-surface px-3 py-2 font-mono text-xs text-status-critical">
-          API ERROR: {state.message}
-        </p>
-      )}
-
-      {state.status === "ready" && (
-        <Console
-          data={state.data}
-          index={index}
-          onIndexChange={setIndex}
-          draftParams={draftParams}
-          onDraftChange={setDraftParams}
-          onRun={() => runExperiment(draftParams)}
-          onReset={handleReset}
-          isRunning={isRunning}
-          runError={runError}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <ScenarioSelector
+          selected={activeScenario}
+          onSelect={selectScenario}
+          disabled={state.status === "loading" || viewMode === "compare"}
         />
+        <ViewModeToggle mode={viewMode} onSelect={selectViewMode} />
+      </div>
+
+      {viewMode === "compare" ? (
+        <>
+          {comparisonState.status === "loading" && (
+            <p className="font-mono text-xs text-muted">LOADING COMPARISON&hellip;</p>
+          )}
+          {comparisonState.status === "error" && (
+            <p className="border border-status-critical bg-surface px-3 py-2 font-mono text-xs text-status-critical">
+              API ERROR: {comparisonState.message}
+            </p>
+          )}
+          {comparisonState.status === "ready" && (
+            <ScenarioComparison entries={comparisonState.data.scenarios} />
+          )}
+        </>
+      ) : (
+        <>
+          {state.status === "loading" && (
+            <p className="font-mono text-xs text-muted">LOADING TELEMETRY&hellip;</p>
+          )}
+
+          {state.status === "error" && (
+            <p className="border border-status-critical bg-surface px-3 py-2 font-mono text-xs text-status-critical">
+              API ERROR: {state.message}
+            </p>
+          )}
+
+          {state.status === "ready" && (
+            <Console
+              data={state.data}
+              index={index}
+              onIndexChange={setIndex}
+              draftParams={draftParams}
+              onDraftChange={setDraftParams}
+              onRun={() => runExperiment(draftParams)}
+              onReset={handleReset}
+              isRunning={isRunning}
+              runError={runError}
+            />
+          )}
+        </>
       )}
     </main>
   );

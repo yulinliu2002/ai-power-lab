@@ -150,6 +150,46 @@ export interface ProtectionScenarioResponse {
 
 export type ScenarioName = "load_step" | ProtectionScenarioName;
 
+/** Mirrors `backend/schemas.py: StressProfileModel` field-for-field
+ * (SPEC-010 §5/§7). `dominant_stress_label`/`dominant_stress_detail`
+ * are backend-owned display strings read verbatim, same contract as
+ * `outcome_label`/`result_label` (SPEC-008/009). */
+export interface StressProfile {
+  min_v_dc_v: number;
+  max_v_dc_v: number;
+  max_voltage_deviation_v: number;
+  max_voltage_deviation_percent: number;
+  peak_power_deficit_w: number;
+  dc_link_energy_excursion_j: number;
+  max_temperature_c: number;
+  grid_ever_unavailable: boolean;
+  min_grid_voltage_pu: number;
+  protection_states_reached: string[];
+  dominant_stress:
+    | "DC_BUS_VIABILITY_LOSS"
+    | "THERMAL_PROTECTION_TRIP"
+    | "SUSTAINED_THERMAL_DERATING"
+    | "TRANSIENT_POWER_IMBALANCE";
+  dominant_stress_label: string;
+  dominant_stress_detail: string;
+}
+
+/** Mirrors `backend/schemas.py: ScenarioComparisonEntry` field-for-field
+ * (SPEC-010 §7). */
+export interface ScenarioComparisonEntry {
+  scenario: ScenarioName;
+  thresholds: ProtectionScenarioThresholds;
+  protection_timeline: ProtectionTimeline;
+  stress_profile: StressProfile;
+}
+
+/** Mirrors `backend/schemas.py: ScenarioComparisonResponse`
+ * field-for-field. Exactly five entries, fixed order: load_step,
+ * sustained_high_load, thermal_trip, grid_sag, grid_loss (SPEC-010 §7). */
+export interface ScenarioComparisonResponse {
+  scenarios: ScenarioComparisonEntry[];
+}
+
 /** Either response shape -- both share `timeseries`/`events`/
  * `protection_timeline`, read generically everywhere except the
  * Scenario-A-only sections that need `LoadStepResponse` specifically. */
@@ -252,4 +292,20 @@ export async function fetchProtectionScenario(
 export async function fetchScenario(scenario: ScenarioName): Promise<ScenarioRunResponse> {
   if (scenario === "load_step") return fetchLoadStep();
   return fetchProtectionScenario(scenario);
+}
+
+/**
+ * Runs all five fixed scenarios server-side and returns each one's
+ * existing `thresholds`/`protection_timeline` plus the new
+ * `stress_profile` (SPEC-010 §7/§8). No parameters -- the five fixed
+ * presets only, same posture as `fetchProtectionScenario`.
+ */
+export async function fetchScenarioComparison(): Promise<ScenarioComparisonResponse> {
+  const response = await fetch(`${API_BASE_URL}/api/v1/simulations/comparison`);
+
+  if (!response.ok) {
+    throw new Error(`Simulation request failed: HTTP ${response.status}`);
+  }
+
+  return response.json();
 }

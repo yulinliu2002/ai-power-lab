@@ -220,3 +220,48 @@ class ProtectionScenarioResponse(BaseModel):
 
 class HealthResponse(BaseModel):
     status: str = "ok"
+
+
+class StressProfileModel(BaseModel):
+    """Mirrors `dashboard.adapters.scenario_comparison.StressProfile`
+    field-for-field (SPEC-010 §5/§7). `dominant_stress_label`/
+    `dominant_stress_detail` are backend-owned display strings the
+    frontend reads verbatim, same convention as `outcome_label`/
+    `result_label` (SPEC-008/009).
+    """
+
+    min_v_dc_v: float
+    max_v_dc_v: float
+    max_voltage_deviation_v: float
+    max_voltage_deviation_percent: float
+    peak_power_deficit_w: float
+    dc_link_energy_excursion_j: float
+    max_temperature_c: float
+    grid_ever_unavailable: bool
+    min_grid_voltage_pu: float
+    protection_states_reached: list[str]
+    dominant_stress: str
+    dominant_stress_label: str
+    dominant_stress_detail: str
+
+
+class ScenarioComparisonEntry(BaseModel):
+    """One fixed scenario's row in the comparison response (SPEC-010 §7).
+    `thresholds` reuses `ProtectionScenarioThresholds` for every row
+    (including Load Step's), since every scenario's `Config` carries
+    those fields regardless of which scenario ran.
+    """
+
+    scenario: str
+    thresholds: ProtectionScenarioThresholds
+    protection_timeline: ProtectionTimelineModel
+    stress_profile: StressProfileModel
+
+
+class ScenarioComparisonResponse(BaseModel):
+    """Response body for GET /api/v1/simulations/comparison. Exactly
+    five entries, fixed order: load_step, sustained_high_load,
+    thermal_trip, grid_sag, grid_loss (SPEC-010 §7).
+    """
+
+    scenarios: list[ScenarioComparisonEntry]
