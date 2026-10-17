@@ -5,12 +5,23 @@ import { gridStatus, sstStatus } from "../lib/statusRoles";
 import { SVG_COLOR } from "../lib/theme";
 
 interface PowerFlowSchematicProps {
-  sample: Sample;
-  ratedPowerW: number;
-  voltageReferenceV: number;
-  /** `thresholds.capacitance_f` from the fetched run -- the only input
-   * the bus energy readout needs beyond `sample.v_dc_v`. */
-  capacitanceF: number;
+  /**
+   * The live telemetry bundle. Omit it entirely to render the diagram
+   * in "static" mode -- the System Map's use case: the same topology
+   * glyphs/connectors/bus segment, nominal (accent) coloring throughout,
+   * and no V/E readouts or kW figures, since there is no run to read
+   * them from. All four fields travel together (rather than as four
+   * separately-optional props) so TypeScript can narrow "live or not"
+   * from one check instead of four.
+   */
+  live?: {
+    sample: Sample;
+    ratedPowerW: number;
+    voltageReferenceV: number;
+    /** `thresholds.capacitance_f` from the fetched run -- the only input
+     * the bus energy readout needs beyond `sample.v_dc_v`. */
+    capacitanceF: number;
+  };
 }
 
 function clamp01(x: number): number {
@@ -22,7 +33,17 @@ function clamp01(x: number): number {
 // drawn as a sparse line topology (circle / diamond / hatched bus segment /
 // circle), not bordered cards. Constants below reproduce that composition's
 // proportions at a scale that fits this panel's width.
-const PAD_X = 20;
+// 28px (not 20px): the smallest margin that keeps the "UTILITY GRID"
+// caption -- centered on the grid glyph at PAD_X + GRID_R from the left
+// viewBox edge -- from being cropped by the root <svg>'s default
+// viewBox-edge clipping. At this caption's actual font metrics (IBM
+// Plex Mono, 10px, 0.06em letter-spacing: ~6px/char advance + spacing),
+// "UTILITY GRID" renders ~79px wide, so its half-width (~39.5px) needs
+// more than the prior 38px margin (20 + 18) afforded; 28 + 18 = 46px
+// leaves headroom. Applies symmetrically to the right (AI COMPUTE) edge
+// too, which already fit -- so this only adds outer whitespace margin,
+// it does not change any icon size or connector length.
+const PAD_X = 28;
 const ICON_CY = 46;
 const GRID_R = 18;
 const SST_HALF = 24;
@@ -78,10 +99,17 @@ function mismatchLabel(deficitW: number, ratedPowerW: number): string | null {
  * the P2 bus-segment hatch texture as the DC bus's topology-integrated
  * energy cue, and the P4 twin V/E potential-axis readout underneath it.
  *
- * Cyan is the nominal/structural color throughout; amber marks only the
- * two things Concept 03 marks amber -- the E (stored-energy) channel
- * itself, and a real P_load > P_sst deficit (plus, reusing that same
- * stress amber, a sagged grid or a DERATED SST). The one addition beyond
+ * `accent` (the product's one chromatic accent, not a schematic-only
+ * hue) is the nominal/structural color throughout; `warning` amber
+ * marks only an actual non-good condition -- a real P_load > P_sst
+ * deficit (which also recolors the bus connectors, the bus-segment
+ * hatch, and the E/stored-energy axis together, since all three
+ * describe the same deficit event), plus, reusing that same stress
+ * amber, a sagged grid or a DERATED SST. The E axis is never amber
+ * merely because it is the energy channel -- healthy stored energy
+ * reads as nominal `accent`, the same as everything else, matching
+ * DESIGN.md's rule that a value which cannot fail (or currently isn't
+ * failing) never wears a color that implies it could. The one addition beyond
  * Concept 03's three frames (which never depict a fault) is a critical
  * (red) stroke on the GRID or SST glyph when that stage is actually
  * faulted (grid lost, or SST `TRIPPED`) -- without it this component
@@ -95,46 +123,53 @@ function mismatchLabel(deficitW: number, ratedPowerW: number): string | null {
  * of any dynamics (no trajectory, trip logic, or control behavior is
  * computed here).
  */
-export function PowerFlowSchematic({
-  sample,
-  ratedPowerW,
-  voltageReferenceV,
-  capacitanceF,
-}: PowerFlowSchematicProps) {
+export function PowerFlowSchematic({ live }: PowerFlowSchematicProps) {
   const clipId = useId();
 
-  const grid = gridStatus(sample.grid_voltage_pu, sample.grid_available);
-  const sst = sstStatus(sample.operating_state);
-  const deficitW = sample.p_load_w - sample.p_sst_w;
-  const label = mismatchLabel(deficitW, ratedPowerW);
+  const grid = live ? gridStatus(live.sample.grid_voltage_pu, live.sample.grid_available) : null;
+  const sst = live ? sstStatus(live.sample.operating_state) : null;
+  const deficitW = live ? live.sample.p_load_w - live.sample.p_sst_w : 0;
+  const label = live ? mismatchLabel(deficitW, live.ratedPowerW) : null;
   const hasDeficit = label === "P_load > P_sst";
 
-  const vFrac = clamp01(sample.v_dc_v / voltageReferenceV);
-  const eRefJ = 0.5 * capacitanceF * voltageReferenceV ** 2;
-  const eDcJ = 0.5 * capacitanceF * sample.v_dc_v ** 2;
+  const vFrac = live ? clamp01(live.sample.v_dc_v / live.voltageReferenceV) : 0;
+  const eRefJ = live ? 0.5 * live.capacitanceF * live.voltageReferenceV ** 2 : 0;
+  const eDcJ = live ? 0.5 * live.capacitanceF * live.sample.v_dc_v ** 2 : 0;
   const eFrac = clamp01(eRefJ > 0 ? eDcJ / eRefJ : 0);
 
   const gridColor =
-    grid.role === "critical"
+    grid?.role === "critical"
       ? SVG_COLOR.critical
-      : grid.role === "warning"
-        ? SVG_COLOR.schematicAmber
-        : SVG_COLOR.schematicCyan;
+      : grid?.role === "warning"
+        ? SVG_COLOR.warning
+        : SVG_COLOR.accent;
   const sstColor =
-    sst.role === "critical"
+    sst?.role === "critical"
       ? SVG_COLOR.critical
-      : sst.role === "warning"
-        ? SVG_COLOR.schematicAmber
-        : SVG_COLOR.schematicCyan;
-  const busLineColor = hasDeficit ? SVG_COLOR.schematicAmber : SVG_COLOR.schematicCyan;
+      : sst?.role === "warning"
+        ? SVG_COLOR.warning
+        : SVG_COLOR.accent;
+  const busLineColor = hasDeficit ? SVG_COLOR.warning : SVG_COLOR.accent;
 
   return (
-    <section className="flex flex-col gap-1.5 border border-hairline bg-surface px-4 py-2">
-      <span className="font-sans text-[11.5px] font-semibold uppercase tracking-[0.04em] text-muted">
+    <section className="flex min-w-0 flex-col gap-1.5 border border-hairline bg-surface px-4 py-2">
+      <span className="font-sans text-[11.5px] font-semibold uppercase tracking-[0.04em] text-secondary">
         POWER FLOW
       </span>
-      <div className="mx-auto w-full" style={{ maxWidth: VIEW_W }}>
-        <svg viewBox={`0 0 ${VIEW_W} ${VIEW_H}`} width="100%">
+      <div
+        role="region"
+        aria-label="Power flow diagram; scroll horizontally to view all stages"
+        tabIndex={0}
+        className="mx-auto w-full min-w-0 overflow-x-auto focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary"
+        style={{ maxWidth: VIEW_W }}
+      >
+        <svg
+          role={live ? undefined : "img"}
+          aria-label={live ? undefined : "Utility grid to solid-state transformer to 800 VDC distribution bus to AI compute"}
+          viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
+          width="100%"
+          style={{ minWidth: VIEW_W }}
+        >
           <text
             x={(BUS_X1 + BUS_X2) / 2}
             y={TITLE_Y}
@@ -152,7 +187,7 @@ export function PowerFlowSchematic({
             x2={SST_LEFT_X}
             y={ICON_CY}
             color={gridColor}
-            dashed={grid.role === "critical"}
+            dashed={grid?.role === "critical"}
           />
           <Connector x1={SST_RIGHT_X} x2={BUS_X1} y={ICON_CY} color={busLineColor} dashed={hasDeficit} />
           <Connector x1={BUS_X2} x2={LOAD_LEFT_X} y={ICON_CY} color={busLineColor} />
@@ -204,7 +239,7 @@ export function PowerFlowSchematic({
             fontFamily="var(--font-mono)"
             fontSize={8.5}
             letterSpacing="0.04em"
-            fill={SVG_COLOR.muted}
+            fill={SVG_COLOR.textSecondary}
           >
             SOLID-STATE TRANSFORMER
           </text>
@@ -223,31 +258,35 @@ export function PowerFlowSchematic({
             textAnchor="middle"
             fontFamily="var(--font-mono)"
             fontSize={9.5}
-            fill={SVG_COLOR.muted}
+            fill={SVG_COLOR.textSecondary}
           >
-            {`Vdc reference — ${voltageReferenceV.toFixed(1)} V`}
+            {live ? `Vdc reference — ${live.voltageReferenceV.toFixed(1)} V` : "800 VDC bus"}
           </text>
 
-          <PotentialAxis
-            label="V"
-            x1={TRACK_X1}
-            x2={TRACK_X2}
-            y={V_ROW_Y}
-            frac={vFrac}
-            color={SVG_COLOR.schematicCyan}
-            readout={`Vdc  ${sample.v_dc_v.toFixed(1)} V`}
-          />
-          <PotentialAxis
-            label="E"
-            x1={TRACK_X1}
-            x2={TRACK_X2}
-            y={E_ROW_Y}
-            frac={eFrac}
-            color={SVG_COLOR.schematicAmber}
-            readout={`Edc  ${(eDcJ / 1e3).toFixed(2)} kJ`}
-          />
+          {live && (
+            <>
+              <PotentialAxis
+                label="V"
+                x1={TRACK_X1}
+                x2={TRACK_X2}
+                y={V_ROW_Y}
+                frac={vFrac}
+                color={SVG_COLOR.accent}
+                readout={`Vdc  ${live.sample.v_dc_v.toFixed(1)} V`}
+              />
+              <PotentialAxis
+                label="E"
+                x1={TRACK_X1}
+                x2={TRACK_X2}
+                y={E_ROW_Y}
+                frac={eFrac}
+                color={busLineColor}
+                readout={`Edc  ${(eDcJ / 1e3).toFixed(2)} kJ`}
+              />
+            </>
+          )}
 
-          <LoadGlyph cx={LOAD_CX} cy={ICON_CY} r={LOAD_R} color={SVG_COLOR.schematicCyan} />
+          <LoadGlyph cx={LOAD_CX} cy={ICON_CY} r={LOAD_R} color={SVG_COLOR.accent} />
           <text
             x={LOAD_CX}
             y={CAPTION_Y}
@@ -260,17 +299,19 @@ export function PowerFlowSchematic({
           >
             AI COMPUTE
           </text>
-          <text
-            x={LOAD_CX}
-            y={CAPTION_Y + 16}
-            textAnchor="middle"
-            fontFamily="var(--font-mono)"
-            fontSize={13}
-            fontWeight={500}
-            fill={SVG_COLOR.textPrimary}
-          >
-            {`${(sample.p_load_w / 1e3).toFixed(0)} kW`}
-          </text>
+          {live && (
+            <text
+              x={LOAD_CX}
+              y={CAPTION_Y + 16}
+              textAnchor="middle"
+              fontFamily="var(--font-mono)"
+              fontSize={13}
+              fontWeight={500}
+              fill={SVG_COLOR.textPrimary}
+            >
+              {`${(live.sample.p_load_w / 1e3).toFixed(0)} kW`}
+            </text>
+          )}
         </svg>
       </div>
     </section>
@@ -357,9 +398,10 @@ function LoadGlyph({ cx, cy, r, color }: { cx: number; cy: number; r: number; co
 
 /**
  * The P2 bus-segment texture: a bounded rectangle with a faint constant
- * cyan fill and evenly spaced diagonal hatch lines whose color is the
- * only thing that changes with state (cyan nominal, amber while
- * P_load > P_sst) -- matching Concept 03 frames 01/02 exactly. Line
+ * `accent` fill and evenly spaced diagonal hatch lines whose color is
+ * the only thing that changes with state (`accent` nominal, `warning`
+ * while P_load > P_sst) -- matching Concept 03 frames 01/02's
+ * structure, drawn from this product's one unified palette. Line
  * count/geometry are an educational-assumption approximation of the
  * Pixso vector hatch (exact path data isn't exposed via the MCP read),
  * not a literal export.
@@ -393,8 +435,8 @@ function BusSegment({
 
   return (
     <g>
-      <rect x={x} y={y} width={w} height={h} rx={3} fill="none" stroke={SVG_COLOR.schematicCyan} strokeWidth={1.5} />
-      <rect x={innerX1} y={innerY1} width={innerX2 - innerX1} height={rise} fill={SVG_COLOR.schematicCyan} opacity={0.05} />
+      <rect x={x} y={y} width={w} height={h} rx={3} fill="none" stroke={SVG_COLOR.accent} strokeWidth={1.5} />
+      <rect x={innerX1} y={innerY1} width={innerX2 - innerX1} height={rise} fill={SVG_COLOR.accent} opacity={0.05} />
       <clipPath id={clipId}>
         <rect x={innerX1} y={innerY1} width={innerX2 - innerX1} height={rise} />
       </clipPath>
@@ -421,9 +463,11 @@ function BusSegment({
  * bus width, a fixed end-tick marking the reference (V_ref or the
  * V_ref-derived E_ref, always the track's right end since frac <= 1),
  * a colored indicator tick at the real value's fraction of that
- * reference, and a mono readout. V and E each keep one fixed channel
- * color (cyan / amber) regardless of state -- only the indicator's
- * position moves.
+ * reference, and a mono readout. V always reads nominal `accent`; E
+ * shares the same nominal/warning color as the bus connectors and
+ * hatch (`busLineColor`), so stored energy only reads amber while a
+ * real P_load > P_sst deficit is actually depleting it, never as a
+ * constant "this is the energy channel" identity color.
  */
 function PotentialAxis({
   label,

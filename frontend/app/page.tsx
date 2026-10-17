@@ -1,561 +1,167 @@
-"use client";
+import type { Metadata } from "next";
+import Link from "next/link";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-
-import { EnergyDeficitAnalysis } from "./components/EnergyDeficitAnalysis";
-import { EngineeringInterpretation } from "./components/EngineeringInterpretation";
-import {
-  BASELINE_EXPERIMENT_PARAMS,
-  ExperimentPanel,
-  type ExperimentParams,
-} from "./components/ExperimentPanel";
-import { KpiReadout } from "./components/KpiTile";
-import { PowerFlowSchematic } from "./components/PowerFlowSchematic";
-import { ProtectionCoordination } from "./components/ProtectionCoordination";
-import { ProtectionTimeline } from "./components/ProtectionTimeline";
-import { SCENARIO_OPTIONS, ScenarioSelector } from "./components/ScenarioSelector";
-import { ScenarioComparison } from "./components/ScenarioComparison";
-import { SensitivityStudy } from "./components/SensitivityStudy";
-import { TelemetryChart } from "./components/TelemetryChart";
-import { TimeScrubber } from "./components/TimeScrubber";
-import { TransientMetricsPanel } from "./components/TransientMetricsPanel";
-import { ViewModeToggle, type ViewMode } from "./components/ViewModeToggle";
-import {
-  fetchLoadStep,
-  fetchScenario,
-  fetchScenarioComparison,
-  sampleAt,
-  type LoadStepResponse,
-  type ScenarioComparisonResponse,
-  type ScenarioName,
-  type ScenarioRunResponse,
-  type Sample,
-} from "./lib/simulationApi";
-import { busStatus, sstStatus } from "./lib/statusRoles";
-import { SVG_COLOR } from "./lib/theme";
-import { computeTransientMetrics, formatEnergyDeficitKj } from "./lib/transientMetrics";
-
-// The initial AI load fraction (before the step) is fixed in V1 --
-// Scenario A always starts at 40% rated load, matching
-// `backend/schemas.py: LoadStepRequest.initial_fraction`'s own
-// default. Only the final (post-step) load is an experiment variable.
-const INITIAL_FRACTION = 0.4;
+export const metadata: Metadata = {
+  title: "AI Power Lab",
+};
 
 /**
- * The scrubber's default position for a freshly-loaded run: the
- * voltage minimum, not t=0. A first-time viewer should land on the
- * moment the transient is most visible, not on the flat pre-event
- * steady state -- "preferably t=0 unless there is a better existing
- * convention" (see the experiment-controls task this followed); this
- * is that better convention.
+ * AI Power Lab 2.0's learning-first homepage. Replaces the former
+ * simulator-first root (now at `/sandbox`, unchanged behavior). Server
+ * component -- static content and navigation only, no client state,
+ * no fetch.
+ *
+ * Positioning per the Phase 1B reboot: a personal, career-oriented
+ * learning platform for the AI data-center power infrastructure
+ * industry, built from public information -- not a research-grade
+ * digital twin. The four learning areas are introduced here; System
+ * Map is the primary entry point since it is the only one besides the
+ * Sandbox that is implemented today.
  */
-function defaultIndexFor(data: LoadStepResponse): number {
-  const metrics = computeTransientMetrics(data);
-  if (!metrics) return 0;
-  const timeS = data.timeseries.time_s;
-  let closest = 0;
-  let bestDiff = Infinity;
-  for (let i = 0; i < timeS.length; i++) {
-    const diff = Math.abs(timeS[i] - metrics.minVdcTimeS);
-    if (diff < bestDiff) {
-      bestDiff = diff;
-      closest = i;
-    }
-  }
-  return closest;
-}
-
-type LoadState =
-  | { status: "loading" }
-  | { status: "error"; message: string }
-  | { status: "ready"; data: ScenarioRunResponse };
-
-type ComparisonState =
-  | { status: "idle" }
-  | { status: "loading" }
-  | { status: "error"; message: string }
-  | { status: "ready"; data: ScenarioComparisonResponse };
-
-const SCENARIO_LABEL: Record<ScenarioName, string> = Object.fromEntries(
-  SCENARIO_OPTIONS.map((option) => [option.key, option.label]),
-) as Record<ScenarioName, string>;
-
-export default function Home() {
-  const [state, setState] = useState<LoadState>({ status: "loading" });
-  const [activeScenario, setActiveScenario] = useState<ScenarioName>("load_step");
-  const [index, setIndex] = useState(0);
-  const [draftParams, setDraftParams] = useState<ExperimentParams>(BASELINE_EXPERIMENT_PARAMS);
-  const [isRunning, setIsRunning] = useState(false);
-  const [runError, setRunError] = useState<string | null>(null);
-  const requestedRef = useRef(false);
-
-  // "Compare All" is a separate view mode, not a sixth scenario
-  // (SPEC-010 §8) -- it never touches `activeScenario`/`state` above,
-  // so returning to "Single Scenario" always restores exactly what was
-  // there before, unchanged.
-  const [viewMode, setViewMode] = useState<ViewMode>("single");
-  const [comparisonState, setComparisonState] = useState<ComparisonState>({ status: "idle" });
-  const comparisonRequestGenerationRef = useRef(0);
-
-  // Monotonically increasing request generation. Every fetch-starting
-  // action (initial load, a scenario selection, an experiment run)
-  // takes the next number and only applies its result if it is still
-  // the most recent request when it resolves -- so a slow RUN
-  // EXPERIMENT response can never land after (and overwrite) a
-  // scenario switched to in the meantime, or vice versa (SPEC-008
-  // AC-009: no stale value is ever shown, regardless of which request
-  // started it or finishes last).
-  const requestGenerationRef = useRef(0);
-
-  // Shared by the initial load and every later RUN EXPERIMENT /
-  // RESET click -- one fetch, one returned dataset, one place that
-  // replaces `state`. No component below this ever fetches on its
-  // own. Only reachable while Load Step is selected (the Advanced
-  // Experiment panel is Scenario-A-only, §12).
-  const runExperiment = useCallback((params: ExperimentParams) => {
-    const generation = ++requestGenerationRef.current;
-    setIsRunning(true);
-    setRunError(null);
-    fetchLoadStep({
-      final_fraction: params.finalFraction,
-      capacitance_f: params.capacitanceF,
-      time_constant_s: params.timeConstantS,
-    })
-      .then((data) => {
-        if (requestGenerationRef.current !== generation) return;
-        setState({ status: "ready", data });
-        setIndex(defaultIndexFor(data));
-      })
-      .catch((error: unknown) => {
-        if (requestGenerationRef.current !== generation) return;
-        setRunError(error instanceof Error ? error.message : "Unknown error");
-      })
-      .finally(() => {
-        if (requestGenerationRef.current === generation) setIsRunning(false);
-      });
-  }, []);
-
-  // Selecting any scenario option (SPEC-008 AC-009): clears to the
-  // same "loading" placeholder the initial mount uses, so no stale
-  // KPI/schematic/chart/Timeline value from the previous scenario is
-  // ever visible underneath the new fetch, then dispatches to the
-  // matching endpoint (Load Step's existing one, or the one shared
-  // GET endpoint for Scenarios B-E).
-  const selectScenario = useCallback((scenario: ScenarioName) => {
-    const generation = ++requestGenerationRef.current;
-    setActiveScenario(scenario);
-    setState({ status: "loading" });
-    // Supersedes any in-flight RUN EXPERIMENT request (its own stale
-    // generation check will now skip applying its result) -- also
-    // clear its "Running…" state directly, since that request's own
-    // `finally` will no longer run it (the experiment panel this
-    // guards is Load Step-only, so this is a no-op unless one was
-    // actually in flight).
-    setIsRunning(false);
-    setRunError(null);
-    fetchScenario(scenario)
-      .then((data) => {
-        if (requestGenerationRef.current !== generation) return;
-        setState({ status: "ready", data });
-        setIndex(scenario === "load_step" ? defaultIndexFor(data as LoadStepResponse) : 0);
-      })
-      .catch((error: unknown) => {
-        if (requestGenerationRef.current !== generation) return;
-        setState({
-          status: "error",
-          message: error instanceof Error ? error.message : "Unknown error",
-        });
-      });
-  }, []);
-
-  useEffect(() => {
-    // Guards against React Strict Mode's dev-only double effect
-    // invocation, which would otherwise dispatch this fetch twice on
-    // a single page load -- the ref persists across that synthetic
-    // mount/cleanup/remount, unlike a plain local variable.
-    if (requestedRef.current) return;
-    requestedRef.current = true;
-
-    const generation = ++requestGenerationRef.current;
-    fetchLoadStep()
-      .then((data) => {
-        if (requestGenerationRef.current !== generation) return;
-        setState({ status: "ready", data });
-        setIndex(defaultIndexFor(data));
-      })
-      .catch((error: unknown) => {
-        if (requestGenerationRef.current !== generation) return;
-        setState({
-          status: "error",
-          message: error instanceof Error ? error.message : "Unknown error",
-        });
-      });
-  }, []);
-
-  const handleReset = useCallback(() => {
-    setDraftParams(BASELINE_EXPERIMENT_PARAMS);
-    runExperiment(BASELINE_EXPERIMENT_PARAMS);
-  }, [runExperiment]);
-
-  // Selecting "Compare All" fetches the comparison endpoint once per
-  // entry into this mode; its own request-generation guard means a
-  // rapid double-toggle back to "Compare All" can never let an earlier,
-  // slower fetch overwrite a later one's result (same race-prevention
-  // pattern as `selectScenario`/`runExperiment` above -- this is a
-  // second, independent lane, not a change to either of theirs).
-  const selectViewMode = useCallback(
-    (mode: ViewMode) => {
-      setViewMode(mode);
-      if (mode !== "compare") return;
-
-      const generation = ++comparisonRequestGenerationRef.current;
-      setComparisonState({ status: "loading" });
-      fetchScenarioComparison()
-        .then((data) => {
-          if (comparisonRequestGenerationRef.current !== generation) return;
-          setComparisonState({ status: "ready", data });
-        })
-        .catch((error: unknown) => {
-          if (comparisonRequestGenerationRef.current !== generation) return;
-          setComparisonState({
-            status: "error",
-            message: error instanceof Error ? error.message : "Unknown error",
-          });
-        });
-    },
-    [],
-  );
-
+export default function HomePage() {
   return (
-    <main className="mx-auto flex w-full max-w-[1320px] flex-1 flex-col gap-3 px-6 py-4">
-      <header className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-hairline pb-2">
-        <div className="flex items-baseline gap-3">
-          <h1 className="text-lg font-bold tracking-tight text-primary">
-            AI POWER LAB
-          </h1>
-          <p className="font-mono text-[10.5px] uppercase tracking-[0.08em] text-secondary">
-            SST / 800 VDC CONTROL CENTER
-          </p>
-        </div>
-        <p className="text-[11px] font-semibold uppercase tracking-[0.04em] text-muted">
-          {SCENARIO_LABEL[activeScenario]}
+    <main className="mx-auto flex w-full max-w-[1320px] flex-1 flex-col gap-8 px-6 py-10">
+      <header className="flex flex-col gap-3 border-b border-hairline pb-6">
+        <p className="font-mono text-[10.5px] uppercase tracking-[0.08em] text-secondary">
+          A personal learning platform
         </p>
+        <h1 className="max-w-3xl text-2xl font-bold leading-tight tracking-tight text-primary sm:text-3xl">
+          Understanding AI data-center power infrastructure, from the grid to the rack.
+        </h1>
+        <p className="max-w-2xl text-[13.5px] leading-relaxed text-secondary">
+          AI Power Lab is built from public engineering and industry sources to develop a
+          systems-architecture and executive-level understanding of how AI data centers are
+          actually powered &mdash; the equipment, the architecture trade-offs, how the chain
+          behaves under real events, and what is happening in the industry around it.
+        </p>
+        <div className="flex flex-wrap gap-3 pt-1">
+          <Link
+            href="/system-map"
+            className="border border-accent bg-accent px-4 py-2 font-mono text-[11.5px] font-semibold uppercase tracking-[0.04em] text-canvas hover:opacity-90"
+          >
+            Start with the System Map &rarr;
+          </Link>
+          <Link
+            href="/sandbox"
+            className="border border-hairline px-4 py-2 font-mono text-[11.5px] font-semibold uppercase tracking-[0.04em] text-secondary hover:border-primary hover:text-primary"
+          >
+            Open the Advanced Sandbox
+          </Link>
+        </div>
       </header>
 
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <ScenarioSelector
-          selected={activeScenario}
-          onSelect={selectScenario}
-          disabled={state.status === "loading" || viewMode === "compare"}
-        />
-        <ViewModeToggle mode={viewMode} onSelect={selectViewMode} />
-      </div>
+      <section className="flex flex-col gap-3">
+        <h2 className="font-sans text-[13px] font-semibold uppercase tracking-[0.04em] text-secondary">
+          Four learning areas
+        </h2>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {LEARNING_AREAS.map((area) => (
+            <LearningAreaCard key={area.title} {...area} />
+          ))}
+        </div>
+      </section>
 
-      {viewMode === "compare" ? (
-        <>
-          {comparisonState.status === "loading" && (
-            <p className="font-mono text-xs text-muted">LOADING COMPARISON&hellip;</p>
-          )}
-          {comparisonState.status === "error" && (
-            <p className="border border-status-critical bg-surface px-3 py-2 font-mono text-xs text-status-critical">
-              API ERROR: {comparisonState.message}
-            </p>
-          )}
-          {comparisonState.status === "ready" && (
-            <ScenarioComparison entries={comparisonState.data.scenarios} />
-          )}
-        </>
-      ) : (
-        <>
-          {state.status === "loading" && (
-            <p className="font-mono text-xs text-muted">LOADING TELEMETRY&hellip;</p>
-          )}
-
-          {state.status === "error" && (
-            <p className="border border-status-critical bg-surface px-3 py-2 font-mono text-xs text-status-critical">
-              API ERROR: {state.message}
-            </p>
-          )}
-
-          {state.status === "ready" && (
-            <Console
-              data={state.data}
-              index={index}
-              onIndexChange={setIndex}
-              draftParams={draftParams}
-              onDraftChange={setDraftParams}
-              onRun={() => runExperiment(draftParams)}
-              onReset={handleReset}
-              isRunning={isRunning}
-              runError={runError}
-            />
-          )}
-        </>
-      )}
+      <section className="flex flex-col gap-2 border-t border-hairline pt-6">
+        <h2 className="font-sans text-[13px] font-semibold uppercase tracking-[0.04em] text-secondary">
+          What this is, and isn&rsquo;t
+        </h2>
+        <p className="max-w-3xl text-[12.5px] leading-relaxed text-secondary">
+          This project uses only public engineering principles, standards, and industry
+          sources &mdash; textbooks, published papers, datasheets, and public company/standards
+          disclosures. It is <strong className="text-primary">not</strong> a commercial
+          product, a research-grade digital twin, or a source of proprietary information from
+          any employer. The underlying simulation (grid &rarr; SST &rarr; 800&nbsp;VDC bus
+          &rarr; AI load) is a deliberately simple, lumped-parameter, system-level model of
+          one conceptual, emerging architecture, built to teach how the chain behaves
+          &mdash; not to reproduce a specific vendor&rsquo;s hardware or to imply that this
+          architecture is widely deployed.
+        </p>
+      </section>
     </main>
   );
 }
 
-function Console({
-  data,
-  index,
-  onIndexChange,
-  draftParams,
-  onDraftChange,
-  onRun,
-  onReset,
-  isRunning,
-  runError,
-}: {
-  data: ScenarioRunResponse;
-  index: number;
-  onIndexChange: (index: number) => void;
-  draftParams: ExperimentParams;
-  onDraftChange: (params: ExperimentParams) => void;
-  onRun: () => void;
-  onReset: () => void;
-  isRunning: boolean;
-  runError: string | null;
-}) {
-  const [advancedOpen, setAdvancedOpen] = useState(false);
-  const isLoadStep = data.scenario === "load_step";
-
-  // One index selected from the already-loaded run -- no new
-  // simulation run, no new API request, no interpolation.
-  const sample = sampleAt(data, index);
-  const timeS = data.timeseries.time_s;
-  const eventMarkers = data.events.map((e) => ({ time: e.time_s, label: e.label }));
-  const event = data.events[0];
-
-  // Fixed analysis over the whole run, computed once per fetched
-  // response -- not recomputed on every scrubber move. Scenario-A-only
-  // (SPEC-008 §12): `computeTransientMetrics` anchors to `events[0]`,
-  // which is absent or protection-derived (not a load event) for
-  // Scenarios B-E, so it is never called for them.
-  const metrics = useMemo(
-    () => (isLoadStep ? computeTransientMetrics(data as LoadStepResponse) : null),
-    [data, isLoadStep],
-  );
-
-  // The initial (pre-step) P_load sample is always real engine
-  // output, never a hardcoded "160" -- and since INITIAL_FRACTION is
-  // fixed, dividing it back out gives the load's rated power without
-  // the frontend ever hardcoding that config value either.
-  const initialPLoadKw = data.timeseries.p_load_w[0] / 1e3;
-  const finalPLoadKw = data.timeseries.p_load_w[data.timeseries.p_load_w.length - 1] / 1e3;
-  const loadRatedPowerW = data.timeseries.p_load_w[0] / INITIAL_FRACTION;
-
-  return (
-    <div className="flex flex-col gap-3">
-      {isLoadStep && event && (
-        <EventBanner initialKw={initialPLoadKw} finalKw={finalPLoadKw} stepTimeS={event.time_s} />
-      )}
-
-      <KpiStrip sample={sample} voltageReferenceV={data.thresholds.voltage_reference_v} />
-
-      <PowerFlowSchematic
-        sample={sample}
-        ratedPowerW={data.thresholds.rated_power_w}
-        voltageReferenceV={data.thresholds.voltage_reference_v}
-        capacitanceF={data.thresholds.capacitance_f}
-      />
-
-      {metrics && (
-        <EngineeringInterpretation
-          metrics={metrics}
-          voltageReferenceV={data.thresholds.voltage_reference_v}
-        />
-      )}
-
-      <ProtectionTimeline timeline={data.protection_timeline} />
-      <ProtectionCoordination timeline={data.protection_timeline} />
-
-      <TimeScrubber timeS={timeS} index={index} onChange={onIndexChange} />
-
-      <div className="flex flex-col gap-1.5">
-        <span className="font-sans text-[11.5px] font-semibold uppercase tracking-[0.04em] text-muted">
-          SYNCHRONIZED TRANSIENT
-        </span>
-        <div className="grid grid-cols-1 gap-2 lg:grid-cols-2">
-          <TelemetryChart
-            title="DC Bus Voltage — V_dc(t)"
-            timeS={timeS}
-            series={[{ label: "V_dc", values: data.timeseries.v_dc_v, color: SVG_COLOR.accent }]}
-            yUnit="V"
-            currentTimeS={sample.t_s}
-            referenceLines={[
-              {
-                value: data.thresholds.voltage_reference_v,
-                label: `V_ref = ${data.thresholds.voltage_reference_v.toFixed(0)} V`,
-              },
-            ]}
-            eventMarkers={eventMarkers}
-            markerPoint={
-              metrics
-                ? {
-                    time: metrics.minVdcTimeS,
-                    value: metrics.minVdcV,
-                    label: `min ${metrics.minVdcV.toFixed(0)} V`,
-                  }
-                : undefined
-            }
-          />
-          <TelemetryChart
-            title="Power Balance — P_load vs P_sst"
-            timeS={timeS}
-            series={[
-              {
-                label: "P_sst",
-                values: data.timeseries.p_sst_w.map((w) => w / 1e3),
-                color: SVG_COLOR.accent,
-              },
-              {
-                label: "P_load",
-                values: data.timeseries.p_load_w.map((w) => w / 1e3),
-                color: SVG_COLOR.neutral,
-                dashed: true,
-              },
-            ]}
-            yUnit="kW"
-            currentTimeS={sample.t_s}
-            eventMarkers={eventMarkers}
-            deficitFill={
-              metrics
-                ? {
-                    aboveLabel: "P_load",
-                    baselineLabel: "P_sst",
-                    windowEndS: metrics.minVdcTimeS,
-                    label: `shaded area ≈ ${formatEnergyDeficitKj(metrics)} kJ drawn from the DC bus (energy, not power)`,
-                  }
-                : undefined
-            }
-          />
-        </div>
-      </div>
-
-      {metrics && (
-        <EnergyDeficitAnalysis
-          metrics={metrics}
-          voltageReferenceV={data.thresholds.voltage_reference_v}
-        />
-      )}
-
-      {metrics && (
-        <TransientMetricsPanel
-          metrics={metrics}
-          voltageReferenceV={data.thresholds.voltage_reference_v}
-        />
-      )}
-
-      {isLoadStep && (
-        <div className="flex flex-col gap-1.5 border-t border-hairline pt-2">
-          <button
-            type="button"
-            onClick={() => setAdvancedOpen((open) => !open)}
-            className="flex items-center gap-1.5 self-start font-sans text-[10.5px] font-semibold uppercase tracking-[0.04em] text-muted"
-          >
-            <span className="font-mono text-[12px] leading-none">{advancedOpen ? "−" : "+"}</span>
-            Advanced Experiment
-          </button>
-          {advancedOpen && (
-            <ExperimentPanel
-              draft={draftParams}
-              onDraftChange={onDraftChange}
-              onRun={onRun}
-              onReset={onReset}
-              isRunning={isRunning}
-              initialPLoadKw={initialPLoadKw}
-              loadRatedPowerW={loadRatedPowerW}
-              error={runError}
-            />
-          )}
-        </div>
-      )}
-
-      {isLoadStep && <SensitivityStudy draft={draftParams} />}
-    </div>
-  );
+interface LearningArea {
+  title: string;
+  question: string;
+  description: string;
+  href: string | null;
+  status: "live" | "planned";
 }
 
-/**
- * States the one thing that happens in Scenario A in plain, concrete
- * terms before any chart or number -- the "what changed" a first-time
- * reader needs before anything else makes sense. Every figure is a
- * real sample from the fetched run (first/last P_load, the engine's
- * own event marker), never a hardcoded "160 -> 320".
- */
-function EventBanner({
-  initialKw,
-  finalKw,
-  stepTimeS,
-}: {
-  initialKw: number;
-  finalKw: number;
-  stepTimeS: number;
-}) {
-  return (
-    <section className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 border-b border-hairline pb-2">
-      <div className="flex items-baseline gap-3">
-        <span className="font-sans text-[10.5px] font-semibold uppercase tracking-[0.04em] text-muted">
-          THE EVENT
-        </span>
-        <span className="font-mono text-[18px] font-semibold tabular-nums text-primary">
-          {initialKw.toFixed(0)} <span className="text-muted">&rarr;</span> {finalKw.toFixed(0)}{" "}
-          <span className="text-[12px] font-normal text-muted">kW</span>
-        </span>
-        <span className="font-mono text-[11px] tabular-nums text-secondary">
-          at t = {stepTimeS.toFixed(3)} s
+const LEARNING_AREAS: ReadonlyArray<LearningArea> = [
+  {
+    title: "System Map",
+    question: "What are the pieces, and how do they connect?",
+    description:
+      "The physical power path from the utility grid through substations, conversion, " +
+      "distribution, and racks, to AI compute and cooling — plus where architectures " +
+      "diverge, such as conventional AC distribution versus emerging 800 VDC concepts.",
+    href: "/system-map",
+    status: "live",
+  },
+  {
+    title: "Architecture Choices",
+    question: "Why these designs, and what are the trade-offs?",
+    description:
+      "How conventional AC distribution, emerging 800 VDC architectures, and solid-state " +
+      "transformers (SSTs, one optional way to do the grid-side conversion, not a " +
+      "requirement for 800 VDC) compare, and what assumptions and trade-offs each carries.",
+    href: null,
+    status: "planned",
+  },
+  {
+    title: "Learn by Example",
+    question: "Show me the chain responding to a real event.",
+    description:
+      "Annotated walkthroughs of the simulated chain under load steps, grid faults, and " +
+      "thermal trips — the same engine the Advanced Sandbox exposes in full.",
+    href: null,
+    status: "planned",
+  },
+  {
+    title: "Industry & Career",
+    question: "What's happening in industry, and what does it mean for me?",
+    description:
+      "Public company, product, and standards developments in AI data-center power, " +
+      "tracked over time, framed for an engineer building a systems-architecture career path.",
+    href: null,
+    status: "planned",
+  },
+];
+
+function LearningAreaCard({ title, question, description, href, status }: LearningArea) {
+  const body = (
+    <>
+      <div className="flex items-center justify-between gap-2">
+        <h3 className="text-[14px] font-semibold text-primary">{title}</h3>
+        <span
+          className={`font-mono text-[9.5px] uppercase tracking-[0.06em] ${
+            status === "live" ? "text-status-good" : "text-secondary"
+          }`}
+        >
+          {status === "live" ? "available" : "planned"}
         </span>
       </div>
-      <p className="max-w-md text-[11.5px] leading-snug text-secondary">
-        AI compute demand jumps almost instantly &mdash; far faster than this model&rsquo;s SST
-        (solid-state transformer) response time constant lets delivered power follow.
-      </p>
-    </section>
+      <p className="mt-1 text-[12px] italic leading-snug text-secondary">{question}</p>
+      <p className="mt-1.5 text-[12px] leading-relaxed text-secondary">{description}</p>
+    </>
   );
-}
 
-function KpiStrip({
-  sample,
-  voltageReferenceV,
-}: {
-  sample: Sample;
-  voltageReferenceV: number;
-}) {
-  const bus = busStatus(sample.v_dc_v, voltageReferenceV);
-  const sst = sstStatus(sample.operating_state);
-  const mismatchW = sample.p_load_w - sample.p_sst_w;
+  if (href) {
+    return (
+      <Link
+        href={href}
+        className="flex flex-col border border-hairline bg-surface px-4 py-3 hover:border-primary"
+      >
+        {body}
+      </Link>
+    );
+  }
 
   return (
-    <div className="grid grid-cols-2 gap-x-2 border-y border-hairline sm:grid-cols-4 sm:gap-x-0 sm:divide-x sm:divide-hairline">
-      <KpiReadout
-        label="V_DC"
-        caption="DC bus voltage"
-        value={sample.v_dc_v.toFixed(1)}
-        unit="V"
-        role={bus.role}
-      />
-      <KpiReadout
-        label="P_LOAD"
-        caption="AI demand"
-        value={(sample.p_load_w / 1e3).toFixed(1)}
-        unit="kW"
-        role="neutral"
-      />
-      <KpiReadout
-        label="P_SST"
-        caption="SST delivered power"
-        value={(sample.p_sst_w / 1e3).toFixed(1)}
-        unit="kW"
-        role={sst.role}
-      />
-      <KpiReadout
-        label="ΔP"
-        caption={mismatchW >= 0 ? "power deficit — bus is supplying this" : "power surplus — bus is recharging"}
-        value={(Math.abs(mismatchW) / 1e3).toFixed(1)}
-        unit="kW"
-        role="neutral"
-      />
+    <div className="flex flex-col border border-hairline bg-surface-raised px-4 py-3 opacity-80">
+      {body}
     </div>
   );
 }
