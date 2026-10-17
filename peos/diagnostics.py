@@ -200,6 +200,43 @@ def sanitize_identity_text(text: str) -> str:
     return bound("".join(pieces))
 
 
+def classify_transient_failure(result) -> str:
+    """SPEC-007 "Provider Usage/Rate-Limit Classification" (Decision 3):
+    stable-signal-only, version-independent classification of whether a
+    failed agent invocation (`ClaudeRunResult`/`CodexReviewResult`, or
+    anything with the same `ok`/`returncode` shape) is safely resumable
+    (`"execution_not_completed"`) or not (`"not_transient"`, the
+    default). Never free-text/substring matching of either CLI's stdout/
+    stderr content (explicitly out of scope).
+
+    V1 ships only the one CLI-agnostic signal both `peos/claude_agent.py`
+    and `peos/codex_agent.py` already establish identically: `returncode
+    == -1` is each module's own existing marker (`_uninterpretable`/
+    `_fail`, used only when the subprocess itself never completed --
+    `subprocess.TimeoutExpired`/`FileNotFoundError`/`OSError` raised by
+    the `runner()` call itself) for "the subprocess never ran to
+    completion at all". A real, *normal* exit always reports a
+    non-negative code (0-255), so this never collides with a genuine
+    CLI/content failure. Codex closure review (precise, not a safety
+    gap): Python's `subprocess` module also reports a *negative* code
+    `-N` for a child killed by signal `N` (e.g. `-1` for `SIGHUP`
+    specifically) -- so a process that *did* launch and run, but was
+    then killed by that one specific signal, is indistinguishable from
+    "never completed" by this check alone. This is accepted, not
+    disambiguated further in V1: both cases describe an agent invocation
+    that produced no usable final result through no fault of its own
+    content, so classifying either as resumable is correct either way --
+    the ambiguity is between two sub-cases that already share the same,
+    safe classification, never between "transient" and "a genuine
+    content/logic failure".
+    """
+    if getattr(result, "ok", True):
+        return "not_transient"
+    if getattr(result, "returncode", None) == -1:
+        return "execution_not_completed"
+    return "not_transient"
+
+
 def sanitize_human_text(text: str) -> str:
     """Redact and bound one agent-controlled, human-facing free-text
     field -- SPEC-003 remediation Finding 3 (MAJOR): Claude's `summary`/

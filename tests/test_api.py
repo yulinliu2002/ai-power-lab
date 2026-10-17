@@ -9,12 +9,64 @@ becomes a second implementation of the simulation.
 
 from __future__ import annotations
 
+import pytest
 from fastapi.testclient import TestClient
 
 from backend.app import app
 from dashboard.adapters import simulation_adapter as adapter
+from dashboard.adapters.protection_timeline import build_protection_timeline
+from dashboard.adapters.scenario_comparison import build_stress_profile
 
 client = TestClient(app)
+
+
+def _timeline_to_dict(timeline) -> dict:
+    """JSON-shaped dict matching `ProtectionTimelineModel`'s serialization,
+    for direct comparison against a response body's `protection_timeline`.
+    """
+    return {
+        "segments": [
+            {
+                "state": s.state,
+                "start_time_s": s.start_time_s,
+                "end_time_s": s.end_time_s,
+                "duration_s": s.duration_s,
+                "is_open_ended": s.is_open_ended,
+            }
+            for s in timeline.segments
+        ],
+        "events": [
+            {"time_s": e.time_s, "category": e.category, "label": e.label, "cause": e.cause, "detail": e.detail}
+            for e in timeline.events
+        ],
+        "outcome": timeline.outcome.value,
+        "outcome_event_time_s": timeline.outcome_event_time_s,
+        "outcome_label": timeline.outcome_label,
+        "outcome_detail": timeline.outcome_detail,
+        "recovery": timeline.recovery.value,
+        "recovery_label": timeline.recovery_label,
+        "trip_event_time_s": timeline.trip_event_time_s,
+        "bus_collapse_event_time_s": timeline.bus_collapse_event_time_s,
+        "coordination": {
+            "result": timeline.coordination.result.value,
+            "result_label": timeline.coordination.result_label,
+            "result_detail": timeline.coordination.result_detail,
+            "derating_preceded_terminal_event": timeline.coordination.derating_preceded_terminal_event,
+            "separations": [
+                {
+                    "label": sep.label,
+                    "from_time_s": sep.from_time_s,
+                    "to_time_s": sep.to_time_s,
+                    "duration_s": sep.duration_s,
+                }
+                for sep in timeline.coordination.separations
+            ],
+        },
+        "coverage": [
+            {"function": c.function, "modeled": c.modeled, "detail": c.detail}
+            for c in timeline.coverage
+        ],
+    }
 
 
 def test_health() -> None:
@@ -36,7 +88,7 @@ def test_load_step_response_schema_shape() -> None:
     response = client.post("/api/v1/simulations/load-step", json={"duration_s": 0.3})
     body = response.json()
 
-    assert set(body.keys()) == {"scenario", "thresholds", "events", "timeseries"}
+    assert set(body.keys()) == {"scenario", "thresholds", "events", "timeseries", "protection_timeline"}
     assert set(body["thresholds"].keys()) == {
         "voltage_reference_v", "rated_power_w", "thermal_derate_start_c", "thermal_trip_c",
         "capacitance_f",
@@ -225,3 +277,205 @@ def test_load_step_parity_with_source_of_truth() -> None:
 
     api_events = response.json()["events"]
     assert [(e["time_s"], e["label"]) for e in api_events] == direct.events
+
+
+def test_load_step_protection_timeline_matches_direct_build() -> None:
+    """AC-006/AC-007 parity: LoadStepResponse's additive `protection_timeline`
+    must be identical to calling `build_protection_timeline` directly on
+    the same adapter call's result."""
+    direct = adapter.run_load_step()
+    expected = _timeline_to_dict(build_protection_timeline(direct.telemetry, direct.config, direct.events))
+
+    response = client.post("/api/v1/simulations/load-step", json={})
+    assert response.json()["protection_timeline"] == expected
+
+
+# --------------------------------------------------------------------------
+# GET /api/v1/simulations/protection-scenarios/{scenario} (SPEC-008)
+# --------------------------------------------------------------------------
+
+_PROTECTION_SCENARIOS = ["sustained_high_load", "thermal_trip", "grid_sag", "grid_loss"]
+
+
+def test_protection_scenario_accepts_every_valid_name() -> None:
+    for scenario in _PROTECTION_SCENARIOS:
+        response = client.get(f"/api/v1/simulations/protection-scenarios/{scenario}")
+        assert response.status_code == 200, scenario
+        body = response.json()
+        assert body["scenario"] == scenario
+        assert "protection_timeline" in body
+        assert "thresholds" in body
+
+
+def test_protection_scenario_rejects_invalid_name() -> None:
+    response = client.get("/api/v1/simulations/protection-scenarios/not_a_real_scenario")
+    assert response.status_code == 422
+
+
+def test_protection_scenario_response_schema_shape() -> None:
+    response = client.get("/api/v1/simulations/protection-scenarios/grid_sag")
+    body = response.json()
+
+    assert set(body.keys()) == {"scenario", "thresholds", "events", "timeseries", "protection_timeline"}
+    assert set(body["thresholds"].keys()) == {
+        "voltage_reference_v", "rated_power_w", "thermal_derate_start_c", "thermal_trip_c",
+        "capacitance_f", "thermal_trip_time_s", "derate_factor_min", "floor_voltage_v",
+    }
+    assert set(body["protection_timeline"].keys()) == {
+        "segments", "events", "outcome", "outcome_event_time_s", "outcome_label", "outcome_detail",
+        "recovery", "recovery_label", "trip_event_time_s", "bus_collapse_event_time_s",
+        "coordination", "coverage",
+    }
+
+
+@pytest.mark.parametrize(
+    "scenario,adapter_fn",
+    [
+        ("sustained_high_load", adapter.run_sustained_high_load),
+        ("thermal_trip", adapter.run_thermal_trip),
+        ("grid_sag", adapter.run_grid_sag),
+        ("grid_loss", adapter.run_grid_loss),
+    ],
+)
+def test_protection_scenario_thresholds_echo_the_config_actually_used(scenario, adapter_fn) -> None:
+    direct = adapter_fn()
+    response = client.get(f"/api/v1/simulations/protection-scenarios/{scenario}")
+    thresholds = response.json()["thresholds"]
+
+    assert thresholds["voltage_reference_v"] == direct.config.controller.voltage_reference_v
+    assert thresholds["rated_power_w"] == direct.config.sst.rated_power_w
+    assert thresholds["thermal_derate_start_c"] == direct.config.protection.thermal_derate_start_c
+    assert thresholds["thermal_trip_c"] == direct.config.protection.thermal_trip_c
+    assert thresholds["capacitance_f"] == direct.config.dc_bus.capacitance_f
+    assert thresholds["thermal_trip_time_s"] == direct.config.protection.thermal_trip_time_s
+    assert thresholds["derate_factor_min"] == direct.config.protection.derate_factor_min
+
+
+@pytest.mark.parametrize(
+    "scenario,adapter_fn,reconciled_input_events",
+    [
+        ("sustained_high_load", adapter.run_sustained_high_load, None),
+        ("thermal_trip", adapter.run_thermal_trip, []),
+        ("grid_sag", adapter.run_grid_sag, None),
+        ("grid_loss", adapter.run_grid_loss, None),
+    ],
+)
+def test_protection_scenario_timeline_matches_direct_build(
+    scenario, adapter_fn, reconciled_input_events
+) -> None:
+    """AC-006 parity: `protection_timeline` is identical to calling
+    `build_protection_timeline` directly on that same adapter call's
+    result (with the §11-reconciled `input_events`)."""
+    direct = adapter_fn()
+    input_events = direct.events if reconciled_input_events is None else reconciled_input_events
+    expected = _timeline_to_dict(build_protection_timeline(direct.telemetry, direct.config, input_events))
+
+    response = client.get(f"/api/v1/simulations/protection-scenarios/{scenario}")
+    assert response.json()["protection_timeline"] == expected
+
+
+def test_protection_scenario_thermal_trip_excludes_protection_derived_input_events() -> None:
+    """AC-016, at the API boundary: Thermal Trip's returned Protection
+    Timeline contains no `input_event` entry copied from the adapter's
+    own protection-derived markers ("derating begins", "TRIPPED")."""
+    response = client.get("/api/v1/simulations/protection-scenarios/thermal_trip")
+    timeline = response.json()["protection_timeline"]
+    input_labels = {e["label"] for e in timeline["events"] if e["category"] == "input_event"}
+    assert "derating begins" not in input_labels
+    assert "TRIPPED" not in input_labels
+
+
+def test_protection_scenario_grid_sag_includes_genuine_input_events() -> None:
+    """AC-016, at the API boundary: Grid Sag's genuine load/grid-input
+    markers appear unchanged in the returned Protection Timeline."""
+    direct = adapter.run_grid_sag()
+    response = client.get("/api/v1/simulations/protection-scenarios/grid_sag")
+    timeline = response.json()["protection_timeline"]
+    input_labels = [e["label"] for e in timeline["events"] if e["category"] == "input_event"]
+    assert input_labels == [label for _, label in direct.events]
+
+
+# --------------------------------------------------------------------------
+# GET /api/v1/simulations/comparison (SPEC-010)
+# --------------------------------------------------------------------------
+
+_COMPARISON_SCENARIOS = [
+    ("load_step", adapter.run_load_step, False),
+    ("sustained_high_load", adapter.run_sustained_high_load, False),
+    ("thermal_trip", adapter.run_thermal_trip, True),
+    ("grid_sag", adapter.run_grid_sag, False),
+    ("grid_loss", adapter.run_grid_loss, False),
+]
+
+_STRESS_PROFILE_FIELDS = {
+    "min_v_dc_v", "max_v_dc_v", "max_voltage_deviation_v", "max_voltage_deviation_percent",
+    "peak_power_deficit_w", "dc_link_energy_excursion_j", "max_temperature_c",
+    "grid_ever_unavailable", "min_grid_voltage_pu", "protection_states_reached",
+    "dominant_stress", "dominant_stress_label", "dominant_stress_detail",
+}
+
+
+def _stress_profile_to_dict(profile) -> dict:
+    return {
+        "min_v_dc_v": profile.min_v_dc_v,
+        "max_v_dc_v": profile.max_v_dc_v,
+        "max_voltage_deviation_v": profile.max_voltage_deviation_v,
+        "max_voltage_deviation_percent": profile.max_voltage_deviation_percent,
+        "peak_power_deficit_w": profile.peak_power_deficit_w,
+        "dc_link_energy_excursion_j": profile.dc_link_energy_excursion_j,
+        "max_temperature_c": profile.max_temperature_c,
+        "grid_ever_unavailable": profile.grid_ever_unavailable,
+        "min_grid_voltage_pu": profile.min_grid_voltage_pu,
+        "protection_states_reached": list(profile.protection_states_reached),
+        "dominant_stress": profile.dominant_stress.value,
+        "dominant_stress_label": profile.dominant_stress_label,
+        "dominant_stress_detail": profile.dominant_stress_detail,
+    }
+
+
+def test_comparison_returns_all_five_scenarios_in_fixed_order() -> None:
+    """AC-044: exactly five entries, fixed order."""
+    response = client.get("/api/v1/simulations/comparison")
+    assert response.status_code == 200
+    body = response.json()
+    assert [entry["scenario"] for entry in body["scenarios"]] == [
+        name for name, _, _ in _COMPARISON_SCENARIOS
+    ]
+
+
+def test_comparison_response_schema_shape() -> None:
+    """AC-045: top-level and nested key-set assertions."""
+    response = client.get("/api/v1/simulations/comparison")
+    body = response.json()
+
+    assert set(body.keys()) == {"scenarios"}
+    for entry in body["scenarios"]:
+        assert set(entry.keys()) == {"scenario", "thresholds", "protection_timeline", "stress_profile"}
+        assert set(entry["thresholds"].keys()) == {
+            "voltage_reference_v", "rated_power_w", "thermal_derate_start_c", "thermal_trip_c",
+            "capacitance_f", "thermal_trip_time_s", "derate_factor_min", "floor_voltage_v",
+        }
+        assert set(entry["stress_profile"].keys()) == _STRESS_PROFILE_FIELDS
+
+
+@pytest.mark.parametrize("scenario,scenario_fn,input_events_filtered", _COMPARISON_SCENARIOS)
+def test_comparison_entry_matches_direct_build(scenario, scenario_fn, input_events_filtered) -> None:
+    """AC-044: each entry's `protection_timeline`/`stress_profile`
+    matches direct computation on the same adapter call."""
+    direct = scenario_fn()
+    input_events = [] if input_events_filtered else direct.events
+    expected_timeline = _timeline_to_dict(
+        build_protection_timeline(direct.telemetry, direct.config, input_events)
+    )
+    expected_profile = _stress_profile_to_dict(
+        build_stress_profile(
+            direct.telemetry,
+            direct.config,
+            build_protection_timeline(direct.telemetry, direct.config, input_events),
+        )
+    )
+
+    response = client.get("/api/v1/simulations/comparison")
+    entry = next(e for e in response.json()["scenarios"] if e["scenario"] == scenario)
+    assert entry["protection_timeline"] == expected_timeline
+    assert entry["stress_profile"] == expected_profile

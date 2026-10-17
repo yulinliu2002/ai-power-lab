@@ -9,10 +9,13 @@ from peos.codex_agent import Finding, HistoricalFindingDisposition
 from peos.findings_register import RESOLVED, FindingsRegister
 from peos.round_packet import (
     ActiveDispute,
+    RuntimeCheckSummary,
+    RuntimeEvidenceRef,
     StaticContextRef,
     build_round_packet,
     render_historical_dispositions_for_prompt,
     render_round_packet_header,
+    render_runtime_evidence_for_prompt,
 )
 
 
@@ -177,3 +180,43 @@ def test_render_historical_dispositions_empty_when_nothing_closed_yet():
         governance_identities=(), baseline_commit="",
     )
     assert "no historical finding has been dispositioned yet" in render_historical_dispositions_for_prompt(packet)
+
+
+def _base_packet(**overrides):
+    kwargs = dict(
+        task="t", spec_relative_path="s", spec_content_hash="h", decision_identities=(),
+        cycle_number=0, max_cycles=3, workspace_snapshot_identity="w",
+        verification_passed=None, verification_summary="", register=FindingsRegister(),
+        active_disputes=(), acceptance_criteria_ids=(), static_context_artifacts=(),
+        governance_identities=(), baseline_commit="",
+    )
+    kwargs.update(overrides)
+    return build_round_packet(**kwargs)
+
+
+def test_runtime_evidence_absent_by_default():
+    packet = _base_packet()
+    assert packet.runtime_evidence is None
+    assert "no runtime checks declared" in render_runtime_evidence_for_prompt(packet)
+
+
+def test_ac021_runtime_evidence_ref_present_and_rendered_into_prompt_text():
+    ref = RuntimeEvidenceRef(
+        staged_relative_path=".peos/runtime-evidence/cycle-0/evidence.json",
+        evidence_json_sha256="deadbeef" * 8,
+        execution_integrity_passed=True,
+        checks=(
+            RuntimeCheckSummary(check_id="runtime.cycle-0.0.viewport_overflow", kind="viewport_overflow",
+                                 status="PASS", related_ac_ids=("AC-012",)),
+            RuntimeCheckSummary(check_id="runtime.cycle-0.1.page_load", kind="page_load",
+                                 status="NOT_EXECUTED", related_ac_ids=("AC-001",)),
+        ),
+    )
+    packet = _base_packet(runtime_evidence=ref)
+    assert packet.runtime_evidence is ref
+
+    rendered = render_round_packet_header(packet)
+    assert ".peos/runtime-evidence/cycle-0/evidence.json" in rendered
+    assert "PASSED" in rendered  # execution integrity line
+    assert "viewport_overflow" in rendered
+    assert "NOT_EXECUTED" in rendered

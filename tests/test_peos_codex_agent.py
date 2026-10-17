@@ -785,3 +785,78 @@ def test_finding_missing_requires_human_decision_key_is_rejected():
     result = run_codex_review("prompt", Path("."), runner=runner)
     assert not result.ok
     assert result.verdict is None
+
+
+# SPEC-006 Section 14: runtime-evidenced AC contract (AC-022-024).
+
+def test_ac022_approve_met_true_for_runtime_fail_ac_is_rejected():
+    runner = _runner_writing_last_message({
+        "verdict": "APPROVE", "summary": "ok", "findings": [],
+        "acceptance_criteria": [{"id": "AC-012", "met": True, "note": "looks fine"}],
+    })
+    result = run_codex_review(
+        "prompt", Path("."), runner=runner, runtime_evidenced_ac_status={"AC-012": "FAIL"},
+    )
+    assert not result.ok
+    assert result.verdict is None
+
+
+def test_ac022_changes_required_met_true_for_runtime_not_executed_ac_is_also_rejected():
+    """The contract applies regardless of the overall verdict -- a
+    CHANGES_REQUIRED payload asserting met=true for a NOT_EXECUTED-backed
+    AC is just as invalid as an APPROVE one would be."""
+    runner = _runner_writing_last_message({
+        "verdict": "CHANGES_REQUIRED", "summary": "other issues remain",
+        "findings": [
+            {"severity": "minor", "category": "non_blocking_improvement", "description": "x",
+             "requires_human_decision": False},
+        ],
+        "acceptance_criteria": [{"id": "AC-012", "met": True, "note": "looks fine"}],
+    })
+    result = run_codex_review(
+        "prompt", Path("."), runner=runner, runtime_evidenced_ac_status={"AC-012": "NOT_EXECUTED"},
+    )
+    assert not result.ok
+
+
+def test_ac023_met_false_for_runtime_fail_ac_is_accepted_normally():
+    runner = _runner_writing_last_message({
+        "verdict": "CHANGES_REQUIRED", "summary": "overflow detected",
+        "findings": [
+            {"severity": "major", "category": "implementation_defect", "description": "mobile overflow",
+             "requires_human_decision": False},
+        ],
+        "acceptance_criteria": [{"id": "AC-012", "met": False, "note": "overflow detected"}],
+    })
+    result = run_codex_review(
+        "prompt", Path("."), runner=runner, runtime_evidenced_ac_status={"AC-012": "FAIL"},
+    )
+    assert result.ok
+    assert not result.approved
+
+
+def test_ac024_met_true_for_runtime_pass_ac_is_accepted_normally():
+    runner = _runner_writing_last_message({
+        "verdict": "APPROVE", "summary": "ok", "findings": [],
+        "acceptance_criteria": [{"id": "AC-012", "met": True, "note": "no overflow observed"}],
+    })
+    result = run_codex_review(
+        "prompt", Path("."), runner=runner, runtime_evidenced_ac_status={"AC-012": "PASS"},
+    )
+    assert result.ok
+    assert result.approved
+
+
+def test_ac025_ac_not_in_runtime_mapping_is_unconstrained():
+    """An AC the governing specification did not map to any declared
+    runtime check (NOT_APPLICABLE, absent from the mapping's domain) is
+    never constrained by this rule."""
+    runner = _runner_writing_last_message({
+        "verdict": "APPROVE", "summary": "ok", "findings": [],
+        "acceptance_criteria": [{"id": "AC-999", "met": True, "note": "covered by code inspection"}],
+    })
+    result = run_codex_review(
+        "prompt", Path("."), runner=runner, runtime_evidenced_ac_status={"AC-012": "FAIL"},
+    )
+    assert result.ok
+    assert result.approved

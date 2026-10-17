@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
 
+import { SiteNav } from "./components/SiteNav";
+
 // Self-hosted (not next/font/google): the exact IBM Plex Sans/Mono latin
 // .woff2 files Google Fonts serves for this app's weights, vendored once
 // so `next build` never needs network access to fonts.googleapis.com.
@@ -36,6 +38,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       className={`${plexSans.variable} ${plexMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-canvas text-primary font-sans">
+        <SiteNav />
         {children}
       </body>
     </html>

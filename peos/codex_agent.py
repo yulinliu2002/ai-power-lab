@@ -402,6 +402,7 @@ def _validate_review_payload(
     *,
     active_dispute_references: frozenset = frozenset(),
     required_ac_ids: frozenset = frozenset(),
+    runtime_evidenced_ac_status: dict | None = None,
 ) -> CodexReviewResult:
     """Strictly validate a parsed Codex payload. Fails closed on every
     reproduced adversarial case (SPEC-001 remediation Finding 4): a
@@ -417,7 +418,24 @@ def _validate_review_payload(
     payload itself -- both default to empty, reproducing SPEC-001/
     SPEC-003's exact behavior (no dispute mechanism, no AC-completeness
     check) when a caller does not supply them.
+
+    SPEC-006 Section 14 "Contract: a runtime-evidenced AC's `met=true`
+    requires a PASS rollup": `runtime_evidenced_ac_status` is the
+    orchestrator-computed, per-round mapping from AC ID to its four-state
+    runtime rollup (`peos.runtime_evidence.RuntimeEvidence.
+    runtime_evidenced_ac_status`), supplied by `peos/workflow.py`. For
+    every AC ID present in this mapping, a `met=true` assertion is a
+    contract violation -- the same `FAILED` treatment every other
+    "contradictory APPROVE" case in this function already receives --
+    unless that AC's rollup is exactly `"PASS"`. This check applies
+    regardless of the overall `verdict` (a `CHANGES_REQUIRED` payload
+    asserting `met=true` for a FAIL/NOT_EXECUTED-backed AC is just as
+    invalid as an `APPROVE` one would be); `met=false` for the same AC
+    is never affected. Defaults to `None` (treated as empty), reproducing
+    unchanged behavior for every caller/specification that does not
+    declare Runtime Verification checks.
     """
+    runtime_evidenced_ac_status = runtime_evidenced_ac_status or {}
     if not isinstance(data, dict):
         return _fail(0, build_diagnostic(
             structured_message=f"Codex top-level output was not a JSON object (got {type(data).__name__})",
@@ -495,6 +513,27 @@ def _validate_review_payload(
             structured_message=f"Codex `acceptance_criteria` field is malformed: {data.get('acceptance_criteria')!r}",
             category_override="schema",
         ))
+
+    # SPEC-006 Section 14: a runtime-evidenced AC's met=true requires a
+    # PASS rollup -- checked unconditionally (not only within an APPROVE
+    # verdict), since asserting a specific criterion is satisfied while
+    # the orchestrator's own machine evidence proves otherwise is a
+    # contract violation regardless of what the overall verdict says.
+    for ac in acceptance_criteria:
+        ac_id = ac["id"]
+        if ac["met"] is not True or ac_id not in runtime_evidenced_ac_status:
+            continue
+        rollup = runtime_evidenced_ac_status[ac_id]
+        if rollup != "PASS":
+            return _fail(0, build_diagnostic(
+                structured_message=(
+                    f"Codex asserted met=true for {ac['display_id']}, but SPEC-006 Runtime "
+                    f"Verification evidence for this round rolls that AC up to {rollup!r} "
+                    "(not PASS). Failing closed rather than trusting the acceptance_criteria "
+                    "field alone."
+                ),
+                category_override="schema",
+            ))
 
     # SPEC-004 Requirement 8 (AC-10): `reviewer_overrules_dispute` and
     # `addressed_dispute_references` must be null together (no dispute
@@ -656,6 +695,7 @@ def run_codex_review(
     env: dict | None = None,
     active_dispute_references: frozenset = frozenset(),
     required_ac_ids: frozenset = frozenset(),
+    runtime_evidenced_ac_status: dict | None = None,
 ) -> CodexReviewResult:
     """Invoke Codex for an independent review of `cwd` (the isolated
     workspace, never the authoritative repository directly) and capture
@@ -666,7 +706,8 @@ def run_codex_review(
     yields `ok=False, verdict=None` rather than guessing APPROVE
     (SPEC-001 Section 11, AC-011).
 
-    `active_dispute_references`/`required_ac_ids` (SPEC-004) are
+    `active_dispute_references`/`required_ac_ids` (SPEC-004) and
+    `runtime_evidenced_ac_status` (SPEC-006 Section 14) are
     orchestrator-owned state forwarded verbatim to
     `_validate_review_payload`; see that function's docstring.
     """
@@ -721,6 +762,7 @@ def run_codex_review(
 
         result = _validate_review_payload(
             data, active_dispute_references=active_dispute_references, required_ac_ids=required_ac_ids,
+            runtime_evidenced_ac_status=runtime_evidenced_ac_status,
         )
         if not result.ok:
             return CodexReviewResult(

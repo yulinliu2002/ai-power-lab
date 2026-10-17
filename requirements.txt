@@ -8,3 +8,11 @@ pandas
 fastapi
 uvicorn
 httpx
+
+# PEOS Runtime Verification (SPEC-006). Pinned exactly, not a range --
+# bumping this also changes the Chromium build every piece of runtime
+# evidence depends on, which is a reviewed decision, not a routine
+# dependency update. The Chromium browser binary itself is installed by
+# a separate, explicit, human-run step (`python -m playwright install
+# chromium`), never by this requirements file or by PEOS during a run.
+playwright==1.49.1

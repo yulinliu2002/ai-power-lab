@@ -42,7 +42,7 @@ def make_minimal_repo(tmp_path: Path, spec_status: str = "Approved") -> Path:
     # untracked-file scan (`git ls-files --others --exclude-standard`),
     # exactly as a real target repository without this gitignore entry
     # would confuse real reconciliation too.
-    (repo_root / ".gitignore").write_text(".peos/runs/\n", encoding="utf-8")
+    (repo_root / ".gitignore").write_text(".peos/runs/\n.peos/run.lock\n", encoding="utf-8")
 
     specs_dir = repo_root / "docs" / "specifications"
     specs_dir.mkdir(parents=True)

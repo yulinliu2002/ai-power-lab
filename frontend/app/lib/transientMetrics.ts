@@ -74,6 +74,15 @@ export interface TransientMetrics {
 const RECOVERY_BAND_FRACTION = 0.01;
 
 /**
+ * The one display string for the accumulated energy deficit [kJ]. The
+ * Power Balance chart caption and the ANALYZE section both call this,
+ * so the two can never be formatted or rounded differently.
+ */
+export function formatEnergyDeficitKj(metrics: TransientMetrics): string {
+  return metrics.energyDeficitKj.toFixed(1);
+}
+
+/**
  * Computes `TransientMetrics` from one Scenario A response, anchored
  * to its first event marker (the load step). Returns `null` only if
  * the response has no event to anchor to (should not happen for
