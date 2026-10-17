@@ -1,13 +1,13 @@
 # AI Power Lab — Design System
 
-**Status:** locked visual direction for the current Streamlit implementation and any future frontend. This document is a constitution, not a mood board — when a future change conflicts with it, the change is wrong until this document is deliberately revised, not the other way around.
+**Status:** locked visual direction for the current Next.js/React implementation (`frontend/app/`) and any future frontend. This document is a constitution, not a mood board — when a future change conflicts with it, the change is wrong until this document is deliberately revised, not the other way around. The original Streamlit implementation (`dashboard/`) is the historical origin of these tokens, not the current reference implementation — see the Implementation Contract.
 
 ## Central Principle
 
-> AI Power Lab is an instrument panel, not a dashboard.
-> The product is the engineering state and telemetry; the interface exists to make that state readable quickly and confidently.
+> AI Power Lab is a learning instrument, not a marketing site.
+> The product is engineering understanding, built with real precision; the interface exists to make systems-level AI-data-center power knowledge — whether read off live simulated telemetry or taught through clearly-labeled educational reference content — fast and confident to absorb.
 
-Every rule in this document answers to that sentence. If a future decision doesn't make the system's state faster or more confident to read, it doesn't belong here, no matter how polished it looks in isolation.
+Every rule in this document answers to that sentence. If a future decision doesn't make the system's state or its underlying engineering concepts faster or more confident to understand, it doesn't belong here, no matter how polished it looks in isolation. AI Power Lab 2.0 is explicitly an **industry-first learning platform built with engineering precision** — not a pure operator console (its original framing) and not a startup marketing product either. The learning-platform pages (System Map, Architecture Choices, Learn by Example, Industry & Career) and the Advanced Sandbox (the original simulator) are two faces of the same instrument and share every rule below; neither gets a separate visual language.
 
 ---
 
@@ -18,8 +18,16 @@ AI Power Lab is built to feel like the software an operator keeps open at a desk
 - The interface is **flat**. Depth comes from a surface hierarchy and border weight, never from shadow, blur, or glassmorphism.
 - The interface is **restrained**. One accent color. Four status roles. Nothing else is chromatic.
 - The interface is **dense but legible**. Information is close together, not spread out to look generous — generous spacing is a marketing convention, not an operations convention.
-- The interface is **honest**. Every color, every number, every animation on screen is derived from real simulated engineering state. Nothing is decorative data.
+- The interface is **honest**. Every live value, color, and animation tied to a simulation run is derived from real simulated engineering state — nothing live is decorative. Static educational/reference diagrams (e.g., the System Map's infrastructure overview) are permitted to illustrate a concept rather than a live telemetry value, **but only when clearly labeled as conceptual/illustrative** — see "Conceptual Educational Diagrams," below. A conceptual diagram pretending to be a live readout is exactly the dishonesty this rule forbids.
 - The interface is **dark, permanently**. There is no light mode to maintain parity with, because a mission-critical console is not a brand surface that needs to flatter a product screenshot in daylight.
+
+### Conceptual Educational Diagrams
+
+The learning platform (System Map today; Architecture Choices and Learn by Example later) teaches concepts that have no single "live" instance — an industry-representative architecture, a category of equipment, a generic topology. These are **not** telemetry and must never be styled as if they were:
+
+- A conceptual diagram or card carries a visible label marking it as illustrative/representative (e.g., an explicit caveat that it is one representative architecture, not a universal one) — never presented bare, as if it were a live system state.
+- A conceptual diagram still obeys every other rule in this document (color tokens, type scale, spacing, border hierarchy, no shadows/gradients) — "conceptual" licenses *what the content claims*, never a second visual language.
+- The one component that does render live telemetry (`PowerFlowSchematic`) is reused, not forked, across both contexts: it renders nominal/accent styling when given no live data (System Map) and real status-colored state when given a live sample (Advanced Sandbox). It is one component with one palette, not a "static" skin and a "live" skin.
 
 This system was synthesized from a comparative study of real product design languages (see **Reference Influences** below) — it borrows recurring *principles* that independently appeared across unrelated companies, never a single brand's signature look. Nothing here is "inspired by" one product; it is AI Power Lab's own answer to problems those products also had to solve.
 
@@ -28,11 +36,11 @@ This system was synthesized from a comparative study of real product design lang
 **Name:** AI Power Lab
 **Subtitle / system identifier:** SST / 800 VDC AI Power Infrastructure
 **Domain:** an educational, system-level digital twin of a solid-state-transformer-powered, 800 VDC AI data-center power chain (MV Grid → SST → 800 VDC Bus → AI Compute Load).
-**Register:** serious engineering software, not a startup product. The identity mark is a small, precise wordmark — never a logo mark, never an icon, never a gradient.
+**Register:** an industry-first learning platform built with engineering precision — serious engineering content, taught, not a startup marketing product and not a pure operator console. The identity mark is a small, precise wordmark — never a logo mark, never an icon, never a gradient.
 
 ## 3. Color Tokens
 
-The full token set is already implemented in `dashboard/components/palette.py` (`CHROME`) and mirrored in `.streamlit/config.toml`. This document is the record of *why* those values are what they are, and the contract for any future implementation (React included) to match them exactly — color values are not restyled per platform.
+The full token set is implemented in `frontend/app/globals.css` (`:root` custom properties, consumed through Tailwind's `@theme inline`) and `frontend/app/lib/theme.ts` (`SVG_COLOR`, for inline-SVG presentation attributes that need raw `var(--color-*)` strings). `dashboard/components/palette.py`/`.streamlit/config.toml` is the historical origin of these exact values, kept in sync as a legacy reference, not the current source of truth. This document is the record of *why* those values are what they are, and the contract for every surface — System Map, Sandbox, and any future page — to use them exactly as defined here, with no per-component or per-page variant.
 
 | Token | Value | Role |
 |---|---|---|
@@ -46,13 +54,15 @@ The full token set is already implemented in `dashboard/components/palette.py` (
 | `hairline` | `#24303c` | Default 1px border/divider |
 | `hairline-strong` *(planned)* | `rgba(226,232,240,0.22)` | Emphasis border without introducing a color — not yet implemented |
 
+**Current governing palette vs. historical specs.** The tokens in this section and §4 are the only governing palette. `docs/specifications/SPEC-005` refers to a schematic "cyan/amber" pair (`SVG_COLOR.schematicCyan` / `schematicAmber`); those names do not exist in `frontend/app/lib/theme.ts`, and the schematic now draws from `accent` plus the four status roles. SPEC-005 is a historical record and is not rewritten here; where it differs from this document, this document governs.
+
 There is exactly **one accent color**, reserved for one meaning:
 
 | Token | Value | Meaning |
 |---|---|---|
 | `accent` | `#3987e5` | "Energized / actively flowing / process in motion." Never used for selection, branding flourish, or decoration. |
 
-No second chromatic accent exists anywhere in this system, including for focus or selection states (see §14, §19). Adding one requires revising this document first.
+No second chromatic accent exists anywhere in this system, including for focus or selection states (see §14, §19), **and including inside any individual component's own presentation code.** A component is never allowed to introduce its own "scoped" palette (e.g., a second blue/amber pair reserved "just for this diagram") on the reasoning that it only affects one surface — every surface draws from this one token set, full stop. Adding a second accent anywhere requires revising this document first, which has not happened.
 
 ## 4. Semantic / Status (Electrical) Colors
 
@@ -85,18 +95,20 @@ No more than three tiers are ever visible in one screen region at once. Elevatio
 Two families, strictly separated by role, never mixed:
 
 - **IBM Plex Sans** — all UI chrome: labels, headings, body/explainer text, navigation.
-- **IBM Plex Mono** — reserved exclusively for live, tabular, or code-like data. Never used as a "technical-looking" costume for ordinary prose.
+- **IBM Plex Mono** — live, tabular, or code-like data, plus short instrument-style metadata: navigation links, button labels, status tags, and chart tick labels. Never used as a "technical-looking" costume for running prose or paragraphs.
 
-Hierarchy is built primarily from **weight**, not size — the earlier implementation accumulated twelve distinct font sizes by accident; the fix is a small, deliberate scale where weight does most of the differentiating work:
+Hierarchy is built primarily from **weight**, not size — the earlier implementation accumulated twelve distinct font sizes by accident; the fix is a small, deliberate, *named* scale where weight does most of the differentiating work. This is a semantic scale: every piece of text in the product maps to one of these four tiers, with the one documented exception below. Sizes inside a tier's range are acceptable; a size outside every tier's range is a defect to fix.
 
-| Tier | Size | Weight | Treatment |
-|---|---|---|---|
-| App identity | 20–22px | 700 | Set once, at the top of the shell — never a web-page-sized headline |
-| Panel / section heading | 11.5px | 600 | Uppercase, `+0.04em` tracking, muted color |
-| Body / explainer text | 12–13px | 400 | `text-secondary` — always visually subordinate to data |
-| Metadata / label / unit | 10.5–11px | 500–600 | Uppercase or mono, never prose weight |
+| Tier | Token | Size | Weight | Treatment |
+|---|---|---|---|---|
+| App identity | `text-display` | 18–22px | 700 | Page title (e.g. System Map) — never a web-page-sized headline |
+| Panel / section heading | `text-heading` | 11.5px | 600 | Uppercase, `+0.04em` tracking, muted color |
+| Body / explainer text | `text-body` | 12–13px | 400 | `text-secondary` — always visually subordinate to data |
+| Metadata / label / unit | `text-meta` | 10.5–11px | 500–600 | Uppercase or mono, never prose weight |
 
-Display weight never exceeds 700 anywhere in the product. A heavier weight reads as marketing emphasis, not instrument precision.
+**Documented exception — homepage headline:** the learning homepage (`frontend/app/page.tsx`) sets its single `h1` at 24px (30px from the `sm` breakpoint), weight 700, so the page's purpose reads at first glance. This is the only headline above the 22px display ceiling and applies to that one element; no other page or panel may use it as precedent.
+
+Display weight never exceeds 700 anywhere in the product. A heavier weight reads as marketing emphasis, not instrument precision. **Known gap:** the React implementation does not define these four tiers as reusable Tailwind utilities/CSS custom properties — the token names above are descriptive, and components write `text-[Npx]` literals (currently 9px to 14px in small steps, plus the display and homepage sizes), which is more distinct sizes than four. Introducing `text-display`/`text-heading`/`text-body`/`text-meta` utilities (or equivalent) and migrating existing literals onto them is tracked as a cleanup, not a license to keep adding new sizes in the meantime.
 
 ## 7. Telemetry / Numeric Typography
 
@@ -130,7 +142,7 @@ There is no shadow-based elevation system in this product, and there will not be
 
 ## 12. Navigation
 
-Left rail, icon + label, the active item marked by sitting on the `surface-raised` tier — not by a color change. Two items are already identified as not yet meeting this bar: the current navigation icons are full-color emoji, which is the single largest remaining violation of the "one accent, status reserved" rule in the shipped product, and should be replaced with monochrome glyphs or a left accent-bar consistent with the KPI-tile language. This is documented here as a known gap, not yet corrected.
+Horizontal top navigation bar (`frontend/app/components/SiteNav.tsx`), text-only labels, no icons and no emoji — this supersedes the earlier left-rail icon + label requirement, which described the original Streamlit implementation and is not the current one. Links use IBM Plex Mono at metadata size (§6). The current route is marked on the link itself by a shift from `text-secondary` to `text-primary` plus a 2px bottom border, both drawn from the neutral grayscale rather than `accent` or a status color — a deliberate, scoped exception to §19's "selection changes surface tier, never color" rule, made because a flat horizontal nav bar has no elevated surface tier for an individual link to sit on the way a panel does; it does not license color-based selection anywhere else in the product. A learning area not yet implemented is rendered as plain, non-clickable text carrying an explicit "(planned)" label — never a dead link or a placeholder route. Keyboard focus follows §18.
 
 ## 13. KPI Tiles
 
@@ -138,7 +150,7 @@ The compact, flat instrument tile is the system's primary way of presenting a he
 
 ## 14. Controls
 
-One button language: ghost/outline by default, 4px radius, `hairline` border, `surface-raised` background. Exactly one filled exception exists per screen — the single primary action (e.g. Play/Pause on the Simulator), using `accent` blue. Selection and hover states change the surface tier the control sits on, not its color — color is reserved for status alone, never repurposed to mean "you're interacting with this."
+One button language: ghost/outline by default, 4px radius, `hairline` border, `surface-raised` background. Exactly one filled exception exists per major context — a page, or a self-contained section acting as its own context (e.g. the home page's entry CTA, the System Map's "Open the Advanced Sandbox" exit CTA, the Sandbox's Run Experiment action) — and it is always `accent` blue, never any other fill color (not `text-primary`, not a status color). Its label is set in `canvas` color for AA contrast (§18). Button labels use Plex Mono or Sans at metadata size (§6). Two filled buttons are never visible in the same context at once. Selection and hover states change the surface tier the control sits on, not its color — color is reserved for status alone, never repurposed to mean "you're interacting with this" or "this is the primary action" (the filled `accent` fill, not a border color, is what marks the primary action).
 
 ## 15. Charts
 
@@ -157,11 +169,13 @@ Status is always communicated through at least two channels at once — color is
 
 ## 17. Power-Flow Schematic
 
-The schematic (`dashboard/components/schematic.py`) is the product's single most domain-specific element and the clearest expression of the central principle: every value on it — stage border color, flow-line thickness, flow-line animation speed — is computed directly from one instant of real `Telemetry`, never from a styling choice. It intentionally does not attempt switching-level or 3D hardware realism; it is a schematic, not a rendering. This component's visual design does not change when other parts of the interface do — it is the standard the rest of the interface is held to, not a target for restyling.
+The schematic (`frontend/app/components/PowerFlowSchematic.tsx`; historically `dashboard/components/schematic.py`) is the product's single most domain-specific element and the clearest expression of the central principle: every value on it — stage border color, flow-line thickness, flow-line animation speed — is computed directly from one instant of real `Telemetry` when telemetry is available, never from a styling choice. It draws from the same `accent`/status token set as every other surface in the product — it has no palette of its own, scoped or otherwise. On the System Map, it renders with no live sample (the `live` prop omitted): nominal `accent`-colored structure throughout, no V/E readouts, clearly a topology diagram rather than a live reading. On the Advanced Sandbox, the same component renders with a real sample and shows real status coloring and readouts. It intentionally does not attempt switching-level or 3D hardware realism; it is a schematic, not a rendering. This component's visual design does not change by context — it is the standard the rest of the interface is held to, not a target for restyling.
 
 ## 18. Focus / Accessibility States
 
-**Planned, not yet implemented — a known, named gap.** No `:focus-visible` styling currently exists anywhere in the shipped CSS; keyboard-focus state is whatever the underlying framework provides unmodified. The committed fix, once implemented: every focusable control receives a 2px `accent`-colored focus ring plus a 1px hairline underline on the control itself, so focus is visible through two channels, not one, and never only through a color that a color-blind or low-contrast viewer might not reliably perceive. Contrast has been independently verified clean elsewhere in the product (every sampled text/background pair in the live DOM measured 9:1 or better against WCAG AA's 4.5:1 floor) — this gap is specifically about focus visibility, not contrast.
+**Implemented per control; not yet global.** Interactive controls on the System Map, homepage navigation, `InfrastructureMap`, and `PowerFlowSchematic` carry a Tailwind `focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary` treatment (offset 4px on the `SiteNav` route links): a 2px outline in the neutral `secondary` color, drawn only for keyboard focus. It uses a neutral token rather than `accent` so focus never competes with the "energized" meaning of the accent color (§3). There is no global `:focus-visible` rule in `globals.css`, and the originally committed accent ring plus hairline underline was not implemented; **known gap:** some controls (e.g. the Sandbox experiment controls and Sensitivity Study buttons) rely on browser-default focus until a shared rule is added. Any new control must include the outline treatment above.
+
+Contrast: normal-size text must reach WCAG AA's 4.5:1 against the surface it sits on. `text-primary` and `text-secondary` meet this on every surface tier. `text-muted` (`#6b7680`) measures about 4.2:1 on `canvas`, 3.9:1 on `surface` and 3.4:1 on `surface-raised`, so it is limited to non-essential decoration or large text and must not carry body or caveat copy. Text on `accent` fills uses `canvas` (about 5.3:1); `text-primary` on `accent` is about 3.1:1 and does not meet AA for normal text. Some Sandbox controls still use `text-primary` on `accent` and `text-muted` on dark surfaces; these are tracked contrast gaps, not precedent.
 
 ## 19. Interaction Principles
 
@@ -204,7 +218,7 @@ AI Power Lab is a desktop-first instrument panel; this is a deliberate scope dec
 
 ## Engineering Visual Semantics
 
-**Visual state must always derive from real engineering state. This is the single non-negotiable rule in this document.** A color, animation, or status label that doesn't trace back to an actual value in a `Telemetry` object is a defect, regardless of how it looks.
+**Visual state must always derive from real engineering state, or be clearly labeled as conceptual/educational content rather than live state. This is the single non-negotiable rule in this document.** A color, animation, or status label presented *as if it reflected real simulated state* when it doesn't is a defect, regardless of how it looks. This is not an opening for decoration: a conceptual diagram still uses only this document's fixed token set (§3/§4) and still carries its "illustrative" label (see "Conceptual Educational Diagrams," §1) — it just isn't required to trace to a live `Telemetry` instance the way the Power-Flow Schematic's live mode or the KPI strip are.
 
 The fixed vocabulary:
 
@@ -224,10 +238,10 @@ Color is never added for decoration, branding flourish, or visual balance. If a 
 
 ## Implementation Contract
 
-- **The Python simulation engine (`src/`) is, and remains, the single source of engineering truth.** No frontend — Streamlit today, React/Next.js in any future iteration — recomputes, approximates, or re-derives physics. `dashboard/adapters/` already enforces this boundary for the current implementation; any future frontend enforces the equivalent boundary against an API, not against reimplemented logic.
+- **The Python simulation engine (`src/`) is, and remains, the single source of engineering truth.** No frontend — the current Next.js/React app, or the earlier Streamlit app — recomputes, approximates, or re-derives physics.
 - **Frontend presentation code must never recreate engineering physics.** If a visual needs a number the engine doesn't already produce, the fix is to extend the engine's `Telemetry` output, not to approximate the number in presentation code.
-- **Every telemetry-driven visual must derive from actual simulation output**, read from a real `Telemetry`/`FlowSnapshot` instance — never from a hardcoded example, a placeholder, or an illustrative approximation standing in for real data.
-- **A future React/Next.js frontend consumes simulation state through an API boundary**, not by importing or reimplementing `src/`. The existing `dashboard/adapters/simulation_adapter.py` functions are already shaped close to what that API's endpoints would look like — a sign the engine/presentation boundary was drawn correctly in V1.1.
+- **Every telemetry-driven visual must derive from actual simulation output**, read from a real `Telemetry`/`FlowSnapshot` instance via the backend API — never from a hardcoded example, a placeholder, or an illustrative approximation standing in for real data. Static conceptual/reference content (e.g., System Map category prose) is exempt from this specific bullet by definition — it never claimed to be telemetry — but remains bound by every other rule in this document, and by the clear-labeling requirement in §1/"Engineering Visual Semantics."
+- **The Next.js frontend (`frontend/app/`) consumes simulation state through the backend API boundary** (`frontend/app/lib/simulationApi.ts`), not by importing or reimplementing `src/`. This is the current implementation, not a future one — `dashboard/adapters/simulation_adapter.py` was its Streamlit-era predecessor and remains only as historical reference for the same boundary.
 - **Presentation logic and engineering logic remain permanently separated**, regardless of which frontend framework renders the presentation layer. This document governs the presentation side only; it has no authority over, and makes no claims about, the physics, scenario logic, or protection thresholds owned by `src/`.
 
 ---
