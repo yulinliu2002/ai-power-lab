@@ -1,5 +1,7 @@
 # SPEC-008 — AI Power Lab Protection & Ride-Through Timeline
 
+> **Historical document:** PEOS is retired (git tag `pre-peos-retirement`). References to PEOS execution below describe the process at the time of writing; requirement text is unchanged.
+
 **Status:** Draft
 **Project:** AI Power Lab
 **System:** `dashboard/adapters/` (new derived-data module), `backend/` (one new endpoint/schema
@@ -835,6 +837,8 @@ interaction (§0), so this feature's Runtime Plan is limited to static presence/
 checks of the default-loaded (Load Step) scenario's rendered page. §17's deterministic and manual
 checks are the primary verification layers for this feature; Runtime Verification is corroborating,
 narrower evidence, not the sole or primary source.
+
+> **Historical:** the PEOS Runtime Verification plan below is retired; PEOS and its runner are available only at git tag `pre-peos-retirement`. Verify via the unit/regression tests and manual checks instead.
 
 ### Runtime Verification
 

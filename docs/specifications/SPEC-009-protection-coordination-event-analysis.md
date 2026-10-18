@@ -1,5 +1,7 @@
 # SPEC-009 — Protection Coordination & Event Analysis
 
+> **Historical document:** PEOS is retired (git tag `pre-peos-retirement`). References to PEOS execution below describe the process at the time of writing; requirement text is unchanged.
+
 **Status:** Architecture Approved (Codex Round 5: `APPROVE`, 0 blocking/0 major/0 minor open across
 the full review history) — implementation not yet started; see "STOP before implementation" in the
 governing brief. Pending Human Engineering Lead approval per `ENGINEERING.md`'s Core Workflow.
@@ -697,6 +699,8 @@ for AC-011); confirm event-separation rows are present only for Thermal Trip amo
 scenarios and absent (not blank) for the other four; confirm the coverage checklist's ✕ rows are
 never color-only (text glyph present); confirm mobile-width rendering has no horizontal overflow for
 at least Thermal Trip (the one scenario with every optional sub-section populated).
+
+> **Historical:** the PEOS Runtime Verification plan below is retired; PEOS and its runner are available only at git tag `pre-peos-retirement`. Verify via the unit/regression tests and manual checks instead.
 
 **PEOS Runtime Verification — honest coverage, unchanged posture from SPEC-008 §18.** The fixed V1
 catalog still cannot drive the scenario selector. The existing `page_load` check's `landmarks`

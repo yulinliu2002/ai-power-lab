@@ -1,6 +1,6 @@
 <!--
-PEOS pull request template. See ENGINEERING.md and AGENTS.md for the full
-workflow this maps to.
+Pull request template. See ENGINEERING.md and AGENTS.md for the full
+Claude + Codex + GitHub PR process this maps to.
 -->
 
 ## Specification
