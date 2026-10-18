@@ -1,5 +1,7 @@
 # SPEC-010 — Scenario Comparison & System Stress Analysis
 
+> **Historical document:** PEOS is retired (git tag `pre-peos-retirement`). References to PEOS execution below describe the process at the time of writing; requirement text is unchanged.
+
 **Status:** Architecture Approved (Codex Round 5: `APPROVE`, 0 blocking/0 major/0 minor open across
 the full five-round review history). Implementation not yet started; pending Human Engineering Lead
 approval per `ENGINEERING.md`'s Core Workflow. (Round 1: `CHANGES_REQUIRED`, 0/3/3, remediation
@@ -551,6 +553,8 @@ three specifications' shared `tests/` files.)
   note).
 - `cd frontend && npm run lint && npm run build` — AC-048.
 - `python -m pytest -q` at the repository root — AC-049.
+
+> **Historical:** the PEOS Runtime Verification plan below is retired; PEOS and its runner are available only at git tag `pre-peos-retirement`. Verify via the unit/regression tests and manual checks instead.
 
 **Runtime Verification (PEOS, honest scope):**
 

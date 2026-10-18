@@ -217,7 +217,7 @@ explicit Human Engineering Lead decision is always authoritative over this chart
 
 ## 10. When to Consult This Charter
 
-Claude, Codex, and ChatGPT (per the PEOS roles in `AGENTS.md`) should consult this
+Claude, Codex, and ChatGPT (per the roles in `AGENTS.md`) should consult this
 charter when:
 
 - proposing a new product specification,

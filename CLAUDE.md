@@ -72,13 +72,12 @@ Do not expand project scope automatically. If a task seems to require something 
 - Prefer deleting complexity over adding it.
 - If a proposed change would make a subsystem harder for the user to personally explain, flag it.
 
-## Engineering Workflow (PEOS)
+## Engineering Workflow
 
-This repository is developed under PEOS (Personal Engineering OS), a
-human-orchestrated workflow for engineering with multiple AI agents. See
-`ENGINEERING.md` for the workflow and `AGENTS.md` for the full role
-definitions; this section states Claude Code's implementation authority
-and constraints specifically.
+Work follows the Claude + Codex + GitHub PR process in `ENGINEERING.md`;
+roles and shared source-of-truth documents are in `AGENTS.md`. PEOS (the
+former orchestration runtime) is retired; it is available only at git tag
+`pre-peos-retirement`.
 
 As **Implementation Owner**, Claude Code may implement approved
 specifications, modify repository code, integrate frontend/backend

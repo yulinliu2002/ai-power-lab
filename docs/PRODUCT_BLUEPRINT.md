@@ -166,14 +166,15 @@ Verified from the working tree on the date above.
 | Learn by Example as guided explanations | **Not implemented** (scenarios exist only inside the Sandbox) | — |
 | Requirements and Engineering Judgment content | **Not implemented as content**; by decision they will live inside the four areas, not on their own pages | — |
 | Streamlit dashboard | Legacy; reference/maintenance only | `dashboard/`, `app.py` |
-| PEOS | Maintenance Mode | `peos/`, `bin/peos` |
+| PEOS | Retired | Removed; available only at git tag `pre-peos-retirement` |
 
 ## 8. Scope Boundaries
 
 **Preserve:** the validated Python simulation engine and the existing Next.js interface.
 
-**Maintenance only:** PEOS (no new orchestration capability); legacy Streamlit (reference
-and maintenance until an explicit retirement decision).
+**Retired:** PEOS (removed in Checkpoint 007 Phase A; history at git tag `pre-peos-retirement`).
+**Maintenance only:** legacy Streamlit (reference and maintenance until an explicit
+retirement decision).
 
 **Not in scope:** research-grade or switching-level simulation; device-level SiC/GaN
 models; machine learning; cloud infrastructure; paid APIs; Docker/Kubernetes; any added
@@ -241,7 +242,7 @@ separate work, not reopened here.
 | Evidence categories and section-level labeling (Section 5.1). | System Map and Sandbox copy; not yet audited against it. |
 | Document responsibilities (Section 10). | `PROJECT_CHARTER.md` §9 hierarchy; `ENGINEERING.md` charter pointer. |
 | Rubric is optional guidance, not a gate. | Nothing to change; recorded so it is not later turned into one. |
-| Streamlit is legacy reference/maintenance; PEOS is Maintenance Mode. | `README.md` still presents Streamlit as the platform. `DESIGN.md` (uncommitted edit) already names Next.js as the reference. |
+| Streamlit is legacy reference/maintenance; PEOS is Retired. | `README.md` still presents Streamlit as the platform. `DESIGN.md` (uncommitted edit) already names Next.js as the reference. |
 | Stale statements to correct when each document is next edited. | `README.md` (Streamlit-only); `PROJECT_CHARTER.md` §11 (SPEC-010 "not implemented"). |
 
 ### 11.2 Genuine unresolved decisions

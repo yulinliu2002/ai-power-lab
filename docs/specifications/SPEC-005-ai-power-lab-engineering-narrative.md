@@ -1,5 +1,7 @@
 # SPEC-005 — AI Power Lab Engineering Narrative
 
+> **Historical note:** PEOS is retired (git tag `pre-peos-retirement`). Implementation now follows the Claude + Codex + GitHub PR process in `ENGINEERING.md`; PEOS references below describe the process at the time of writing. Requirement text is unchanged.
+
 **Status:** Approved
 **Project:** AI Power Lab
 **System:** React/Next.js frontend (`frontend/app/`) — presentation/narrative layer over Scenario A; no new engineering model, no new backend surface

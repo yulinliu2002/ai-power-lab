@@ -1,10 +1,13 @@
-# Engineering Workflow (PEOS)
+# Engineering Workflow
 
-This project uses PEOS — a lightweight, artifact-driven workflow for
-engineering with multiple AI agents while keeping the human engineer in
-control. The full specification is
-`docs/specifications/SPEC-000-peos-bootstrap.md`. Agent roles and
-authority are defined in `AGENTS.md`. This file covers the process itself.
+This project uses a lightweight, artifact-driven Claude + Codex + GitHub PR
+process, orchestrated by the human engineer. Agent roles and the shared
+authoritative documents are defined in `AGENTS.md`. This file covers the
+process and verification standards.
+
+> PEOS, the earlier orchestration runtime, is retired and removed. It is
+> available only at git tag `pre-peos-retirement`. Specifications and
+> validation records that mention PEOS are historical.
 
 The repository, specifications, tests, and validation evidence are the
 shared engineering source of truth. **Chat history is not.**
@@ -12,37 +15,16 @@ shared engineering source of truth. **Chat history is not.**
 Before proposing a new specification, prioritizing roadmap work, or evaluating a
 scope change, consult `PROJECT_CHARTER.md` for the project's strategic direction
 (product and career ROI, maturity progression, anti-feature-creep rule). The
-charter defines *why*; this file defines *how*. It does not add process for
-routine implementation work.
-
-## Purpose
-
-PEOS must improve engineering traceability, implementation consistency,
-independent verification, automated quality control, and reuse of
-project context across AI agents — without introducing process for its
-own sake. If a lighter-weight artifact teaches/enforces the same thing,
-prefer it.
-
-## Roles
-
-Five parties participate: the **Human Engineering Lead** (final
-authority — approves specs, architecture, and merges), **ChatGPT**
-(engineering/systems partner — problem formulation, specs, physics
-reasoning), **Claude Code** (implementation owner), **Codex** (independent
-reviewer — review-first, never silently modifies implementation), and
-**GitHub Actions** (automated quality gate — CI passing is not proof the
-physical model is correct). Full responsibilities and constraints for
-each are defined in `AGENTS.md`; this list is a pointer, not a
-duplicate.
+charter defines *why*; this file defines *how*.
 
 ## Core Workflow
 
 ```
 Engineering Question
-  -> Specification
-  -> Implementation
+  -> Specification (significant changes)
+  -> Implementation (Claude)
   -> Local Verification
-  -> Independent Review
+  -> Independent Review (Codex)
   -> Fixes if required
   -> Pull Request
   -> CI
@@ -54,22 +36,18 @@ Engineering Question
 The workflow is human-orchestrated. Agents must not autonomously create
 agent-to-agent execution loops.
 
-1. **Engineering Question** — a problem or goal is stated.
-2. **Specification** — written to `docs/specifications/SPEC-NNN-<slug>.md`
-   using `docs/specifications/TEMPLATE.md`, and approved by the Human
-   Engineering Lead before implementation starts.
-3. **Implementation** — against the approved spec only.
-4. **Local Verification** — run the commands/checks the spec's
-   Verification section calls for.
-5. **Independent Review** — a reviewer distinct from the implementer
-   checks the work against the spec (see `AGENTS.md`).
-6. **Fixes if required**, then a **Pull Request** using
-   `.github/pull_request_template.md`.
-7. **CI** — automated, reproducible evidence. CI passing does not prove
-   the physical model is correct; CI failing means the change is not
-   ready to merge.
-8. **Human Approval** and **Merge**.
-9. **Validation Record** — evidence of what was verified, filed in
+1. **Specification** — significant changes are written to
+   `docs/specifications/SPEC-NNN-<slug>.md` from `TEMPLATE.md` and approved
+   by the Human Engineering Lead before implementation starts.
+2. **Implementation and local verification** — Claude implements against
+   the approved spec only and runs the checks the spec calls for.
+3. **Independent review** — Codex reviews the diff, requirements and
+   evidence (see `AGENTS.md`).
+4. **Pull Request** using `.github/pull_request_template.md`, then **CI**.
+   CI passing does not prove the physical model is correct; CI failing
+   means the change is not ready to merge.
+5. **Human approval and merge.**
+6. **Validation Record** — evidence of what was verified, filed in
    `docs/validation/`.
 
 ## Source-of-Truth Hierarchy
@@ -138,20 +116,11 @@ reasoning, recorded in `docs/validation/`.
 
 ## Current CI Coverage
 
-`.github/workflows/ci.yml` today runs, on every push and pull request:
+`.github/workflows/ci.yml` runs on every push and pull request:
 
-- **Python job** — the full `pytest` suite in one run, which already
-  spans unit tests, DC-bus physics-invariant tests (`test_dc_bus.py`),
-  scenario regression tests (`test_grid_scenarios.py`,
-  `test_thermal_protection_simulation.py`), FastAPI endpoint tests, and
-  API/simulation-adapter parity tests (`test_api.py`) — i.e. layers 1-4
-  above and the "API tests" / "API/model parity tests" gates from
-  `AGENTS.md`'s GitHub Actions role.
+- **Python job** — the full `pytest` suite (unit, physics-invariant,
+  scenario regression, FastAPI endpoint and API/adapter parity tests).
 - **Frontend job** — `npm run lint`, `npm run typecheck`, `npm run build`.
-
-Not yet separate CI jobs (tracked as future work, not added by this
-bootstrap): dedicated physics-invariant/regression jobs split out from
-the single Python job. The coverage exists today inside that one job.
 
 ## Repository Map
 
@@ -167,6 +136,6 @@ docs/
 └── pull_request_template.md
 
 CLAUDE.md      AI Power Lab's modeling/scope rules for Claude Code
-AGENTS.md      PEOS roles, authority, and agent working rules
+AGENTS.md      agent roles, authority, and shared authoritative documents
 ENGINEERING.md this file
 ```
