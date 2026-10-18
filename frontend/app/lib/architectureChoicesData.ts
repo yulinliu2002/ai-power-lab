@@ -21,6 +21,8 @@ export type EvidenceLabel = "public-fact" | "assumption" | "model-output" | "eme
 export type ReferenceId =
   | "NVIDIA"
   | "OCP"
+  | "OCPWP"
+  | "OCPSST"
   | "SYSMAP"
   | "SANDBOX"
   | "MOHAN"
@@ -30,9 +32,16 @@ export type ReferenceId =
   | "IEEE1584"
   | "GARZON";
 
+/**
+ * Source type keeps vendor statements, consortium documents, textbook
+ * principles and repository material distinct. `inspection` states what was
+ * actually examined in the SPEC-011 source audit (2026-10-18); a textbook or
+ * standard that was not opened is listed as background, not as verified.
+ */
 export interface Reference {
   id: ReferenceId;
-  kind: "repository-source" | "textbook-standard";
+  kind: "repository-source" | "textbook-standard" | "consortium-document" | "vendor-statement";
+  inspection: string;
   citation: string;
   /** Present only for sources already recorded in `data/industry/`. */
   url?: string;
@@ -42,56 +51,80 @@ export interface Reference {
 export const REFERENCES: Record<ReferenceId, Reference> = {
   NVIDIA: {
     id: "NVIDIA",
-    kind: "repository-source",
-    citation: "NVIDIA Blog — 800 VDC Power Architecture for AI Factories (data/industry/developments.yaml)",
+    kind: "vendor-statement",
+    inspection: "Web page read in the 2026-10-18 audit (page dated 2026-08-11). Vendor statement: attributed, not endorsed.",
+    citation: "NVIDIA Blog — 800 VDC Power Architecture for AI Factories (also recorded in data/industry/developments.yaml)",
     url: "https://blogs.nvidia.com/blog/800-vdc-power-architecture-ai-factory/",
     verifiedDate: "2026-10-04",
   },
   OCP: {
     id: "OCP",
-    kind: "repository-source",
-    citation: "Open Compute Project Blog — Powering the Next Era of AI (data/industry/standards.yaml)",
+    kind: "consortium-document",
+    inspection: "Web page read in the 2026-10-18 audit. Consortium statement (Google, Microsoft, NVIDIA and others): attributed, not endorsed.",
+    citation: "Open Compute Project Blog — Powering the Next Era of AI (also recorded in data/industry/standards.yaml)",
     url: "https://www.opencompute.org/index.php/blog/powering-the-next-era-of-ai-how-google-microsoft-and-nvidia-are-standardizing-and-accelerating-the-industry-transition-to-lvdc",
     verifiedDate: "2026-10-04",
+  },
+  OCPWP: {
+    id: "OCPWP",
+    kind: "consortium-document",
+    inspection: "PDF text extracted and searched; the sections cited here were read (not all 155 pages). Consortium document: attributed, not endorsed.",
+    citation: "OCP Data Center Facility — Low Voltage Direct Current Power Distribution white paper, v1.0 (30 March 2026)",
+    url: "https://www.opencompute.org/documents/dcf-power-distribution-lvdc-white-paper-version-1-0-final-pdf-1",
+  },
+  OCPSST: {
+    id: "OCPSST",
+    kind: "consortium-document",
+    inspection: "PDF text extracted and read (24 pages). Consortium document: attributed, not endorsed.",
+    citation: "OCP Solid State Transformer (SST) Specification, Rev 0.3.0 (effective 22 June 2026; authors Google, Microsoft, NVIDIA; first draft)",
+    url: "https://www.opencompute.org/documents/ocp-sst-design-specification-v0-3-final-pdf",
   },
   SYSMAP: {
     id: "SYSMAP",
     kind: "repository-source",
+    inspection: "This repository.",
     citation: "This site's System Map category and architecture definitions (frontend/app/lib/infrastructureMapData.ts)",
   },
   SANDBOX: {
     id: "SANDBOX",
     kind: "repository-source",
+    inspection: "This repository.",
     citation: "Advanced Sandbox: simplified average-value SST chain simulation (src/, SPEC-002 sensitivity study)",
   },
   MOHAN: {
     id: "MOHAN",
     kind: "textbook-standard",
+    inspection: "Not inspected in the audit. Listed as background for a general engineering principle; not verified against the text.",
     citation: "Mohan, Undeland, Robbins — Power Electronics: Converters, Applications, and Design",
   },
   GRAINGER: {
     id: "GRAINGER",
     kind: "textbook-standard",
+    inspection: "Not inspected in the audit. Listed as background for a general engineering principle; not verified against the text.",
     citation: "Grainger, Stevenson — Power System Analysis",
   },
   GOLDBOOK: {
     id: "GOLDBOOK",
     kind: "textbook-standard",
+    inspection: "Not inspected in the audit. Listed as background for a general engineering principle; not verified against the text.",
     citation: "IEEE Std 493 (Gold Book) — Design of Reliable Industrial and Commercial Power Systems",
   },
   NEC: {
     id: "NEC",
     kind: "textbook-standard",
+    inspection: "Not opened. The OCP white paper (inspected) cites NFPA 70 and IEC 60364 for these topics.",
     citation: "NFPA 70 (National Electrical Code); IEC 60364 (low-voltage electrical installations)",
   },
   IEEE1584: {
     id: "IEEE1584",
     kind: "textbook-standard",
+    inspection: "Not inspected in the audit. Listed as background for a general engineering principle; not verified against the text.",
     citation: "IEEE Std 1584 — Guide for Performing Arc-Flash Hazard Calculations",
   },
   GARZON: {
     id: "GARZON",
     kind: "textbook-standard",
+    inspection: "Not inspected in the audit. Listed as background for a general engineering principle; not verified against the text.",
     citation: "Garzon — High Voltage Circuit Breakers: Design and Applications",
   },
 };
@@ -103,6 +136,13 @@ export type Evidence =
   | { evidence: "public-fact" | "emerging"; basis: string; refs: NonEmptyRefs }
   | { evidence: "model-output"; basis: string; refs: NonEmptyRefs; sandboxOnly: true }
   | { evidence: "assumption"; basis: string; refs?: readonly ReferenceId[] };
+
+export const SOURCE_KIND_TEXT: Record<Reference["kind"], string> = {
+  "repository-source": "this site",
+  "textbook-standard": "textbook/standard, background",
+  "consortium-document": "consortium document",
+  "vendor-statement": "vendor statement",
+};
 
 export const EVIDENCE_LABEL_TEXT: Record<EvidenceLabel, string> = {
   "public-fact": "Public fact",
@@ -236,25 +276,25 @@ export type Cell = { how: string; harder: string } & Evidence;
 export const CELLS: Record<DriverId, Record<ArchitectureId, Cell>> = {
   rd1: {
     "conventional-ac": {
-      how: "Rack power is delivered as AC at a chosen distribution voltage. For a given voltage, conductor arrangement and power factor, more rack power means proportionally more current, so growth is met with larger conductors or more circuits.",
+      how: "Rack power is delivered as AC at a chosen distribution voltage. For a given voltage, conductor arrangement and power factor, more rack power means proportionally more current, so growth is met with larger conductors or more circuits. The OCP article describes the baseline as medium-voltage AC stepped down to 480 VAC feeding AC racks.",
       harder: "Large steps in rack power push conductor and busway size, or the number of circuits, upward.",
       evidence: "public-fact",
-      basis: "Power–current relation for AC delivery; System Map conventional pattern.",
-      refs: ["GRAINGER", "SYSMAP"],
+      basis: "Power–current relation (textbook principle; reference not inspected); OCP article's description of the baseline architecture.",
+      refs: ["GRAINGER", "OCP", "SYSMAP"],
     },
     "ac-to-800vdc": {
-      how: "For the same power, a higher distribution voltage means lower current per conductor, all else equal. The actual benefit depends on the AC voltage and phase arrangement it is compared with and on the DC conductor arrangement. Public sources describe 800 VDC as aimed at high-density AI racks.",
+      how: "For the same power, a higher distribution voltage means lower current per conductor, all else equal. The actual benefit depends on the AC voltage and phase arrangement it is compared with and on the DC conductor arrangement; the OCP white paper's wiring analysis (§6.3.3) shows that, for a given power, moving to a higher voltage class with correspondingly less conductor material can reduce relative cable losses and current, and that a bipolar arrangement with a midpoint conductor can reduce losses compared with a unipolar one when loads are balanced. Both NVIDIA and the OCP white paper cite rising rack power density as the motivation for DC distribution.",
       harder: "It needs rack-level DC-DC conversion and DC-rated equipment that conventional racks do not use.",
       evidence: "public-fact",
-      basis: "Power–current relation; NVIDIA's public description of the 800 VDC rack; System Map rack-level conversion.",
-      refs: ["GRAINGER", "NVIDIA", "SYSMAP"],
+      basis: "Power–current relation (textbook principle; reference not inspected); OCP white paper executive summary and §6.3.3 wiring analysis; NVIDIA vendor statement on rack density.",
+      refs: ["GRAINGER", "OCPWP", "NVIDIA", "SYSMAP"],
     },
     "mv-to-800vdc": {
       how: "The distribution-voltage benefit is the same as AC-fed 800 VDC. The difference is upstream, where an SST is the conceptual medium-voltage-to-DC source.",
-      harder: "Supplying a facility-scale DC block this way depends on SST technology that public sources describe as still being specified.",
+      harder: "Supplying a facility-scale DC block this way depends on SST technology that is still being specified: NVIDIA describes direct medium-voltage conversion only for a future facility-scale unit, and the OCP SST specification is a first draft (Rev 0.3.0) with open items.",
       evidence: "emerging",
-      basis: "NVIDIA describes direct medium-voltage conversion as a future concept; OCP describes an SST specification at v0.3.",
-      refs: ["NVIDIA", "OCP"],
+      basis: "NVIDIA vendor statement on a future facility-scale DC power block; OCP SST specification version history and TBD items.",
+      refs: ["NVIDIA", "OCPSST"],
     },
   },
   rd2: {
@@ -262,15 +302,15 @@ export const CELLS: Record<DriverId, Record<ArchitectureId, Cell>> = {
       how: "A double-conversion UPS places a DC link and battery between the AC source and the load, which can decouple load swings from the upstream source. How much depends on the UPS design.",
       harder: "Fast swings must still be absorbed within the UPS inverter and DC link ratings; this page gives no ratings.",
       evidence: "public-fact",
-      basis: "Double-conversion UPS topology with battery on the DC link.",
+      basis: "Double-conversion UPS topology (textbook principle; reference not inspected); System Map description.",
       refs: ["MOHAN", "SYSMAP"],
     },
     "ac-to-800vdc": {
-      how: "Storage attaches directly to the DC bus. Bus capacitance and the control of the centralized AC-DC stage set how far voltage moves in a load step (stored capacitor energy is ½CV²).",
+      how: "Storage attaches directly to the DC bus. Bus capacitance and the control of the centralized AC-DC stage set how far voltage moves in a load step (stored capacitor energy is ½CV², a relation also exercised in this repository's DC-bus tests). The OCP white paper examines closer integration of energy storage as part of DC distribution.",
       harder: "Bus voltage regulation becomes a control interface between the centralized stage and the rack DC-DC converters.",
       evidence: "public-fact",
-      basis: "Capacitor energy and DC-link behavior; System Map description of storage on the DC bus.",
-      refs: ["MOHAN", "SYSMAP"],
+      basis: "Capacitor energy relation (principle); OCP white paper efficiency discussion; System Map description of storage on the DC bus.",
+      refs: ["MOHAN", "OCPWP", "SYSMAP"],
     },
     "mv-to-800vdc": {
       how: "The DC-bus mechanics match AC-fed 800 VDC, with the SST's control response also in the loop. The Advanced Sandbox illustrates this slice with a simplified model: an AI load step produces a bus-voltage sag whose size depends on bus capacitance and SST response time.",
@@ -283,70 +323,71 @@ export const CELLS: Record<DriverId, Record<ArchitectureId, Cell>> = {
   },
   rd3: {
     "conventional-ac": {
-      how: "Mature redundancy patterns (N+1, 2N) and switching schemes for isolating sections are widely practiced, and the System Map describes them.",
+      how: "The OCP white paper cites strategies such as N+1 power blocks and UPS maintenance bypass for managing power-electronics failures, and the System Map describes N+1 and 2N redundancy.",
       harder: "More series equipment (transformers, UPS plant, distribution) has to be maintained.",
       evidence: "public-fact",
-      basis: "Redundancy and reliability practice for commercial power systems; System Map redundancy discussion.",
-      refs: ["GOLDBOOK", "SYSMAP"],
+      basis: "OCP white paper redundancy section; System Map redundancy discussion; commercial power-system reliability practice (textbook; reference not inspected).",
+      refs: ["OCPWP", "GOLDBOOK", "SYSMAP"],
     },
     "ac-to-800vdc": {
-      how: "Redundancy concepts (N+1, 2N) can be applied to centralized conversion modules and the DC bus.",
-      harder: "This page cites no operating-experience data for 800 VDC distribution; public sources describe it as a direction under standardization.",
+      how: "Redundancy concepts such as N+1 can be applied to centralized conversion modules and the DC bus, but the OCP white paper says DC distribution does not allow a UPS maintenance-bypass strategy, so redundancy is needed at power-block level and possibly in distribution.",
+      harder: "The OCP white paper says strategies for availability in LVDC data centers require further investigation; this page cites no operating data for 800 VDC AI data centers.",
       evidence: "emerging",
-      basis: "OCP and NVIDIA describe the architecture direction and standardization effort, not operating history.",
-      refs: ["OCP", "NVIDIA"],
+      basis: "OCP white paper section on redundancy levels and availability.",
+      refs: ["OCPWP", "OCP"],
     },
     "mv-to-800vdc": {
-      how: "Modular converter concepts could give redundancy at module level.",
-      harder: "Fault behavior and maintenance of a medium-voltage-connected solid-state stage lack the established practice of conventional switchgear; this page cites no field data.",
-      evidence: "assumption",
-      basis: "Illustrative reasoning; no public operating data cited.",
+      how: "The OCP SST specification illustrates block (catcher) and distributed redundancy arrangements, and the OCP white paper says major building blocks are moving toward modular sub-blocks with live-swap capability.",
+      harder: "Voltage levels for seamless redundancy design are an open (TBD) item in the SST specification, and this page cites no field data for a medium-voltage solid-state stage.",
+      evidence: "emerging",
+      basis: "OCP SST specification Appendix A and TBD items; OCP white paper availability discussion.",
+      refs: ["OCPSST", "OCPWP"],
     },
   },
   rd4: {
     "conventional-ac": {
-      how: "Installation practice and protective devices for AC are codified (for example NFPA 70 and IEC 60364), and AC current's periodic zero crossings assist arc interruption.",
-      harder: "Arc-flash incident energy depends on available fault current and protective clearing time together, so it must be reassessed whenever capacity or configuration changes.",
+      how: "Installation practice and protective devices for AC are codified (the OCP white paper cites NFPA 70 and IEC 60364), and AC selectivity by time-current settings is the most widespread method. AC current's periodic zero crossings assist arc interruption (textbook principle; reference not inspected).",
+      harder: "Arc-flash incident energy depends on fault current and protective clearing time together; the OCP white paper notes that time-current selectivity delays in AC systems can mean long arcing time in an arc flash. It must be reassessed whenever capacity or configuration changes.",
       evidence: "public-fact",
-      basis: "Codified AC installation practice; arc-flash calculation guidance; circuit-breaker interruption principle.",
-      refs: ["NEC", "IEEE1584", "GARZON"],
+      basis: "OCP white paper protection section; NFPA 70, IEC 60364 and IEEE 1584 as general background (not inspected).",
+      refs: ["OCPWP", "NEC", "IEEE1584", "GARZON"],
     },
     "ac-to-800vdc": {
-      how: "DC fault current has no natural zero crossing, so interruption needs DC-rated devices or electronic current limiting. Clearances and personnel practice for 800 V DC differ from AC practice.",
-      harder: "Protection coordination and safe-work procedures must be established; OCP reports interaction with standards and safety organizations.",
+      how: "DC interruption needs devices rated for DC. The OCP white paper describes conventional fuses and breakers interrupting by creating an arc voltage above the system voltage, and newer semiconductor-based devices. Clearances and personnel practice for 800 V DC differ from AC practice.",
+      harder: "The OCP white paper states there is currently no standard or recognized practice for coordinating protection for the DC fault behaviors it describes, and no DC equivalent of IEEE 1584 for incident energy; the OCP article reports engagement with UL Solutions, NFPA, IEEE and IEC.",
       evidence: "emerging",
-      basis: "Circuit-breaker interruption principle; OCP's described work with standards and safety organizations.",
-      refs: ["GARZON", "OCP"],
+      basis: "OCP white paper protection section and incident-energy note; OCP article on standards and safety organizations.",
+      refs: ["OCPWP", "OCP"],
     },
     "mv-to-800vdc": {
-      how: "A medium-frequency transformer provides galvanic isolation between the medium-voltage side and the DC output, and electronic control can limit current quickly.",
-      harder: "Protection coordination across a solid-state stage differs from conventional medium-voltage breaker coordination, and the public SST specification work (OCP v0.3) is still in progress.",
+      how: "The OCP white paper's converter classification lists galvanic isolation by a high-frequency transformer, and notes fault-limiting converters can hold steady-state fault current to zero or low values.",
+      harder: "The white paper says migrating to solid-state solutions may need a new approach to coordination studies, and the OCP SST specification is a first draft in which short-circuit duration and other values are still TBD.",
       evidence: "emerging",
-      basis: "Isolating-transformer principle in SST topologies; OCP's SST specification v0.3.",
-      refs: ["MOHAN", "OCP"],
+      basis: "OCP white paper converter classification and protection discussion; OCP SST specification TBD items.",
+      refs: ["OCPWP", "OCPSST"],
     },
   },
   rd5: {
     "conventional-ac": {
-      how: "Power passes through AC-DC-AC conversion in a double-conversion UPS and AC-DC again in rack supplies. Each series function dissipates some power as heat, and series efficiencies multiply.",
+      how: "Power passes through AC-DC-AC conversion in a double-conversion UPS and AC-DC again in rack supplies. Each series function dissipates some power as heat, and series efficiencies multiply. The OCP article describes direct DC architectures as removing intermediate AC conversion stages and repeated AC/DC conversions.",
       harder: "Repeated conversion compounds losses and heat; this page gives no efficiency figures.",
       evidence: "public-fact",
-      basis: "Series efficiency multiplication; System Map conventional conversion chain.",
-      refs: ["MOHAN", "SYSMAP"],
+      basis: "Series efficiency multiplication (textbook principle; reference not inspected); System Map conversion chain; OCP article.",
+      refs: ["MOHAN", "SYSMAP", "OCP"],
     },
     "ac-to-800vdc": {
-      how: "A centralized AC-DC stage replaces the UPS AC-AC chain, and public sources describe fewer conversion stages between grid and compute as a goal of 800 VDC.",
-      harder: "The net stage count still depends on equipment upstream of the DC bus, and whether net efficiency improves is equipment-specific and not compared here.",
+      how: "A centralized AC-DC stage replaces the UPS AC-AC chain. NVIDIA says 800 VDC leaves fewer conversion stages between grid and accelerator, and the OCP white paper cites a potential reduction in conversion stages while noting that realized gains depend on site-specific design.",
+      harder: "The side-rack option still performs AC-to-DC conversion locally, the net stage count still depends on equipment upstream of the DC bus, and neither NVIDIA nor the OCP article gives a stage count or efficiency figure here, so no efficiency comparison is made.",
       evidence: "public-fact",
-      basis: "NVIDIA's stated aim of fewer conversion stages; System Map caveat on total stage count.",
-      refs: ["NVIDIA", "SYSMAP"],
+      basis: "NVIDIA vendor statement and OCP white paper efficiency discussion (attributed, not endorsed); OCP article description of the side-rack option.",
+      refs: ["NVIDIA", "OCPWP", "OCP", "SYSMAP"],
     },
     "mv-to-800vdc": {
-      how: "The SST conceptually folds the step-down transformer and rectifier into one functional block.",
-      harder: "The block is internally multi-stage, so stages are repackaged, not removed; the efficiency of any real SST is product-specific and not compared here.",
+      how: "The OCP SST specification defines the SST as replacing the line-frequency medium-voltage transformer, rectifier units and, as required, energy storage: one functional block.",
+      harder: "The specification is a black-box definition that lists several product components (power conversion, MVAC input, LVDC output, firmware and control, auxiliary power) and gives no stage count, so any stage reduction is not shown; general engineering practice is that such a converter is internally multi-stage; the efficiency of any real SST is product-specific and not compared here.",
       evidence: "public-fact",
-      basis: "SST internal multi-stage structure; System Map SST architecture caveat.",
-      refs: ["MOHAN", "SYSMAP"],
+      basis: "OCP SST specification scope and product-composition sections; System Map SST caveat.",
+      refs: ["OCPSST", "SYSMAP"],
     },
   },
   rd6: {
@@ -354,45 +395,45 @@ export const CELLS: Record<DriverId, Record<ArchitectureId, Cell>> = {
       how: "At a given distribution voltage and conductor arrangement, more power means more current and so more conductor cross-section for the same loss; UPS and battery rooms also occupy floor space.",
       harder: "Footprint grows with UPS plant and conductor size as rack power rises.",
       evidence: "public-fact",
-      basis: "Conductor loss and sizing relations; System Map UPS and battery plant description.",
+      basis: "Conductor loss and sizing relations (textbook principle; reference not inspected); System Map UPS and battery plant description.",
       refs: ["GRAINGER", "SYSMAP"],
     },
     "ac-to-800vdc": {
-      how: "Where the distribution voltage is higher for the same power and loss basis, conductors can be smaller. The saving depends on the comparison basis (AC voltage, phases, power factor, DC arrangement). Centralized conversion equipment still needs space and cooling.",
+      how: "Where the distribution voltage is higher for the same power and loss basis, conductors can be smaller. The saving depends on the comparison basis (AC voltage, phases, power factor, DC arrangement); the OCP white paper examines improved utilization of conductors while noting that realized gains depend on site-specific design. Centralized conversion equipment still needs space and cooling.",
       harder: "It moves heat and floor space from UPS rooms to conversion blocks and rack DC-DC stages; no sizing is claimed.",
       evidence: "public-fact",
-      basis: "Conductor loss and sizing relations.",
-      refs: ["GRAINGER"],
+      basis: "Conductor loss and sizing relations (textbook principle; reference not inspected); OCP white paper efficiency discussion.",
+      refs: ["GRAINGER", "OCPWP"],
     },
     "mv-to-800vdc": {
-      how: "Medium-frequency isolation shrinks the transformer magnetics compared with a line-frequency transformer.",
+      how: "The OCP SST specification states that an SST uses medium-to-high-frequency magnetic components and targets higher power density; smaller magnetics at higher frequency is a textbook relationship.",
       harder: "Cooling of the power section and packaging of new equipment become design questions; this page makes no footprint comparison.",
       evidence: "public-fact",
-      basis: "Transformer size scales inversely with operating frequency.",
-      refs: ["MOHAN"],
+      basis: "OCP SST specification scope statement (a design target, not measured performance); transformer size–frequency relation (textbook; reference not inspected).",
+      refs: ["OCPSST", "MOHAN"],
     },
   },
   rd7: {
     "conventional-ac": {
-      how: "Standards, equipment supply and operating practice are mature and widely applied.",
-      harder: "Public sources describe AI rack power density as motivating a move beyond traditional AC infrastructure.",
+      how: "AC distribution is covered by established codes and standards (for example NFPA 70 and IEC 60364, both cited by the OCP white paper) and long operating practice.",
+      harder: "The OCP white paper says rising rack power density and more dynamic loads are pushing data-center power beyond the limits of traditional architectures.",
       evidence: "public-fact",
-      basis: "Established codes and reliability standards; NVIDIA's stated motivation for the transition.",
-      refs: ["NEC", "GOLDBOOK", "NVIDIA"],
+      basis: "OCP white paper executive summary; NFPA 70 and IEC 60364 as cited there.",
+      refs: ["OCPWP", "NEC", "GOLDBOOK"],
     },
     "ac-to-800vdc": {
-      how: "OCP has publicized a Google, Microsoft and NVIDIA workstream to standardize 800 VDC (LVDC) data-center power.",
-      harder: "Standards are still being developed; interoperability and equipment availability should be verified, and this page makes no adoption claim.",
+      how: "The OCP article describes a Google, Microsoft and NVIDIA workstream to standardize 800 VDC (LVDC) data-center power, including an AC-fed side power rack option and a direct medium-voltage-to-800 VDC option.",
+      harder: "Standards are still being developed: the OCP article describes engagement with UL Solutions, NFPA, IEEE and IEC on certification and regulatory frameworks. Interoperability and equipment availability should be verified, and this page makes no adoption claim.",
       evidence: "emerging",
-      basis: "OCP's public description of the standardization workstream.",
+      basis: "OCP article description of the standardization workstream and safety-organization engagement.",
       refs: ["OCP", "NVIDIA"],
     },
     "mv-to-800vdc": {
-      how: "OCP's workstream includes an SST specification (v0.3) defining system-level performance and interface requirements.",
-      harder: "A v0.3 specification indicates work in progress; this page makes no adoption claim and no maturity ordering among the architectures.",
+      how: "The OCP SST specification (Rev 0.3.0, effective 22 June 2026) defines the SST as a black box, with a focus on electrical, mechanical, thermal, control and communications interfaces.",
+      harder: "Its own version history calls it a first draft and several values are TBD (for example short-circuit fault duration); this page makes no adoption claim and no maturity ordering among the architectures.",
       evidence: "emerging",
-      basis: "OCP's public description of the SST specification.",
-      refs: ["OCP"],
+      basis: "OCP SST specification version history, scope and TBD items.",
+      refs: ["OCPSST"],
     },
   },
 };
@@ -592,8 +633,8 @@ export const CONDITIONAL_DECISIONS: Record<DriverId, ConditionalDecision> = {
     connects: "Links availability needs to switchgear, conversion and storage arrangements.",
     informs: "What redundancy scheme to adopt and how much operating-experience risk to accept.",
     evidence: "assumption",
-    basis: "Illustrative preference, not a ranking. Context: established redundancy practice; absence of operating data in the cited sources is stated, not inferred.",
-    refs: ["GOLDBOOK", "SYSMAP"],
+    basis: "Illustrative preference, not a ranking. Context: established redundancy practice; the OCP white paper's statement that LVDC availability strategies require further investigation; this page cites no operating data for the DC architectures.",
+    refs: ["OCPWP", "GOLDBOOK", "SYSMAP"],
   },
   rd4: {
     dominantDriver: "rd4",
@@ -606,8 +647,8 @@ export const CONDITIONAL_DECISIONS: Record<DriverId, ConditionalDecision> = {
     connects: "Links protection scheme to distribution form and the monitoring system.",
     informs: "What protection scheme and safe-work practice to commit to.",
     evidence: "assumption",
-    basis: "Illustrative preference, not a ranking. Context: codified AC practice; DC interruption principle; OCP's reported work with standards and safety organizations.",
-    refs: ["NEC", "GARZON", "OCP"],
+    basis: "Illustrative preference, not a ranking. Context: codified AC practice; the OCP white paper's statement (§7.2) that there is currently no standard or recognized practice for coordinating protection for the converter-fed DC fault behavior it describes, in particular the capacitor-discharge peak; OCP's reported work with standards and safety organizations.",
+    refs: ["NEC", "OCPWP", "OCP"],
   },
   rd5: {
     dominantDriver: "rd5",

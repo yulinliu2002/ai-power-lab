@@ -62,6 +62,39 @@ Production build served with `next start`; Browser pane. `/architecture` rendere
 4. **No automated UI test** exists; browser verification was manual and not exhaustive (no screen-reader check, no numeric contrast measurement).
 5. **No quantitative comparison** of any kind is made; none of this content is validated by the simulation, which covers only the SST slice.
 
+## Source-to-claim audit (2026-10-18, requested before merge)
+
+**Method.** The OCP article and the NVIDIA blog (dated 2026-08-11) were fetched and read. The OCP LVDC white paper v1.0 (30 March 2026, 155 pages) and the OCP SST specification Rev 0.3.0 (effective 2026-06-22, 24 pages) were downloaded, text-extracted and searched; the passages cited below were read, but the white paper was **not** read in full. The web fetcher summarized the two HTML pages, so quoted phrases from them are summary-level; the two PDFs were read from extracted text. Textbooks and standards (Mohan, Grainger, IEEE 493, IEEE 1584, Garzon, NFPA 70, IEC 60364) were **not opened** and are not claimed verified. A research-thread report (`research/power-architecture-research-report.md`) pointed to the primary OCP documents; its figures were not reused.
+
+**Outcome.** Every cell that relied on a blog-level source or a bare textbook name was rewritten to say what the primary source actually says, with the source type shown (vendor statement, consortium document, textbook background, this site). Claims that only a textbook could support are labeled as a textbook principle whose reference was not inspected. Cell labels are now 13 public-fact, 7 emerging, 1 model-output (the RD3 SST cell moved from assumption to emerging once OCP documents supported it).
+
+| Cell | Verified against | Result |
+|---|---|---|
+| RD1 conventional | OCP article: baseline is MV AC stepped down to 480 VAC feeding AC racks. Current-vs-voltage is a textbook principle | Narrowed; principle not inspected |
+| RD1 AC-fed | NVIDIA blog and OCP white paper executive summary cite rising rack density. White paper §6.3.3: for a given power, a higher voltage class with correspondingly less conductor material can reduce relative cable losses and current (the paper's 350/700 V to 700/1400 V halving example is deliberately not reproduced); a bipolar arrangement with a midpoint conductor can reduce losses versus unipolar when loads are balanced | Supported; copper and percentage claims deliberately not used (NVIDIA blog page does not state them) |
+| RD1 SST | NVIDIA blog: direct medium-voltage conversion only for a future facility-scale unit. SST spec history: "first draft" | Supported; the blog does not say whether an SST is required, consistent with D-SST |
+| RD2 conventional | Textbook UPS topology only | Labeled principle, reference not inspected |
+| RD2 AC-fed | White paper §2.2 examines energy-storage integration; ½CV² is a principle | Supported / principle |
+| RD3 conventional | White paper §4.2: N+1 power blocks and maintenance bypass | Supported |
+| RD3 AC-fed | White paper §4.2: no UPS maintenance bypass in DC distribution; availability strategies "require further investigation" | Supported. Note: the white paper also cites earlier DC installations (a 2012 DC data center, factories); this page makes no operating-experience claim either way |
+| RD3 SST | SST spec Appendix A redundancy figures; §5.2.1(c) marks voltage levels for seamless redundancy design TBD; white paper live-swap sub-blocks | Supported; **originally unsupported assumption, now sourced** |
+| RD4 conventional | White paper §7.2.2 (selectivity): time-current selectivity is the most widespread method and its delays can mean long arcing time in an arc flash; NFPA 70 and IEC 60364 are cited elsewhere in the paper. The white paper's numeric delay range was removed from the cell | Supported; the zero-crossing statement is a textbook principle not inspected |
+| RD4 AC-fed | White paper §7.2 (no standard or recognized practice for coordinating protection for the converter-fed DC fault behavior it describes, in particular the capacitor-discharge peak) and §7.6 (no DC equivalent of IEEE 1584 for incident energy). OCP article: engagement with UL Solutions, NFPA, IEEE, IEC | Supported |
+| RD4 SST | White paper converter classification (HF transformer isolation), fault-limiting converters; SST spec TBD short-circuit duration | Supported |
+| RD5 conventional | Series efficiency is a principle; OCP article on removing AC conversion stages | Supported / principle |
+| RD5 AC-fed | NVIDIA blog: "fewer" stages, no count or efficiency number; white paper §2.2: "potential reduction", gains site-specific; OCP article: side-rack still converts AC to DC | Supported; wording hedged to match |
+| RD5 SST | SST spec §3 and §4.1: replaces transformer, rectifier and (as required) storage; §4.1 lists five product components (power conversion, MVAC input, LVDC output, firmware/control, auxiliary power) | Supported. The black-box specification does not state a conversion-stage count, and its component list is not a stage count; "internally multi-stage" in D-BLOCK rests on this site's own Learn content and general engineering, not an OCP statement |
+| RD6 conventional | Conductor sizing principle | Principle, not inspected |
+| RD6 AC-fed | White paper §2.2 examines conductor utilization, gains site-specific | Supported / principle |
+| RD6 SST | SST spec §3 states a design target of higher power density | Reworded as a target, not a measured result ("superior" removed) |
+| RD7 conventional | White paper executive summary; NFPA 70 and IEC 60364 as cited there | Supported; "mature supply chain" claim removed |
+| RD7 AC-fed | OCP article: workstream, side-rack and direct options, safety-organization engagement | Supported; adoption-count claims in the article deliberately not used |
+| RD7 SST | SST spec history ("first draft"), scope (black box, interfaces), TBD items | Supported |
+
+**Dropped or narrowed on audit.** "MFT provides galvanic isolation" now cites the white paper's converter classification instead of a textbook; "capacity growth raises arc-flash energy" had already been corrected; no copper, efficiency, cost or TCO figure from any vendor is used; the OCP article's "80 partners" statement is not used.
+
+**Remaining limitations.** The white paper's sections outside those cited were not read. A textbook-only claim remains in RD2 conventional, RD6 conventional, parts of RD1/RD4/RD5 and the transformer size–frequency relation; each shows "not inspected". The earlier 100–200 ms figure was removed, so no AC-3 deviation remains; the digit scan now shows only voltage classes, scheme names, standard numbers, version and date numbers, and the OCP white-paper section number §6.3.3 cited in RD1. Codex had flagged that an attributed external figure (the 350/700 V to 700/1400 V example) might not satisfy AC-3's "cited repository source" wording; it was removed rather than escalated.
+
 ## Appendix: reproducible check commands and output
 
 ```
@@ -74,24 +107,25 @@ git status --short; git diff --name-only main -- src backend content data tests 
 git diff main -- frontend/package.json frontend/package-lock.json                          -> 0 lines
 ```
 
-`check.mts` output (final run):
+`check.mts` output (final run, after the source audit):
 
 ```
 AC-8 term hits in data: ["ranking","ranking","ranking","ranking","ranking","ranking"]
 disclosure term hits (expected rank+winner in D-NOWIN; 'better' in D-SIM negation): ["better","rank","winner"]
-evidence labels: {"public-fact":13,"emerging":6,"model-output":1,"assumption":1}
+evidence labels: {"public-fact":13,"emerging":7,"model-output":1}
 digit-bearing tokens in cells:
-rd1/ac-to-800vdc: 800
-rd1/mv-to-800vdc: 800
+rd1/conventional-ac: 480
+rd1/ac-to-800vdc: (§6.3.3)
+rd1/mv-to-800vdc: 800 | 0.3.0)
 rd2/mv-to-800vdc: 800
-rd3/conventional-ac: (N+1, | 2N)
-rd3/ac-to-800vdc: (N+1, | 2N) | 800
+rd3/conventional-ac: N+1 | N+1 | 2N
+rd3/ac-to-800vdc: N+1 | 800
 rd4/conventional-ac: 70 | 60364),
-rd4/ac-to-800vdc: 800
-rd4/mv-to-800vdc: v0.3)
+rd4/ac-to-800vdc: 800 | 1584
 rd5/ac-to-800vdc: 800
-rd7/ac-to-800vdc: 800
-rd7/mv-to-800vdc: (v0.3) | v0.3
+rd7/conventional-ac: 70 | 60364,
+rd7/ac-to-800vdc: 800 | medium-voltage-to-800
+rd7/mv-to-800vdc: 0.3.0, | 22 | 2026)
 ALL MECHANICAL CHECKS PASS (cells=21, interfaces=15)
 ```
 
@@ -117,3 +151,9 @@ Codex also noted it could not independently confirm the pytest, build and browse
 
 **Overall independent-review status.** The pre-implementation spec gate was a human-approved exception (no Codex PASS on v0.3). The implementation was reviewed in two rounds and ended at Codex `PASS` for the remediation. Source support for the cited textbook and standard references remains unverified by anyone (limitation 2); Codex reviewed technical reasonableness and labeling, not the cited texts.
 
+
+### Source-audit review (Codex, bounded)
+
+- **Audit round 1: `CHANGES_REQUIRED`** (3 major, 2 minor), all valid: the RD1 voltage-class/bipolar loss statement omitted the conditions in white paper §6.3.3 (and the validation record cited §6.3.4 instead of §6.3.3); the RD4 conditional-decision basis broadened the white paper's statement about DC fault coordination; a numeric 100–200 ms selectivity delay conflicted with SPEC-011 AC-3; the RD3 SST cell said "redundancy levels" are TBD where the specification marks voltage levels for seamless redundancy TBD; the record said SST §4.1 had four components (it has five) and implied components equal stage count. All were corrected.
+- **Audit round 2 (targeted closure): `CHANGES_REQUIRED`**, one medium item: the RD1 attributed example figures (350/700 V to 700/1400 V) might not satisfy AC-3's "cited repository source" wording. The four other corrections were confirmed. Rather than request a spec decision, the figures were removed (RD1 now describes the effect qualitatively with the §6.3.3 citation); this last edit only deletes numbers and was **not** re-reviewed by Codex. Treat the source audit as: all material findings fixed; final wording not re-reviewed.
+- Codex checked against the extracted PDF text and the live OCP article and NVIDIA blog; it did not review the textbooks, PDF diagrams, browser rendering or CI.

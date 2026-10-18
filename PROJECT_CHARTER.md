@@ -66,8 +66,8 @@ two gates:
   the Human Engineering Lead's transition toward Systems Engineering / Architecture
   and AI power infrastructure?"
 
-A proposal that is weak against **both** gates should normally be deferred or rejected.
-Passing only because something is visually impressive, technically interesting, easy to
+A proposal must satisfy **both** gates; passing only one, or neither, means it is
+deferred or rejected (`docs/PRODUCT_BLUEPRINT.md` §6). Passing only because something is visually impressive, technically interesting, easy to
 implement, or increases feature count is not sufficient on its own.
 
 This gate is strategic framing for roadmap and specification proposals. It does not
@@ -178,7 +178,7 @@ increases feature count, is technically interesting, or is convenient for an age
 implement.
 
 A future specification should have a clear systems-engineering purpose and meaningful
-Product ROI and/or Career ROI (§3). Where possible, the specification should explicitly
+Product ROI and Career ROI (§3). Where possible, the specification should explicitly
 state what systems-engineering capability or knowledge gap it advances.
 
 This rule is a prioritization lens for roadmap decisions and specification authors — it
@@ -213,9 +213,8 @@ between engineering artifacts (spec vs. implementation, spec vs. test, etc.) and
 set. The two hierarchies answer different questions and do not override one another.
 
 The Blueprint governs learning architecture and content-quality principles; this
-charter governs mission, scope, and strategic direction (Blueprint §10). Where the ROI
-gate is worded differently (§3, §8), the Blueprint §6 requirement that a major
-feature satisfy **both** Product ROI and Career ROI governs.
+charter governs mission, scope, and strategic direction (Blueprint §10). The ROI gate
+(§3, §8) requires **both** Product ROI and Career ROI, as in Blueprint §6.
 
 No lower-level artifact should silently contradict this charter's strategic direction.
 If such a conflict is found, report it rather than silently resolving it — conversation

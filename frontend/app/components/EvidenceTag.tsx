@@ -1,5 +1,6 @@
 import {
   EVIDENCE_LABEL_TEXT,
+  SOURCE_KIND_TEXT,
   REFERENCES,
   type EvidenceLabel,
   type ReferenceId,
@@ -36,6 +37,7 @@ export function EvidenceTag({
               <a href="#references" className="font-mono text-primary underline underline-offset-2 hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary">
                 {REFERENCES[id].id}
               </a>
+              <span className="text-secondary"> ({SOURCE_KIND_TEXT[REFERENCES[id].kind]})</span>
               {i < refs.length - 1 ? ", " : ""}
             </span>
           ))}

@@ -12,6 +12,7 @@ import {
   DRIVERS,
   INTERFACES,
   REFERENCES,
+  SOURCE_KIND_TEXT,
   VALIDATION_NEEDS,
   VALIDATION_SECTION_EVIDENCE,
 } from "../lib/architectureChoicesData";
@@ -200,13 +201,16 @@ export default function ArchitectureChoicesPage() {
       <section id="references" className="flex flex-col gap-2 border-t border-hairline pt-4">
         <SectionHeading>References</SectionHeading>
         <p className="max-w-3xl text-[11.5px] leading-relaxed text-secondary">
-          Textbook and standard references are title-level. Public industry sources are those
-          recorded in this repository&rsquo;s industry data, with their verification date.
+          Each reference states what was actually inspected in the 2026-10-18 source audit.
+          Textbook and standard references that were not opened are background for general
+          principles and are not verified against their text. Vendor and consortium statements are
+          attributed, not endorsed.
         </p>
         <ul className="flex flex-col gap-1.5">
           {Object.values(REFERENCES).map((r) => (
             <li key={r.id} className="text-[12px] leading-relaxed text-secondary">
               <span className="font-mono text-[11px] text-primary">{r.id}</span>{" "}
+              <span className="font-mono text-[10.5px] uppercase tracking-[0.04em]">[{SOURCE_KIND_TEXT[r.kind]}]</span>{" "}
               &mdash; {r.url ? (
                 <a href={r.url} className="underline underline-offset-2 hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary" rel="noreferrer">
                   {r.citation}
@@ -214,7 +218,8 @@ export default function ArchitectureChoicesPage() {
               ) : (
                 r.citation
               )}
-              {r.verifiedDate ? ` (verified ${r.verifiedDate})` : ""}
+              {r.verifiedDate ? ` (recorded in industry data, verified ${r.verifiedDate})` : ""}
+              <span className="block text-[11px]">Inspection: {r.inspection}</span>
             </li>
           ))}
         </ul>
