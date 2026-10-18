@@ -29,6 +29,23 @@ from peos.sandbox import create_isolated_workspace, discard_workspace
 from tests._peos_fixtures import make_minimal_repo
 
 
+@pytest.fixture(autouse=True)
+def _isolate_sandbox_command_construction(monkeypatch):
+    """These tests mock the service/browser-worker lifecycle, not the
+    sandbox. The real `sandboxed_runtime_verification_command` fails
+    closed off macOS (e.g. on the Ubuntu CI runner) before the mocked
+    lifecycle can run, so replace it with a stand-in that keeps the same
+    argv shape (`sandbox-exec -f <profile> *command`) at both call sites:
+    `runtime_verification` (frontend build, browser worker) and
+    `runtime_services` (service launch). Production fail-closed behavior
+    is proven separately in tests/test_peos_sandbox.py."""
+    def fake_wrapper(command, workspace, repo_root, profile_dir, extra_deny_read_paths=()):
+        return ["sandbox-exec", "-f", str(profile_dir / "runtime-verification.sb"), *command]
+
+    monkeypatch.setattr("peos.runtime_verification.sandboxed_runtime_verification_command", fake_wrapper)
+    monkeypatch.setattr("peos.runtime_services.sandboxed_runtime_verification_command", fake_wrapper)
+
+
 @pytest.fixture
 def repo_root(tmp_path):
     return make_minimal_repo(tmp_path)
