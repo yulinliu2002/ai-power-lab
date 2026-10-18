@@ -3,8 +3,8 @@
 > **Historical document:** PEOS is retired (git tag `pre-peos-retirement`). References to PEOS execution below describe the process at the time of writing; requirement text is unchanged.
 
 **Status:** Architecture Approved (Codex Round 5: `APPROVE`, 0 blocking/0 major/0 minor open across
-the full five-round review history). Implementation not yet started; pending Human Engineering Lead
-approval per `ENGINEERING.md`'s Core Workflow. (Round 1: `CHANGES_REQUIRED`, 0/3/3, remediation
+the full five-round review history). **Implemented** (commit `71e589d`; validation record
+`docs/validation/SPEC-010-validation.md`). Status line updated 2026-10-18; the review history below is unchanged. (Round 1: `CHANGES_REQUIRED`, 0/3/3, remediation
 attempted in 0.2. Round 2 closure review of 0.2: `CHANGES_REQUIRED`, 0/0/2 — 4 of 6 confirmed
 closed, 1 downgraded major→minor residual, 1 new residual from 0.2's own remediation text; both
 fixed in 0.3. Round 3 closure review of 0.3: both `CLOSED`, 2 further minor documentation issues

@@ -5,17 +5,17 @@ import { usePathname } from "next/navigation";
 
 /**
  * Minimal top-level navigation across AI Power Lab 2.0's four learning
- * areas plus the Advanced Sandbox. Only System Map (the learning
- * platform) and Advanced Sandbox (the preserved simulator, moved from
- * `/` to `/sandbox`) are implemented routes; Architecture Choices,
- * Learn by Example, and Industry & Career are listed but disabled
+ * areas plus the Advanced Sandbox. System Map, Architecture Choices
+ * (SPEC-011) and Advanced Sandbox (the preserved simulator, moved from
+ * `/` to `/sandbox`) are implemented routes; Learn by Example and
+ * Industry & Career are listed but disabled
  * rather than left off the nav, per the instruction not to build
  * unfinished pages just to populate it, while still showing the
  * intended shape of the site.
  */
 const NAV_ITEMS: ReadonlyArray<{ href: string; label: string; disabled?: boolean }> = [
   { href: "/system-map", label: "System Map" },
-  { href: "/architecture", label: "Architecture Choices", disabled: true },
+  { href: "/architecture", label: "Architecture Choices" },
   { href: "/learn", label: "Learn by Example", disabled: true },
   { href: "/industry", label: "Industry & Career", disabled: true },
   { href: "/sandbox", label: "Advanced Sandbox" },

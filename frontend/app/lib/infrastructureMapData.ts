@@ -270,7 +270,7 @@ export interface Architecture {
 export const ARCHITECTURES: readonly Architecture[] = [
   {
     id: "conventional-ac",
-    name: "Conventional AC Distribution",
+    name: "Conventional AC",
     tagline: "AC end to end, with battery storage on the UPS's internal DC link",
     summary:
       "Power stays in AC form from the utility down to the rack, with a double-conversion UPS and " +
@@ -382,7 +382,7 @@ export const ARCHITECTURES: readonly Architecture[] = [
   },
   {
     id: "ac-to-800vdc",
-    name: "AC Infrastructure with an 800 VDC Transition",
+    name: "AC-fed 800 VDC",
     tagline: "Conventional AC up to a centralized conversion stage, then DC to the rack",
     summary:
       "The grid-facing infrastructure (substation, MV switchgear, backup generation) stays " +
@@ -489,7 +489,7 @@ export const ARCHITECTURES: readonly Architecture[] = [
   },
   {
     id: "mv-to-800vdc",
-    name: "Conceptual MV-to-800 VDC Architecture",
+    name: "Conceptual MV-to-800 VDC via SST",
     tagline: "A solid-state transformer merges voltage step-down and AC-DC conversion into one stage",
     summary:
       "A solid-state transformer (SST) performs medium-voltage AC-to-800VDC conversion directly, " +

@@ -3,8 +3,8 @@
 **Status:** Approved product direction; repository integration pending.
 **Source:** Product direction decided by the Human Engineering Lead (with ChatGPT) and
 codified here. This document records the decision; it does not reopen it.
-**Last verified against the repository:** branch `refactor/ai-power-lab-2`, HEAD `71e589d`,
-including uncommitted frontend work (`/`, `/system-map`, `/sandbox`).
+**Last verified against the repository:** `main` at `8552a7a` (routes `/`, `/system-map`,
+`/sandbox`); Architecture Choices V1 (`/architecture`) added per SPEC-011.
 
 ---
 
@@ -152,17 +152,17 @@ technical trade studies?
 
 ## 7. Current vs. Planned Capabilities
 
-Verified from the working tree on the date above.
+Verified against the repository state named in the header.
 
 | Capability | State | Where |
 |---|---|---|
-| Learning-first home page | Implemented (uncommitted) | `/` |
-| System Map: 10 infrastructure categories × 3 architectures, plus the simulated slice | Implemented (uncommitted) | `/system-map` |
+| Learning-first home page | Implemented | `/` |
+| System Map: 10 infrastructure categories × 3 architectures, plus the simulated slice | Implemented | `/system-map` |
 | Advanced Sandbox: five scenarios, telemetry, protection timeline/coordination, scenario comparison, sensitivity study | Implemented | `/sandbox` |
 | Validated simulation engine (grid → SST → 800 VDC bus → AI load; PI control, thermal, protection) | Implemented, preserved | `src/`, `scenarios/`, `backend/` |
 | Industry knowledge base (sourced, verified/sample flagged) | Data and Streamlit page only; **no Next.js route or API** | `data/industry/`, `dashboard/pages/industry.py` |
 | Learn content (4 levels, YAML) | Streamlit only | `content/learn/` |
-| Architecture Choices as a dedicated area | **Not implemented** (nav entry disabled; comparison exists only inside System Map) | — |
+| Architecture Choices as a dedicated area | Implemented as V1: qualitative, frontend-only (SPEC-011) | `/architecture` |
 | Learn by Example as guided explanations | **Not implemented** (scenarios exist only inside the Sandbox) | — |
 | Requirements and Engineering Judgment content | **Not implemented as content**; by decision they will live inside the four areas, not on their own pages | — |
 | Streamlit dashboard | Legacy; reference/maintenance only | `dashboard/`, `app.py` |
@@ -242,7 +242,7 @@ separate work, not reopened here.
 | Evidence categories and section-level labeling (Section 5.1). | System Map and Sandbox copy; not yet audited against it. |
 | Document responsibilities (Section 10). | `PROJECT_CHARTER.md` §9 hierarchy; `ENGINEERING.md` charter pointer. |
 | Rubric is optional guidance, not a gate. | Nothing to change; recorded so it is not later turned into one. |
-| Streamlit is legacy reference/maintenance; PEOS is Retired. | `README.md` still presents Streamlit as the platform. `DESIGN.md` (uncommitted edit) already names Next.js as the reference. |
+| Streamlit is legacy reference/maintenance; PEOS is Retired. | `README.md` still presents Streamlit as the platform. `DESIGN.md` (commit `002af9d`) already names Next.js as the reference. |
 | Stale statements to correct when each document is next edited. | `README.md` (Streamlit-only); `PROJECT_CHARTER.md` §11 (SPEC-010 "not implemented"). |
 
 ### 11.2 Genuine unresolved decisions

@@ -7,6 +7,34 @@ is best described as an **educational digital-twin framework**: it is
 not calibrated to any specific commercial SST, and makes no claim to
 hardware-design-validation fidelity.
 
+## Current Stack
+
+This section describes the repository as it is today; the sections below
+date from the V1.1 Streamlit platform and are retained for the engine,
+modeling scope and limitations, which are unchanged.
+
+| Layer | Location | Status |
+|---|---|---|
+| Simulation engine (Python) | `src/`, `config/default.yaml`, `scenarios/` | Current, validated |
+| API (FastAPI) | `backend/` | Current; four endpoints: health, load-step, scenario run, scenario comparison |
+| Web interface (Next.js) | `frontend/` | Current: `/` home, `/system-map`, `/architecture`, `/sandbox` |
+| Learn content and industry data (YAML) | `content/learn/`, `data/industry/` | Read by Streamlit only; no Next.js route or API yet |
+| Streamlit dashboard | `app.py`, `dashboard/` | Legacy; reference and maintenance only |
+| PEOS orchestration runtime | none | Retired; available only at git tag `pre-peos-retirement` |
+
+Run the current stack (two terminals):
+
+```bash
+# API (repo root, after `pip install -r requirements.txt`)
+uvicorn backend.app:app --reload --port 8000
+
+# Web interface
+cd frontend && npm install && npm run dev
+```
+
+Product direction is in `docs/PRODUCT_BLUEPRINT.md`; engineering workflow is
+in `ENGINEERING.md`.
+
 ## V1.1: Platform Overview
 
 V1.0 (tagged `v1.0.0`) delivered the validated simulation engine. V1.1
