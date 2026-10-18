@@ -2,7 +2,7 @@
 
 > **Historical document:** PEOS is retired (git tag `pre-peos-retirement`). References to PEOS execution below describe the process at the time of writing; requirement text is unchanged.
 
-**Status:** Draft
+**Status:** Implemented (commit `2439637`; validation record `docs/validation/SPEC-008-validation.md`; architecture review: Codex Round 3 `APPROVE`, 0 blocking/0 major/0 minor open). Status line updated 2026-10-18; the review history below is unchanged.
 **Project:** AI Power Lab
 **System:** `dashboard/adapters/` (new derived-data module), `backend/` (one new endpoint/schema
 extension), `frontend/app/` (new scenario selector + Protection Timeline presentation). No change

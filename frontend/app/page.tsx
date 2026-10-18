@@ -15,8 +15,8 @@ export const metadata: Metadata = {
  * learning platform for the AI data-center power infrastructure
  * industry, built from public information -- not a research-grade
  * digital twin. The four learning areas are introduced here; System
- * Map is the primary entry point since it is the only one besides the
- * Sandbox that is implemented today.
+ * Map is the primary entry point. System Map, Architecture Choices
+ * (SPEC-011) and the Sandbox are the implemented destinations today.
  */
 export default function HomePage() {
   return (
@@ -104,11 +104,12 @@ const LEARNING_AREAS: ReadonlyArray<LearningArea> = [
     title: "Architecture Choices",
     question: "Why these designs, and what are the trade-offs?",
     description:
-      "How conventional AC distribution, emerging 800 VDC architectures, and solid-state " +
-      "transformers (SSTs, one optional way to do the grid-side conversion, not a " +
-      "requirement for 800 VDC) compare, and what assumptions and trade-offs each carries.",
-    href: null,
-    status: "planned",
+      "How Conventional AC, AC-fed 800 VDC, and a Conceptual MV-to-800 VDC architecture via " +
+      "solid-state transformer (one optional way to do the grid-side conversion, not a " +
+      "requirement for 800 VDC) compare against illustrative requirement drivers, and what " +
+      "interfaces and validation each would need.",
+    href: "/architecture",
+    status: "live",
   },
   {
     title: "Learn by Example",

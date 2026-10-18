@@ -69,7 +69,7 @@ export default function SystemMapPage() {
             (the Advanced Sandbox) models one narrow, specific slice of it: the grid →
             SST → 800&nbsp;VDC bus → AI compute chain, drawn below exactly as the simulator
             draws it -- an instance of the <strong className="text-primary">Conceptual
-            MV-to-800VDC</strong> architecture view above, not a fourth, separate topology.
+            MV-to-800 VDC via SST</strong> architecture view above, not a fourth, separate topology.
           </p>
         </div>
 

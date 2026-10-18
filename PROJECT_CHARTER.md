@@ -66,8 +66,8 @@ two gates:
   the Human Engineering Lead's transition toward Systems Engineering / Architecture
   and AI power infrastructure?"
 
-A proposal that is weak against **both** gates should normally be deferred or rejected.
-Passing only because something is visually impressive, technically interesting, easy to
+A proposal must satisfy **both** gates; passing only one, or neither, means it is
+deferred or rejected (`docs/PRODUCT_BLUEPRINT.md` §6). Passing only because something is visually impressive, technically interesting, easy to
 implement, or increases feature count is not sufficient on its own.
 
 This gate is strategic framing for roadmap and specification proposals. It does not
@@ -132,9 +132,9 @@ OBSERVE -> EXPLAIN -> COMPARE -> TRADE STUDY -> REQUIREMENTS -> ARCHITECTURE
 
 The project must not remain indefinitely in dashboard/visualization/scenario-display
 work. As of this charter, the repository has progressed through significant parts of
-OBSERVE, EXPLAIN, and COMPARE (protection timeline, protection coordination, and an
-approved scenario-comparison architecture in SPEC-010). After SPEC-010 is implemented,
-roadmap selection should increasingly favor design-space reasoning, parameter
+OBSERVE, EXPLAIN, and COMPARE (protection timeline, protection coordination, and
+scenario comparison, implemented per SPEC-010; see
+`docs/validation/SPEC-010-validation.md`). Roadmap selection should increasingly favor design-space reasoning, parameter
 sensitivity with engineering meaning, architecture trade studies, requirements,
 constraint analysis, subsystem interactions, limiting factors, and verification against
 requirements — over additional dashboard-only features.
@@ -178,7 +178,7 @@ increases feature count, is technically interesting, or is convenient for an age
 implement.
 
 A future specification should have a clear systems-engineering purpose and meaningful
-Product ROI and/or Career ROI (§3). Where possible, the specification should explicitly
+Product ROI and Career ROI (§3). Where possible, the specification should explicitly
 state what systems-engineering capability or knowledge gap it advances.
 
 This rule is a prioritization lens for roadmap decisions and specification authors — it
@@ -190,6 +190,8 @@ specification.
 
 ```
 PROJECT_CHARTER.md                 (this file — WHY, strategic direction)
+    |
+docs/PRODUCT_BLUEPRINT.md          (learning architecture, narrative standards, content quality)
     |
 ENGINEERING.md / AGENTS.md         (HOW work is executed, reviewed, verified, approved)
     |
@@ -209,6 +211,10 @@ implementation, tests, and conversation history — continues to govern disagree
 between engineering artifacts (spec vs. implementation, spec vs. test, etc.) and operates
 *within* the strategic direction this charter and `ENGINEERING.md`/`AGENTS.md`/`CLAUDE.md`
 set. The two hierarchies answer different questions and do not override one another.
+
+The Blueprint governs learning architecture and content-quality principles; this
+charter governs mission, scope, and strategic direction (Blueprint §10). The ROI gate
+(§3, §8) requires **both** Product ROI and Career ROI, as in Blueprint §6.
 
 No lower-level artifact should silently contradict this charter's strategic direction.
 If such a conflict is found, report it rather than silently resolving it — conversation
@@ -235,9 +241,10 @@ for routine engineering work already governed by `ENGINEERING.md` and `AGENTS.md
 ## 11. Current Roadmap Context (informational, not normative)
 
 As of this charter's drafting, SPEC-010 (Scenario Comparison & System Stress Analysis)
-is Architecture Approved but **not implemented**. It is a presentation/derived-data
-layer over existing scenario and Protection Timeline data (no new engineering model,
-no change to `src/`). After SPEC-010 is implemented, future roadmap planning should
+was Architecture Approved but not yet implemented; it has since been implemented
+(commit `71e589d`; validation record `docs/validation/SPEC-010-validation.md`). It is a
+presentation/derived-data layer over existing scenario and Protection Timeline data (no
+new engineering model, no change to `src/`). Future roadmap planning should
 increasingly investigate TRADE STUDY / REQUIREMENTS / ARCHITECTURE capabilities (§5)
 rather than defaulting to additional dashboard features. This section records roadmap
 state at drafting time and will go stale — treat `docs/specifications/` as the

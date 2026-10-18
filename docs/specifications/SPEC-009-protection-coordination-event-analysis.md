@@ -3,8 +3,8 @@
 > **Historical document:** PEOS is retired (git tag `pre-peos-retirement`). References to PEOS execution below describe the process at the time of writing; requirement text is unchanged.
 
 **Status:** Architecture Approved (Codex Round 5: `APPROVE`, 0 blocking/0 major/0 minor open across
-the full review history) — implementation not yet started; see "STOP before implementation" in the
-governing brief. Pending Human Engineering Lead approval per `ENGINEERING.md`'s Core Workflow.
+the full review history) — **Implemented** (commit `2154075`; validation record
+`docs/validation/SPEC-009-validation.md`). Status line updated 2026-10-18; the review history is unchanged.
 **Project:** AI Power Lab
 **System:** `dashboard/adapters/protection_timeline.py` (additive extension — new fields/dataclass,
 no new module), `backend/schemas.py` (additive extension of the existing mirrored models — no new

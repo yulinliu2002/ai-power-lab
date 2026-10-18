@@ -14,7 +14,9 @@ read both.
 Claude and Codex work from the same repository documents. These are the
 only sources either agent treats as authoritative:
 
-- `docs/PRODUCT_BLUEPRINT.md`: product objectives and requirements.
+- `PROJECT_CHARTER.md`: mission, scope, and strategic direction.
+- `docs/PRODUCT_BLUEPRINT.md`: learning architecture, narrative standards, and
+  product objectives and requirements.
 - `DESIGN.md`: UI/UX standards.
 - `ENGINEERING.md`: engineering and verification standards.
 - Relevant SPECs (`docs/specifications/`) and the PR's acceptance
