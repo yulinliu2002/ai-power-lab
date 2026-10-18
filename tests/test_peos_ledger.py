@@ -107,13 +107,25 @@ def test_ledger_write_sequence_reflects_most_recently_completed_phase(tmp_path):
     assert data["active_phase"] == "Claude implementation"
 
 
-def test_run_directory_creation_is_exclusive_no_reuse(tmp_path):
+def test_run_directory_reuse_by_a_second_ledger_writer_is_tolerated(tmp_path):
+    """SPEC-007: the run directory's *exclusive*-creation guarantee (no
+    reuse, no silent overwrite of another run's state) now lives in
+    `peos.checkpoint.CheckpointWriter._ensure_dir` -- the checkpoint's
+    own first write always happens before the ledger's first write in a
+    real run's lifecycle, so it is the one place a genuine `run_id`
+    collision is actually caught (see
+    tests/test_peos_checkpoint.py::test_run_directory_creation_is_exclusive_no_reuse).
+    A second `LedgerWriter` for the same `run_id` tolerantly reuses the
+    directory the first one (or a checkpoint writer) already created --
+    this is expected, not a regression, since both writers always target
+    the same, single run directory for one real run."""
     writer1 = LedgerWriter(tmp_path, "run1")
     writer1.write(_make_ledger("run1"))
 
     writer2 = LedgerWriter(tmp_path, "run1")
-    with pytest.raises(LedgerError):
-        writer2.write(_make_ledger("run1"))
+    writer2.write(_make_ledger("run1", active_phase="Planning"))
+    data = json.loads((writer2.run_dir / "ledger.json").read_text(encoding="utf-8"))
+    assert data["active_phase"] == "Planning"
 
 
 # --- AC-29-style: filesystem containment ---------------------------------

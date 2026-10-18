@@ -13,6 +13,7 @@ export const SVG_COLOR = {
   surfaceRaised: "var(--color-surface-raised)",
   textSecondary: "var(--color-text-secondary)",
   textPrimary: "var(--color-text-primary)",
+  muted: "var(--color-muted)",
   hairline: "var(--color-hairline)",
   accent: "var(--color-accent)",
   good: "var(--color-status-good)",

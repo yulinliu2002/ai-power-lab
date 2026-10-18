@@ -17,9 +17,19 @@ from pathlib import Path
 
 from peos.plan import MAX_MAX_CYCLES, MIN_MAX_CYCLES
 from peos.report import build_report
+from peos.resume import abandon_run, inspect_run, resume_run
 from peos.workflow import RunResult, run_workflow
 
-EXIT_CODES = {"APPROVED": 0, "HUMAN_GATE": 2, "FAILED": 1}
+EXIT_CODES = {
+    "APPROVED": 0, "HUMAN_GATE": 2, "FAILED": 1, "MAX_CYCLES_REACHED": 1, "ABANDONED": 0,
+    "PAUSED_RETRYABLE": 1,
+}
+
+# SPEC-007 "CLI / UX": the minimal V1 resume surface -- `resume`,
+# `inspect`, `abandon` -- reserved as literal first-token subcommands,
+# distinct from an ordinary `peos "<task>"` invocation. `./bin/peos runs`
+# is explicitly not built in V1 (Decision 1).
+_RESUME_SUBCOMMANDS = ("resume", "inspect", "abandon")
 
 
 def _canonicalize_spec(spec_arg: Path, repo_root: Path) -> tuple[Path | None, str | None]:
@@ -53,7 +63,67 @@ def _canonicalize_spec(spec_arg: Path, repo_root: Path) -> tuple[Path | None, st
     return candidate, None
 
 
+def _run_resume_subcommand(subcommand: str, argv: list[str]) -> int:
+    parser = argparse.ArgumentParser(prog=f"peos {subcommand}")
+    parser.add_argument("run_id", help="The run_id of a previously interrupted PEOS run.")
+    parser.add_argument("--repo", type=Path, default=Path.cwd(), help="Repository root (default: current directory).")
+    args = parser.parse_args(argv)
+
+    try:
+        repo_root = args.repo.resolve()
+    except (OSError, ValueError) as exc:
+        print(f"error: --repo path could not be resolved: {args.repo} ({exc})", file=sys.stderr)
+        return 1
+    if not (repo_root / ".git").exists():
+        print(f"error: {repo_root} is not a Git repository root", file=sys.stderr)
+        return 1
+
+    if subcommand == "inspect":
+        result = inspect_run(repo_root, args.run_id)
+        if not result.found:
+            print(f"No such run: {args.run_id}" + (f" ({result.error})" if result.error else ""), file=sys.stderr)
+            return 1
+        cp = result.checkpoint
+        print(f"run_id: {cp.run_id}")
+        print(f"task: {cp.task}")
+        print(f"active_phase: {cp.active_phase} ({cp.active_phase_state})")
+        print(f"last_safely_completed_phase: {cp.last_safely_completed_phase}")
+        print(f"current_cycle: {cp.current_cycle} / {cp.effective_max_cycles}")
+        if cp.terminal_outcome is not None:
+            print(f"terminal_outcome: {cp.terminal_outcome}")
+            if cp.terminal_gate_id is not None:
+                print(f"gate_id: {cp.terminal_gate_id}")
+            if cp.terminal_gate_reason is not None:
+                print(f"gate_reason: {cp.terminal_gate_reason}")
+        else:
+            print("status: PAUSED_RETRYABLE (non-terminal -- resumable via `peos resume`, or `peos abandon`)")
+        return 0
+
+    if subcommand == "abandon":
+        result = abandon_run(repo_root, args.run_id)
+        if not result.ok:
+            print(f"error: could not abandon run {args.run_id}: {result.reason}", file=sys.stderr)
+            return 1
+        print(f"Run {args.run_id} abandoned.")
+        return 0
+
+    # subcommand == "resume"
+    result = resume_run(repo_root, args.run_id)
+    try:
+        report = build_report(result, repo_root)
+    except Exception as exc:  # noqa: BLE001
+        print(f"error: PEOS resume outcome was {result.outcome!r} but the final "
+              f"report itself could not be built: {exc}", file=sys.stderr)
+        return 1
+    print(report)
+    return EXIT_CODES.get(result.outcome, 1)
+
+
 def main(argv: list[str] | None = None) -> int:
+    argv = sys.argv[1:] if argv is None else argv
+    if argv and argv[0] in _RESUME_SUBCOMMANDS:
+        return _run_resume_subcommand(argv[0], argv[1:])
+
     parser = argparse.ArgumentParser(
         prog="peos",
         description=(

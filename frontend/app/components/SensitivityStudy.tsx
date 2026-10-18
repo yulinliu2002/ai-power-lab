@@ -3,15 +3,13 @@
 import { useRef, useState } from "react";
 
 import {
-  chartData,
   roleLabel,
   runSensitivitySweep,
   type SweepParameter,
   type SweepResult,
 } from "../lib/sensitivitySweep";
-import { SVG_COLOR } from "../lib/theme";
 import type { ExperimentParams } from "./ExperimentPanel";
-import { TelemetryChart } from "./TelemetryChart";
+import { SweepChart } from "./SweepChart";
 
 interface SensitivityStudyProps {
   /** The learner's current draft; read only at the moment RUN is clicked. */
@@ -23,10 +21,25 @@ const PARAMETER_LABEL: Record<SweepParameter, string> = {
   timeConstant: "SST RESPONSE TIME (τ_sst)",
 };
 
+/** Table display -- full precision, unit included. C_dc needs 5
+ *  decimals: the 5 grid values (0.005 + i*0.01875 F) include 0.02375 F
+ *  and 0.06125 F, which 3 decimals would round onto neighbouring
+ *  slider values. (Chart ticks may abbreviate -- see `formatTick`.) */
 function formatValue(parameter: SweepParameter, value: number): string {
   return parameter === "capacitance"
     ? `${value.toFixed(5)} F`
     : `${(value * 1000).toFixed(2)} ms`;
+}
+
+/** Chart x-tick display -- numbers only (the axis label supplies the
+ *  unit once), and shorter, since up to six of these must fit across
+ *  one plot width without colliding. Unlike `formatValue`, this takes
+ *  a value already converted to display units (ms for timeConstant --
+ *  see the `points` mapping below, which does that conversion once
+ *  before `SweepChart` ever calls this as `xTickFormat`), so it must
+ *  NOT convert again. */
+function formatTick(parameter: SweepParameter, value: number): string {
+  return parameter === "capacitance" ? value.toFixed(3) : value.toFixed(1);
 }
 
 /**
@@ -140,26 +153,24 @@ export function SensitivityStudy({ draft }: SensitivityStudyProps) {
 
 function SweepResults({ result }: { result: SweepResult }) {
   const { parameter, points } = result;
-  const { x, y } = chartData(points);
   const fixedNote =
     parameter === "capacitance"
       ? `τ_sst = ${(result.draft.timeConstantS * 1000).toFixed(0)} ms`
       : `C_dc = ${result.draft.capacitanceF.toFixed(3)} F`;
+  const xUnit = parameter === "capacitance" ? "F" : "ms";
 
   return (
     <div className="flex flex-col gap-2">
-      <TelemetryChart
+      <SweepChart
         title={`Max V_dc deviation vs ${PARAMETER_LABEL[parameter]}`}
-        timeS={x}
-        series={[
-          { label: "max |ΔV_dc| / V_ref", values: y, color: SVG_COLOR.accent, hideLine: true },
-        ]}
-        yUnit="% of V_ref"
-        xTickFormat={(v) => formatValue(parameter, v)}
-        pointMarkers={points.map((p, i) => ({
-          time: x[i],
-          value: y[i],
-          label: p.isCurrent ? roleLabel(p) : "",
+        xAxisLabel={`${PARAMETER_LABEL[parameter]}, ${xUnit}`}
+        yUnit="%"
+        xTickFormat={(v) => formatTick(parameter, v)}
+        points={points.map((p) => ({
+          x: parameter === "timeConstant" ? p.value * 1000 : p.value,
+          y: p.metrics.maxDeviationPercent,
+          isGrid: p.isGrid,
+          isCurrent: p.isCurrent,
         }))}
       />
       <span className="font-mono text-[10px] text-muted">

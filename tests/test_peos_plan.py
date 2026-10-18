@@ -87,6 +87,39 @@ def test_build_plan_extracts_max_cycles_override_and_ac_ids(tmp_path):
     assert plan.acceptance_criteria_ids == ("AC-1",)
     assert plan.static_context.declared == ()
     assert plan.governing_spec_content_hash == hashlib.sha256(spec_path.read_bytes()).hexdigest()
+    assert plan.runtime_plan.declarations == ()
+    assert plan.runtime_plan.ok
+
+
+def test_build_plan_extracts_runtime_plan_declarations(tmp_path):
+    spec_path = tmp_path / "SPEC-Y.md"
+    spec_path.write_text(
+        "# SPEC-Y\n\n**Status:** Approved\n\n"
+        "## Acceptance Criteria\n\n- [ ] **AC-012** no overflow\n\n"
+        "## Verification Requirements\n\n### Runtime Verification\n\n"
+        "    runtime: viewport_overflow viewport=mobile ac=AC-012\n",
+        encoding="utf-8",
+    )
+    candidate = SpecCandidate(path=spec_path, title="Y", status="Approved")
+    plan = build_plan("task", tmp_path, None, tmp_path, spec_resolver=_resolver_returns(candidate))
+    assert plan.runtime_plan.ok
+    assert len(plan.runtime_plan.declarations) == 1
+    assert plan.runtime_plan.declarations[0].kind == "viewport_overflow"
+
+
+def test_build_plan_runtime_plan_gate_reason_for_unsupported_kind(tmp_path):
+    spec_path = tmp_path / "SPEC-Z.md"
+    spec_path.write_text(
+        "# SPEC-Z\n\n**Status:** Approved\n\n"
+        "## Acceptance Criteria\n\n- [ ] **AC-001** thing\n\n"
+        "## Verification Requirements\n\n### Runtime Verification\n\n"
+        "    runtime: open_arbitrary_url ac=AC-001\n",
+        encoding="utf-8",
+    )
+    candidate = SpecCandidate(path=spec_path, title="Z", status="Approved")
+    plan = build_plan("task", tmp_path, None, tmp_path, spec_resolver=_resolver_returns(candidate))
+    assert not plan.runtime_plan.ok
+    assert "open_arbitrary_url" in plan.runtime_plan.gate_reason
 
 
 # --- SPEC-004 remediation Finding 1: identity hash is the exact bytes --

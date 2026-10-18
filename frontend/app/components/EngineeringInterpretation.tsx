@@ -1,4 +1,4 @@
-import type { TransientMetrics } from "../lib/transientMetrics";
+import { formatEnergyDeficitKj, type TransientMetrics } from "../lib/transientMetrics";
 
 interface EngineeringInterpretationProps {
   metrics: TransientMetrics;
@@ -6,17 +6,26 @@ interface EngineeringInterpretationProps {
 }
 
 /**
- * The "why" for the Scenario A transient -- plain language first,
- * the governing equations second as reinforcement, never the other
- * way around. Built from the same `TransientMetrics` the tiles below
- * show -- see `lib/transientMetrics.ts`. No number here is
- * hardcoded; every figure is read from the computed metrics for the
- * run actually fetched, so this describes whatever experiment is
- * currently loaded, baseline or not.
+ * The "why" for the Scenario A transient -- plain language, two
+ * distinct lessons, each stated exactly once. Built from the same
+ * `TransientMetrics` the ENGINEERING RESULT tiles below show -- see
+ * `lib/transientMetrics.ts`. No number here is hardcoded; every figure
+ * is read from the computed metrics for the run actually fetched, so
+ * this describes whatever experiment is currently loaded, baseline or
+ * not. The governing equations this prose describes live once, in
+ * `TransientMetricsPanel`'s "Technical details" toggle, immediately
+ * after the quantified results they explain -- not duplicated here.
  *
- * Only cites the minimum voltage as its one proof-point -- the exact
- * deficit/deviation/recovery-time figures are the metrics tiles'
- * job, not this prose's, so the two don't just restate each other.
+ *   1. WHY V_dc moves at all -- the SST can't track an instant load
+ *      step, so the DC bus supplies/absorbs the gap and V_dc moves
+ *      with it until the controller closes the gap.
+ *   2. WHY the sag is as deep as it is -- severity tracks the
+ *      *accumulated* energy deficit (an area), not the instantaneous
+ *      peak power gap (a height). A previous revision stated this
+ *      lesson in a separate card with its own near-duplicate
+ *      "Engineering basis" footer and a numbered walkthrough that
+ *      re-derived the same conclusion ENGINEERING RESULT already
+ *      states as numbers -- folded in here instead.
  *
  * Deliberately not a boxed card: a top hairline is enough separation
  * from the section above it, consistent with reserving full bordered
@@ -43,21 +52,14 @@ export function EngineeringInterpretation({
         energy and drives V_dc back up toward the {voltageReferenceV.toFixed(0)} V reference; once
         the bus is recharged, SST power settles back down to match demand again.
       </p>
-      <div className="flex flex-col gap-0.5 border-t border-hairline pt-1.5">
-        <span className="font-sans text-[9.5px] font-semibold uppercase tracking-[0.04em] text-muted">
-          Engineering basis
-        </span>
-        <p className="font-mono text-[10.5px] text-secondary">
-          dE_dc/dt = P_sst &minus; P_load &nbsp;&nbsp;&middot;&nbsp;&nbsp; E_dc = &#189; C_dc V_dc&sup2;
-        </p>
-        <p className="font-mono text-[9px] leading-snug text-muted">
-          Simplified, average-value system-level model &mdash; the SST response time is a tunable
-          modeling assumption, not a real hardware bandwidth limit; no calibration to any
-          commercial SST; no claim about real hardware protection performance. Recovery time (in
-          the result below): first instant after the load step at which V_dc returns to and
-          remains within &plusmn;1% of V_ref for the rest of the run.
-        </p>
-      </div>
+      <p className="font-sans text-[12.5px] leading-snug text-secondary">
+        How far V_dc sags is set by the <em>accumulated</em> energy deficit &mdash; the area under
+        the power-mismatch curve while demand outruns delivery &mdash; not by how tall that gap&rsquo;s
+        peak is: a tall but brief mismatch drains little; a modest one that lasts drains more. Here
+        that works out to {formatEnergyDeficitKj(metrics)} kJ drawn from the DC link (the shaded
+        area on the Power Balance chart below; every other number this derivation uses is in
+        ENGINEERING RESULT, further down).
+      </p>
     </section>
   );
 }

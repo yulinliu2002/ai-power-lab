@@ -17,3 +17,7 @@ __pycache__/
 # PEOS Run Ledger (SPEC-004 Requirement 19): local, diagnostic
 # orchestration state, never a repository artifact.
 .peos/runs/
+
+# PEOS shared run lock (SPEC-007): local orchestration state, never a
+# repository artifact.
+.peos/run.lock

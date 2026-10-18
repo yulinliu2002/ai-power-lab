@@ -120,6 +120,24 @@ _NEXT_ACTION = {
         "uninterpretable agent output. Inspect the failure detail and the "
         "repository state below before re-running."
     ),
+    # SPEC-007 Decision 9/Resumable-Interruption Classification: both new
+    # outcomes. Codex implementation review (confirmed): an earlier
+    # revision added these outcomes to `peos/workflow.py` without adding
+    # the corresponding entries here, which `build_report` (called
+    # unconditionally by `peos/cli.py`'s `main()` for whatever outcome
+    # `run_workflow` returns) looks up with a bare `[]`, not `.get(...)`
+    # -- a real `KeyError` crash in production for either outcome.
+    "MAX_CYCLES_REACHED": (
+        "This run exhausted its configured remediation-cycle budget without Codex ever "
+        "reaching APPROVE. Inspect the Outstanding Findings Register below, then either "
+        "resolve the remaining findings yourself or re-run PEOS with a larger --max-cycles."
+    ),
+    "PAUSED_RETRYABLE": (
+        "This run paused after a transient agent-execution failure (the subprocess itself "
+        "never completed) -- it is not FAILED. Run `./bin/peos resume <run_id>` to continue "
+        "it, `./bin/peos inspect <run_id>` to see its current state, or `./bin/peos abandon "
+        "<run_id>` to give up on it."
+    ),
 }
 
 
@@ -141,12 +159,20 @@ def _format_verification(reports: tuple[VerificationReport, ...]) -> str:
 
 
 def _format_verification_plan(plan: VerificationPlan | None) -> str:
-    if plan is None or not plan.steps:
+    if plan is None or (not plan.steps and not plan.manual_items):
         return "(not resolved)"
-    return "\n".join(
+    lines = [
         f"- {step.name} (cwd: {step.cwd_relative}, requires: {step.required_input})"
         for step in plan.steps
-    )
+    ]
+    if plan.manual_items:
+        lines.append(
+            "Manual / observational verification (from the governing specification's "
+            "Verification section; not executed by PEOS -- requires human or "
+            "implementer evidence, per ENGINEERING.md's governance model):"
+        )
+        lines.extend(f"  - {item}" for item in plan.manual_items)
+    return "\n".join(lines)
 
 
 def _format_reviews(reviews) -> str:
@@ -265,6 +291,32 @@ def _format_unresolved_minor_findings(result: RunResult) -> str:
     return "\n".join(f"- [{f.severity}/{f.category}] {f.description}" for f in minors)
 
 
+def _format_runtime_verification_history(result: RunResult) -> str:
+    """SPEC-006 Section 18 extension point 4: one entry per round whose
+    Runtime Verification actually ran (the documented no-op is never
+    listed here), showing that round's execution-integrity outcome and
+    every declared check's own status -- never only the latest round's.
+    """
+    history = getattr(result, "runtime_verification_history", ())
+    ran_rounds = [o for o in history if o.ran]
+    if not ran_rounds:
+        return "(no runtime checks declared, or Runtime Verification did not run)"
+    lines = []
+    for outcome in ran_rounds:
+        integrity = "PASSED" if outcome.execution_integrity_passed else "FAILED"
+        lines.append(f"Execution integrity: {integrity}")
+        if outcome.failure_reason:
+            lines.append(f"  reason: {outcome.failure_reason}")
+        if outcome.evidence is not None:
+            lines.append(f"  cycle: {outcome.evidence.cycle_label}")
+            if outcome.persisted is not None:
+                lines.append(f"  evidence: {outcome.persisted.evidence_dir} (sha256 {outcome.persisted.evidence_json_sha256})")
+            for check in outcome.evidence.checks:
+                ac_ids = ", ".join(check.related_ac_ids) or "(none)"
+                lines.append(f"  - [{check.check_id}] kind={check.kind} status={check.status} ac={ac_ids}")
+    return "\n".join(lines)
+
+
 def _task_specific_limitations(result: RunResult) -> list[str]:
     items: list[str] = []
     if result.blocked_governance_mutation:
@@ -322,6 +374,9 @@ def build_report(result: RunResult, repo_root: Path) -> str:
         "",
         "## Local verification",
         _format_verification(result.verification_reports),
+        "",
+        "## Runtime evidence",
+        _format_runtime_verification_history(result),
         "",
         "## Claude implementation/remediation",
         _format_claude_runs(result.claude_runs),

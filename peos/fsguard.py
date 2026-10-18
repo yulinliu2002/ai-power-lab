@@ -205,6 +205,79 @@ def create_dir_exclusive_anchored(parent_fd: int, name: str) -> int:
     return fd
 
 
+def write_all(fd: int, data: bytes) -> None:
+    """`os.write(fd, data)` in a loop, accumulating its own returned byte
+    count until every byte of `data` is confirmed written -- POSIX
+    permits a single `os.write` call to write fewer bytes than
+    requested, and a caller that ignores that (a bare, unchecked single
+    call) can `fsync`+`rename` an incomplete payload over a previously
+    valid file while reporting success (SPEC-007 Codex implementation
+    review Finding 9, extended identically to every atomic-write caller
+    in this codebase -- `peos/ledger.py` and `peos/checkpoint.py` alike).
+    """
+    written = 0
+    while written < len(data):
+        n = os.write(fd, data[written:])
+        if n <= 0:
+            raise OSError("write_all: os.write made no progress")
+        written += n
+
+
+def fsync_dir_fd(dir_fd: int) -> None:
+    """`fsync` an already-open directory file descriptor (SPEC-007
+    "Checkpoint Trust Boundary"/Decision 8 extension).
+
+    `os.fsync` on a regular file's fd makes that file's own *content*
+    durable; it says nothing about whether the directory *entry* (the
+    name -> inode mapping a `mkdir`/`os.rename`/`os.link` into that
+    directory just created or changed) itself survives a crash or power
+    loss. This is the one extra call that closes that gap -- callers
+    invoke it on the containing directory's fd immediately after any
+    operation that changes one of its entries, whenever that entry's
+    durability matters (a run directory's first creation, a checkpoint/
+    ledger file's first-ever creation via `os.rename`). May raise
+    `OSError` on an unexpected failure; callers decide how to treat that
+    exactly like any other write failure in this module.
+    """
+    os.fsync(dir_fd)
+
+
+def mkdir_tolerant_anchored(parent_fd: int, name: str) -> int | None:
+    """Create `name` relative to the already-open, trusted `parent_fd`
+    *tolerantly* (an already-existing `name` is not an error, unlike
+    `create_dir_exclusive_anchored`), `fsync`ing `parent_fd` iff this call
+    is the one that actually created the entry (SPEC-007: the directory-
+    entry change itself must survive power loss, but only the creator
+    needs to pay for that fsync -- a caller that merely finds `name`
+    already present did not just change `parent_fd`'s own content).
+
+    Returns an open, verified-directory fd for `name` on success, or
+    `None` -- never raises on an ordinary creation/verification failure
+    -- exactly like `traverse_dirs_anchored`'s own per-component step.
+    """
+    created = False
+    try:
+        os.mkdir(name, dir_fd=parent_fd)
+        created = True
+    except FileExistsError:
+        pass
+    except OSError:
+        return None
+    if created:
+        try:
+            fsync_dir_fd(parent_fd)
+        except OSError:
+            return None
+    try:
+        fd = os.open(name, _DIR_OPEN_FLAGS, dir_fd=parent_fd)
+    except OSError:
+        return None
+    if not _verify_is_dir_fd(fd):
+        os.close(fd)
+        return None
+    return fd
+
+
 def stat_nofollow(parent_fd: int, name: str) -> os.stat_result | None:
     """`os.stat(name, dir_fd=parent_fd, follow_symlinks=False)`, returning
     `None` (never raising) on any `OSError` -- a uniform, fail-safe way
