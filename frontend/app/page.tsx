@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { AreaHeader } from "./components/AreaHeader";
+
 export const metadata: Metadata = {
   title: "AI Power Lab",
 };
@@ -21,16 +23,11 @@ export const metadata: Metadata = {
 export default function HomePage() {
   return (
     <main className="mx-auto flex w-full max-w-[1320px] flex-1 flex-col gap-8 px-4 py-8 sm:px-6 sm:py-10">
-      <header className="flex flex-col gap-3 border-b border-hairline pb-6">
-        <h1 className="max-w-4xl text-page-title text-primary">
-          Understanding AI data-center power infrastructure, from the grid to the rack.
-        </h1>
-        <p className="max-w-2xl text-lede text-secondary">
-          AI Power Lab is built from public engineering and industry sources to develop
-          systems-level reasoning and architecture judgment about how AI data centers are
-          actually powered &mdash; the equipment, the architecture trade-offs, how the chain
-          behaves under real events, and what is happening in the industry around it.
-        </p>
+      <AreaHeader
+        title="Understanding AI data-center power infrastructure, from the grid to the rack."
+        role="AI Power Lab: learn, evaluate, explain"
+        lede="AI Power Lab is built from public engineering and industry sources to develop systems-level reasoning and architecture judgment about how AI data centers are actually powered — the equipment, the architecture trade-offs, how the chain behaves under real events, and what is happening in the industry around it."
+      >
         <div className="flex flex-wrap gap-3 pt-1">
           <Link
             href="/system-map"
@@ -45,7 +42,7 @@ export default function HomePage() {
             Open the Advanced Sandbox
           </Link>
         </div>
-      </header>
+      </AreaHeader>
 
       <section className="flex flex-col gap-3">
         <h2 className="text-heading text-primary">Four learning areas, in a suggested order</h2>

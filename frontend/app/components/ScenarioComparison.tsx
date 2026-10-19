@@ -1,3 +1,4 @@
+import { OUTCOME_CAUTION } from "../lib/sandboxTakeawayData";
 import { formatSeconds } from "../lib/formatSeconds";
 import type { ScenarioComparisonEntry } from "../lib/simulationApi";
 import { type StatusRole } from "../lib/statusRoles";
@@ -145,7 +146,7 @@ export function ScenarioComparison({ entries }: { entries: ScenarioComparisonEnt
         does not quantify how long unmet demand continued afterward.
       </p>
       <p data-testid="outcome-caution" className="font-sans text-[12px] leading-snug text-secondary">
-        Outcome labels are this simplified model&rsquo;s classification of the run, not certified hardware fault-ride-through performance. The model has no fault ride-through dynamics.
+        {OUTCOME_CAUTION}
       </p>
 
       <ScrollRegion label="Scenario comparison table" className="border border-hairline">

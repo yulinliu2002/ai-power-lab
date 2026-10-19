@@ -1,6 +1,6 @@
 "use client";
 
-import type { MouseEvent } from "react";
+import { useEffect, useState, type MouseEvent } from "react";
 
 /**
  * In-page stage navigation (SPEC-014 R3/R20): native anchor links, one per
@@ -16,10 +16,34 @@ export function StageNav({
   label: string;
   stages: ReadonlyArray<{ id: string; label: string; n?: number }>;
 }) {
+  const [current, setCurrent] = useState<string | null>(null);
+
+  // Track which stage is nearest the top of the viewport so the matching
+  // link can expose aria-current="location".
+  useEffect(() => {
+    const els = stages.map((s) => document.getElementById(s.id)).filter((e): e is HTMLElement => !!e);
+    if (els.length === 0 || typeof IntersectionObserver === "undefined") return;
+    const visible = new Set<string>();
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) visible.add(entry.target.id);
+          else visible.delete(entry.target.id);
+        }
+        const first = stages.find((s) => visible.has(s.id));
+        if (first) setCurrent(first.id);
+      },
+      { rootMargin: "0px 0px -60% 0px" },
+    );
+    els.forEach((el) => io.observe(el));
+    return () => io.disconnect();
+  }, [stages]);
+
   const go = (e: MouseEvent<HTMLAnchorElement>, id: string) => {
     const section = document.getElementById(id);
     if (!section) return;
     e.preventDefault();
+    setCurrent(id);
     section.scrollIntoView({ block: "start" });
     const heading = section.querySelector<HTMLElement>("[data-stage-heading]");
     heading?.focus({ preventScroll: true });
@@ -32,6 +56,7 @@ export function StageNav({
         <a
           key={s.id}
           href={`#${s.id}`}
+          aria-current={current === s.id ? "location" : undefined}
           onClick={(e) => go(e, s.id)}
           className="py-1 text-secondary hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-secondary"
         >

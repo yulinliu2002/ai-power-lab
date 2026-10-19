@@ -33,7 +33,7 @@ This system was synthesized from a comparative study of real product design lang
 
 ### Basis & limits panel
 
-Mandatory specification disclosures are visible on initial load, verbatim, in a structured panel (a mono tag plus text). They are never collapsed, paraphrased or hidden behind an interaction. Presentation may change; wording and initial-load visibility may not. Each page imports the canonical constants of its specification (SPEC-011 `DISCLOSURES`, SPEC-012 `LEARN_DISCLOSURES`).
+Mandatory spec disclosures are visible on initial load, verbatim, in a structured panel (mono tag plus text). They are never collapsed, paraphrased or hidden behind an interaction. Presentation may change; wording and visibility may not. Each page imports the canonical constants of its spec (SPEC-011 `DISCLOSURES`, SPEC-012 `LEARN_DISCLOSURES`).
 
 ## 2. Product Identity
 
@@ -99,18 +99,18 @@ No more than three tiers are ever visible in one screen region at once. Elevatio
 Two families, strictly separated by role, never mixed:
 
 - **IBM Plex Sans** — all UI chrome: labels, headings, body/explainer text, navigation.
-- **IBM Plex Mono** — live or tabular values, equations and code, and concise instrument metadata (tags, units, chart ticks, step and area numbering, navigation and button labels). Never used for running prose or headings, and never as a "technical-looking" costume.
+- **IBM Plex Mono** — Plex Mono is used for live or tabular values, equations and code, and for concise instrument metadata (tags, units, chart ticks, step and area numbering). It is never used for running prose or headings.
 
 Hierarchy is built primarily from **weight**, not size — the earlier implementation accumulated twelve distinct font sizes by accident; the fix is a small, deliberate, *named* scale where weight does most of the differentiating work. This is a semantic scale: every piece of text in the product maps to one of these four tiers. Sizes inside a tier's range are acceptable; a size outside every tier's range is a defect to fix.
 
 | Tier | Token | Size | Weight | Treatment |
 |---|---|---|---|---|
-| Page title | `text-page-title` | 28px (mobile) to 40px (from `sm`) | 600 | Plex Sans, sentence case, -0.02em tracking, one per page |
-| Section / panel heading | `text-heading` | 14–18px | 600 | Plex Sans, sentence case, `text-primary` (replaces the earlier uppercase 11.5px muted tier) |
-| Body / explainer text | `text-body` | 13–14px (a lede up to 16px, once per page) | 400 | `text-secondary` — always visually subordinate to data |
-| Metadata / label / unit | `text-meta` | 10.5–12px | 500–600 | Plex Mono uppercase for tags and units; Plex Sans 12px for plain labels |
+| Page title | `text-page-title` | 28px (mobile) to 40px (from `sm`) | 600 | Plex Sans, sentence case, -0.02em, one per page |
+| Section / panel heading | `text-heading` | 14 to 18px | 600 | Plex Sans, sentence case, `text-primary` (replaces the uppercase 11.5px muted tier) |
+| Body / explainer | `text-body` | 13 to 14px (lede up to 16px, once per page) | 400 | `text-secondary` |
+| Metadata / label / unit | `text-meta` | 10.5 to 12px | 500 to 600 | Plex Mono uppercase for tags and units; Plex Sans 12px for plain labels |
 
-The earlier homepage-headline exception is removed: the page-title tier covers it. Essential prose is never below 12px; the metadata tier is for labels, units and tags, never prose.
+The "homepage headline" exception is removed (the page-title tier covers it). Weight never exceeds 700.
 
 Display weight never exceeds 700 anywhere in the product. A heavier weight reads as marketing emphasis, not instrument precision. **Known gap:** the React implementation does not define these four tiers as reusable Tailwind utilities/CSS custom properties — the token names above are descriptive, and components write `text-[Npx]` literals (currently 9px to 14px in small steps, plus the display and homepage sizes), which is more distinct sizes than four. Introducing `text-display`/`text-heading`/`text-body`/`text-meta` utilities (or equivalent) and migrating existing literals onto them is tracked as a cleanup, not a license to keep adding new sizes in the meantime.
 
@@ -131,7 +131,7 @@ A 4px base unit: `4 / 8 / 12 / 16 / 24 / 32px`. Panel padding stays in the 12–
 Three strengths, each with exactly one meaning:
 
 1. **`hairline`** (1px, `#24303c`) — the default separator for every panel, card, and divider in the product.
-2. **`hairline-strong`** — emphasis without introducing a color, for a panel or selected control that needs to stand out without implying a status judgment. It is in addition to, never instead of, the §18 keyboard focus outline.
+2. **`hairline-strong`** — emphasis without introducing a color, for a panel that needs to stand out without implying a status judgment. A selected control changes surface tier and border to `hairline-strong`; no shadow and no ring. The §18 keyboard focus outline (2px `secondary`) is unchanged and applies in addition.
 3. **Status border** (2px, one of the four STATUS colors) — the *only* border that ever carries meaning. It appears exclusively on an entity that is actually, currently, in that state. A 1px neutral border escalating to 2px and a status color is the entire alarm-escalation vocabulary of this system (see §16).
 
 No panel, card, list item, or alert ever uses a colored left- or right-border accent above 1px as a decorative device — that pattern reads as generic templated chrome, and this product has already removed the one place it crept in (the former six-row status panel's colored left bars, retired when the KPI strip replaced it).
@@ -148,7 +148,7 @@ There is no shadow-based elevation system in this product, and there will not be
 
 Horizontal top navigation bar (`frontend/app/components/SiteNav.tsx`), text-only labels, no icons and no emoji — this supersedes the earlier left-rail icon + label requirement, which described the original Streamlit implementation and is not the current one. Links use IBM Plex Mono at metadata size (§6). The current route is marked on the link itself by a shift from `text-secondary` to `text-primary` plus a 2px bottom border, both drawn from the neutral grayscale rather than `accent` or a status color — a deliberate, scoped exception to §19's "selection changes surface tier, never color" rule, made because a flat horizontal nav bar has no elevated surface tier for an individual link to sit on the way a panel does; it does not license color-based selection anywhere else in the product. A learning area not yet implemented is rendered as plain, non-clickable text carrying an explicit "(planned)" label — never a dead link or a placeholder route. Keyboard focus follows §18.
 
-A single **signal-path rail** may sit under the navigation bar. It draws the selected architecture's own main power path from the System Map data and never one universal chain. A solid-state-transformer node appears only in the Conceptual MV-to-800 VDC via SST architecture and is labeled conceptual. Pages that run the simulation pin the rail to that architecture and mark the simulated slice with dashed node borders; the page's Basis & limits panel carries the legend (dashed nodes are simulated; stages the model does not represent, such as rack DC-DC conversion, are named as not modeled). Focus is shown by surface tier and weight, never by color. The rail exposes its node sequence in its accessible name. On narrow screens it collapses to a label row and a dot track.
+A single signal-path rail may sit under the nav. It draws the selected architecture's own main power path from the System Map data and never one universal chain. An SST node appears only in the Conceptual MV-to-800 VDC via SST architecture and is labeled conceptual. Pages that run the simulation pin the rail to that architecture and mark the simulated slice with dashed node borders; the page's Basis & limits panel carries the legend (dashed nodes are simulated; stages the model does not represent, such as rack DC-DC conversion, are named as not modeled). Focus is shown by surface tier and weight, never color. The rail exposes the node sequence in its accessible name. On narrow screens it collapses to a label row and a dot track.
 
 ## 13. KPI Tiles
 
@@ -173,7 +173,7 @@ Status is always communicated through at least two channels at once — color is
 
 **Planned, not yet implemented:** a distinct "transient" treatment — a value actively moving toward a new setpoint after a real engineering event (e.g. just after a load step), shown as a brief `accent`-blue pulse rather than a status color, so the system never looks alarmed simply because it is correctly, dynamically responding to a real input.
 
-**Evidence labels.** Evidence labels render as neutral chips with a glyph (square public fact, circle illustrative assumption, diamond model output, triangle emerging) plus the canonical label text. The `EvidenceTag` component takes the glyph as a presentation option; its basis, references and reference destinations are unchanged. Evidence never uses a status color.
+**Evidence labels.** Evidence labels render as neutral chips with a glyph (square public fact, circle illustrative assumption, diamond model output, triangle emerging) plus the canonical label text. The existing `EvidenceTag` gains the glyph as a presentation prop; its basis, references and reference destinations are unchanged. Evidence never uses a status color.
 
 ## 17. Power-Flow Schematic
 
@@ -185,7 +185,7 @@ The schematic (`frontend/app/components/PowerFlowSchematic.tsx`; historically `d
 
 Contrast: normal-size text must reach WCAG AA's 4.5:1 against the surface it sits on. `text-primary` and `text-secondary` meet this on every surface tier. `text-muted` (`#6b7680`) measures about 4.2:1 on `canvas`, 3.9:1 on `surface` and 3.4:1 on `surface-raised`, so it is limited to non-essential decoration or large text and must not carry body or caveat copy. Text on `accent` fills uses `canvas` (about 5.3:1); `text-primary` on `accent` is about 3.1:1 and does not meet AA for normal text. Some Sandbox controls still use `text-primary` on `accent` and `text-muted` on dark surfaces; these are tracked contrast gaps, not precedent.
 
-Essential text, including chart reference-line labels, uses `text-secondary` or brighter; `muted` stays limited to non-essential decoration.
+Essential text (including chart reference-line labels) uses `text-secondary` or brighter; `muted` stays limited to non-essential decoration.
 
 ## 19. Interaction Principles
 
@@ -203,7 +203,7 @@ Motion is minimal and must be earned by a real signal:
 
 ## 21. Responsive Behavior
 
-The four learning areas must be readable at 390px with no horizontal page scroll and no silently clipped content: wide tables, charts and diagrams scroll inside a named, keyboard-focusable container with a visible hint, and chart text never renders below its authored size. The Advanced Sandbox remains desktop-first and keeps the same no-clipping floor; true mobile-optimized operation of the simulator is still out of scope. The KPI strip wraps to fewer tiles per row and the hero schematic/status layout stacks vertically below a defined breakpoint.
+The four learning areas must be readable at 390px with no horizontal page scroll; wide tables and charts scroll inside a named, keyboard-focusable container with a visible hint, and chart text never renders below its authored size. The Advanced Sandbox remains desktop-first and keeps SPEC-014's no-clipping floor.
 
 ## 22. Explicit Do / Don't Rules
 
@@ -211,7 +211,7 @@ The four learning areas must be readable at 390px with no horizontal page scroll
 - Derive every color on screen from real engineering state or from this document's fixed token set — nothing else.
 - Keep status color to the four STATUS roles, applied through the shared classifier functions, never re-judged per surface.
 - Use weight and the surface ladder to establish hierarchy before reaching for size or color.
-- Use IBM Plex Mono for live or tabular values, equations and code, and for concise instrument metadata; never for running prose or headings.
+- Plex Mono is used for live or tabular values, equations and code, and for concise instrument metadata (tags, units, chart ticks, step and area numbering). It is never used for running prose or headings.
 - Treat 4px radius and flat, hairline-bordered surfaces as permanent, not provisional.
 
 **Don't:**

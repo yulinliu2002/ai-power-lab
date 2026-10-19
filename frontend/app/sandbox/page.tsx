@@ -276,13 +276,15 @@ export default function SandboxPage() {
   const shownParams = displayedParams ?? BASELINE_EXPERIMENT_PARAMS;
   const draftDiffersFromRun = isLoadStep && !paramsEqual(draftParams, shownParams);
 
+  const describeParams = (p: ExperimentParams) =>
+    `AI load step to ${((p.finalFraction * loadRatedPowerW) / 1e3).toFixed(0)} kW, C_dc = ${p.capacitanceF.toFixed(3)} F, τ_sst = ${(p.timeConstantS * 1000).toFixed(0)} ms`;
   const provenance = !readyData
     ? ""
     : !isLoadStep
       ? `Showing ${SCENARIO_LABEL[activeScenario]} (fixed preset).`
-      : displayedParams === null || paramsEqual(displayedParams, BASELINE_EXPERIMENT_PARAMS)
-        ? "Showing Load Step with preset defaults."
-        : `Showing Load Step with experiment values: AI load step to ${((displayedParams.finalFraction * loadRatedPowerW) / 1e3).toFixed(0)} kW, C_dc = ${displayedParams.capacitanceF.toFixed(3)} F, τ_sst = ${(displayedParams.timeConstantS * 1000).toFixed(0)} ms.`;
+      : displayedParams === null
+        ? `Showing Load Step with preset defaults: ${describeParams(BASELINE_EXPERIMENT_PARAMS)}.`
+        : `Showing Load Step with experiment values: ${describeParams(displayedParams)}.`;
 
   return (
     <main className="mx-auto flex w-full max-w-[1320px] flex-1 flex-col gap-5 px-4 py-5 sm:px-6">
@@ -378,22 +380,33 @@ export default function SandboxPage() {
       <Stage id="stage-investigate" n={3} title="Investigate & compare" question="How sensitive is this, and how do the scenarios differ?">
         <fieldset className="flex flex-wrap gap-1.5" data-testid="study-chooser">
           <legend className="sr-only">Study</legend>
-          <StudyOption id="sweep" label="Vary a parameter" selected={studyMode === "sweep"} onSelect={() => selectStudy("sweep")} />
+          <StudyOption id="sweep" label="Vary a parameter" selected={studyMode === "sweep"} disabled={!isLoadStep} onSelect={() => selectStudy("sweep")} />
           <StudyOption id="compare" label="Compare all five scenarios" selected={studyMode === "compare"} onSelect={() => selectStudy("compare")} />
         </fieldset>
+        {!isLoadStep && studyMode !== "sweep" && (
+          <p data-testid="sweep-disabled-reason" className="text-[13px] text-secondary">
+            {SWEEP_LOAD_STEP_ONLY} Select Load Step above to use it.
+          </p>
+        )}
         {studyMode === "none" && (
           <p className="text-[13px] text-secondary">
             Choose a study: sweep one parameter around the values set above, or compare all five fixed scenarios.
           </p>
         )}
-        {studyMode === "sweep" &&
-          (isLoadStep ? (
+        {/* The sweep stays mounted (hidden) while the Compare study is shown, so
+            its result, parameter and snapshot survive switching between studies; it
+            unmounts, clearing and invalidating any in-flight sweep, only when the
+            scenario changes away from Load Step. */}
+        {isLoadStep && (
+          <div hidden={studyMode !== "sweep"}>
             <SensitivityStudy draft={draftParams} embedded />
-          ) : (
-            <p data-testid="sweep-unavailable" className="text-[13px] text-secondary">
-              {SWEEP_LOAD_STEP_ONLY} Select Load Step above to use it.
-            </p>
-          ))}
+          </div>
+        )}
+        {studyMode === "sweep" && !isLoadStep && (
+          <p data-testid="sweep-unavailable" className="text-[13px] text-secondary">
+            {SWEEP_LOAD_STEP_ONLY} Select Load Step above to use it.
+          </p>
+        )}
         {studyMode === "compare" && (
           <>
             {comparisonState.status === "loading" && (
@@ -461,11 +474,13 @@ function StudyOption({
   id,
   label,
   selected,
+  disabled = false,
   onSelect,
 }: {
   id: "sweep" | "compare";
   label: string;
   selected: boolean;
+  disabled?: boolean;
   onSelect: () => void;
 }) {
   return (
@@ -474,12 +489,13 @@ function StudyOption({
         type="radio"
         name="study"
         checked={selected}
+        disabled={disabled}
         onChange={onSelect}
         data-testid={`study-option-${id}`}
         className="peer sr-only"
       />
       <span
-        className={`block cursor-pointer border px-3 py-1.5 text-[12px] font-semibold peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-secondary ${
+        className={`block cursor-pointer border px-3 py-1.5 text-[12px] font-semibold peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-secondary peer-disabled:cursor-not-allowed peer-disabled:opacity-60 ${
           selected
             ? "border-hairline-strong bg-surface-raised text-primary"
             : "border-hairline bg-surface text-secondary hover:text-primary"
@@ -631,7 +647,7 @@ function Observe({
       </div>
 
       {metrics && (
-        <TransientMetricsPanel metrics={metrics} voltageReferenceV={data.thresholds.voltage_reference_v} />
+        <TransientMetricsPanel metrics={metrics} voltageReferenceV={data.thresholds.voltage_reference_v} comfortable />
       )}
     </div>
   );

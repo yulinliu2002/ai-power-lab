@@ -619,4 +619,6 @@ container with a visible hint, and chart text never renders below its authored s
 
 **§18 contrast:** essential text (including chart reference-line labels) uses `text-secondary` or brighter; `muted` stays limited to non-essential decoration.
 
+**§7 units (added during implementation, axe color-contrast finding):** the unit suffix of a live value uses `text-secondary` instead of `muted`.
+
 Unchanged: tokens, dark canvas, one accent, four status roles, 4px radius, no gradient or shadow, no animation, Plex families, tabular numerics, the Implementation Contract and Engineering Visual Semantics.

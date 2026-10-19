@@ -1,3 +1,4 @@
+import { ScrollRegion } from "./ScrollRegion";
 import { SVG_COLOR } from "../lib/theme";
 
 export interface SweepChartPoint {
@@ -122,7 +123,7 @@ export function SweepChart({ title, xAxisLabel, yUnit, points, xTickFormat }: Sw
         </div>
       </div>
 
-      <div className="-mx-1 overflow-x-auto px-1">
+      <ScrollRegion label={`${title} chart`}>
         <svg
           viewBox={`0 0 ${W} ${H}`}
           width="100%"
@@ -198,7 +199,7 @@ export function SweepChart({ title, xAxisLabel, yUnit, points, xTickFormat }: Sw
             fontSize={10}
             fontWeight={600}
             letterSpacing="0.02em"
-            fill={SVG_COLOR.muted}
+            fill={SVG_COLOR.textSecondary}
           >
             {xAxisLabel.toUpperCase()}
           </text>
@@ -252,7 +253,7 @@ export function SweepChart({ title, xAxisLabel, yUnit, points, xTickFormat }: Sw
             );
           })}
         </svg>
-      </div>
+      </ScrollRegion>
     </section>
   );
 }

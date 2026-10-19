@@ -220,6 +220,9 @@ export function ArchitectureChoices() {
                       <p className="font-mono text-meta text-secondary">
                         {nodeLabel(item.nodeIds[0])} &rarr; {nodeLabel(item.nodeIds[1])}
                       </p>
+                      <Link href="/system-map" className={`self-start font-mono text-meta uppercase text-secondary ${link}`}>
+                        See these nodes on the System Map
+                      </Link>
                       <Field label="What crosses" body={item.crosses} />
                       <Field label="Concern" body={item.concern} />
                       <EvidenceTag glyph evidence={item.evidence} basis={item.basis} refs={item.refs} />

@@ -20,11 +20,11 @@ export const NOT_VALIDATED_STATEMENT =
 
 /** A9: link text to Architecture Choices, validation step. */
 export const VALIDATE_LINK_TEXT =
-  "What would have to be shown, and by what kind of evidence, before any real-world conclusion";
+  "What would have to be shown, and by what kind of evidence, before any real-world conclusion.";
 
 /** A13: outcome caution (also rendered at the outcome banner and comparison table). */
 export const OUTCOME_CAUTION =
-  "Outcome labels are this simplified model’s classification of the run, not certified hardware fault-ride-through performance. The model has no fault ride-through dynamics.";
+  "Outcome labels are this simplified model's classification of the run, not certified hardware fault-ride-through performance. The model has no fault ride-through dynamics.";
 
 /** A7: V_dc chart caption. */
 export const VDC_CHART_CAPTION =
@@ -32,9 +32,9 @@ export const VDC_CHART_CAPTION =
 
 /** A8: power-balance chart caption (the shaded-area sentence applies to Load Step only). */
 export const POWER_BALANCE_CAPTION =
-  "P_load (dashed) is the scenario’s AI demand; P_sst is SST output power calculated by the model. Where demand exceeds SST output, the model takes the difference from the energy stored in the DC bus (dE/dt = P_sst − P_load), until its numerical energy floor is reached; after that the model keeps running but no longer represents physically supplied energy, so values past that point are a numerical limit, not hardware behavior.";
+  "P_load (dashed) is the scenario's AI demand; P_sst is SST output power calculated by the model. Where demand exceeds SST output, the model takes the difference from the energy stored in the DC bus (dE/dt = P_sst − P_load), until its numerical energy floor is reached; after that the model keeps running but no longer represents physically supplied energy, so values past that point are a numerical limit, not hardware behavior.";
 export const POWER_BALANCE_CAPTION_LOAD_STEP =
-  "For Load Step, the shaded area is the sampled positive-gap energy from the event to the V_dc minimum (energy, not power). The Engineering Result’s energy deficit is the closed-form capacitor-energy change, so the two are defined differently.";
+  "For Load Step, the shaded area is the sampled positive-gap energy from the event to the V_dc minimum (energy, not power). The Engineering Result's energy deficit is the closed-form capacitor-energy change, so the two are defined differently.";
 
 /** A10 and A11: capability-limit notices. */
 export const SWEEP_LOAD_STEP_ONLY = "Sensitivity sweeps are available for Load Step only.";

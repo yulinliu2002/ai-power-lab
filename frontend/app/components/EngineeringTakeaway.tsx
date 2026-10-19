@@ -72,15 +72,14 @@ export function EngineeringTakeaway({
       <TakeawayBlock title="What the model reports">
         <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-[13px]">
           <dt className="text-secondary">Outcome</dt>
-          <dd className="text-primary">{timeline.outcome_label}</dd>
+          <dd className="text-primary">{timeline.outcome_label || NOT_AVAILABLE}</dd>
           <dt className="text-secondary">Detail</dt>
-          <dd className="text-secondary">{timeline.outcome_detail}</dd>
+          <dd className="text-secondary">{timeline.outcome_detail || NOT_AVAILABLE}</dd>
           <dt className="text-secondary">Recovery</dt>
-          <dd className="text-secondary">{timeline.recovery_label}</dd>
+          <dd className="text-secondary">{timeline.recovery_label || NOT_AVAILABLE}</dd>
           <dt className="text-secondary">Coordination</dt>
-          <dd className="text-secondary">{timeline.coordination.result_label}</dd>
+          <dd className="text-secondary">{timeline.coordination?.result_label || NOT_AVAILABLE}</dd>
         </dl>
-        <p className="text-[12px] leading-snug text-secondary">{OUTCOME_CAUTION}</p>
         <EvidenceTag
           glyph
           evidence="model-output"
@@ -91,6 +90,7 @@ export function EngineeringTakeaway({
       <TakeawayBlock title="What the model does not represent">
         <p className="text-[13px] leading-relaxed text-secondary">{MODEL_DOES_NOT_REPRESENT}</p>
         <p className="text-[13px] leading-relaxed text-secondary">{PROTECTION_COVERAGE_STATEMENT}</p>
+        <p className="text-[13px] leading-relaxed text-secondary">{OUTCOME_CAUTION}</p>
         <p className="text-[13px] leading-relaxed text-secondary">{NOT_VALIDATED_STATEMENT}</p>
         <EvidenceTag
           glyph
@@ -107,7 +107,6 @@ export function EngineeringTakeaway({
           >
             {VALIDATE_LINK_TEXT}
           </Link>
-          .
         </p>
         <ul className="flex flex-col gap-1 text-[13px] text-secondary">
           <li>
@@ -133,6 +132,8 @@ export function EngineeringTakeaway({
     </div>
   );
 }
+
+const NOT_AVAILABLE = "not available for this run";
 
 function TakeawayBlock({ title, children }: { title: string; children: React.ReactNode }) {
   return (

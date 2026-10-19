@@ -1,3 +1,4 @@
+import { OUTCOME_CAUTION } from "../lib/sandboxTakeawayData";
 import { formatSeconds } from "../lib/formatSeconds";
 import type {
   ProtectionTimeline as ProtectionTimelineData,
@@ -62,7 +63,7 @@ export function ProtectionTimeline({ timeline }: { timeline: ProtectionTimelineD
         surrounding protection system would necessarily behave.
       </p>
       <p data-testid="outcome-caution" className="font-sans text-[12px] leading-snug text-secondary">
-        Outcome labels are this simplified model&rsquo;s classification of the run, not certified hardware fault-ride-through performance. The model has no fault ride-through dynamics.
+        {OUTCOME_CAUTION}
       </p>
     </section>
   );
@@ -107,13 +108,13 @@ function SegmentBar({
 function EventList({ events }: { events: TimelineEvent[] }) {
   if (events.length === 0) {
     return (
-      <p className="font-mono text-[10.5px] text-secondary">No timeline events recorded for this run.</p>
+      <p className="font-mono text-[11px] text-secondary">No timeline events recorded for this run.</p>
     );
   }
   return (
     <ul className="flex flex-col gap-1 border-y border-hairline py-1.5">
       {events.map((event, i) => (
-        <li key={i} className="flex flex-wrap items-baseline gap-x-2 font-mono text-[10.5px]">
+        <li key={i} className="flex flex-wrap items-baseline gap-x-2 font-mono text-[11px]">
           <span className="text-secondary">t = {formatSeconds(event.time_s)}</span>
           <span className="font-semibold text-primary">{event.label}</span>
           {event.detail && <span className="text-secondary">{event.detail}</span>}

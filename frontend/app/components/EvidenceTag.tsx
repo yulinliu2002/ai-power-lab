@@ -34,7 +34,7 @@ export function EvidenceTag({
   glyph?: boolean;
 }) {
   return (
-    <p className="flex flex-col gap-0.5 border-t border-hairline pt-1.5 text-[10.5px] leading-snug text-secondary">
+    <p className={`flex flex-col gap-0.5 border-t border-hairline pt-1.5 leading-snug text-secondary ${glyph ? "text-[12px]" : "text-[10.5px]"}`}>
       <span>
         {glyph && (
           <svg viewBox="0 0 10 10" width="9" height="9" aria-hidden="true" className="mr-1.5 inline-block fill-none stroke-current text-primary">

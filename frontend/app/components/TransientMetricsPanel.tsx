@@ -1,6 +1,9 @@
 import { formatEnergyDeficitKj, type TransientMetrics } from "../lib/transientMetrics";
 
 interface TransientMetricsPanelProps {
+  /** Presentation option (SPEC-014): render the engineering-basis prose in
+   * the 12px Sans body tier instead of 11px Mono. Default keeps the original. */
+  comfortable?: boolean;
   metrics: TransientMetrics;
   voltageReferenceV: number;
 }
@@ -32,7 +35,7 @@ interface TransientMetricsPanelProps {
  * the physics a learner needs to check the causal account above is
  * never hidden behind interaction.
  */
-export function TransientMetricsPanel({ metrics, voltageReferenceV }: TransientMetricsPanelProps) {
+export function TransientMetricsPanel({ metrics, voltageReferenceV, comfortable = false }: TransientMetricsPanelProps) {
   const hasDeficit = metrics.peakDeficitKw > 0;
 
   return (
@@ -41,7 +44,7 @@ export function TransientMetricsPanel({ metrics, voltageReferenceV }: TransientM
         <span className="font-sans text-[12px] font-bold uppercase tracking-[0.04em] text-secondary">
           ENGINEERING RESULT
         </span>
-        <span className="font-sans text-[10.5px] text-secondary">
+        <span className="font-sans text-[12px] text-secondary">
           How severe was this event, and how fast did the system recover?
         </span>
       </div>
@@ -98,7 +101,7 @@ export function TransientMetricsPanel({ metrics, voltageReferenceV }: TransientM
           &Delta;E = &int;(P_load &minus; P_sst) dt = &#189; C_dc (V_ref&sup2; &minus;
           V_dc,min&sup2;)
         </p>
-        <p className="font-mono text-[11px] leading-snug text-secondary">
+        <p className={comfortable ? "font-sans text-[12px] leading-relaxed text-secondary" : "font-mono text-[11px] leading-snug text-secondary"}>
           Simplified, average-value system-level model: the SST response time is a tunable
           modeling assumption, not a real hardware bandwidth limit, and the lumped DC-link
           capacitor is the only energy path modeled &mdash; no calibration to any commercial SST

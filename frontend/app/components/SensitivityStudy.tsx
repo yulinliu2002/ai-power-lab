@@ -9,6 +9,7 @@ import {
   type SweepResult,
 } from "../lib/sensitivitySweep";
 import type { ExperimentParams } from "./ExperimentPanel";
+import { ScrollRegion } from "./ScrollRegion";
 import { SweepChart } from "./SweepChart";
 
 interface SensitivityStudyProps {
@@ -162,7 +163,7 @@ export function SensitivityStudy({ draft, embedded = false }: SensitivityStudyPr
             </span>
           )}
           {result && <SweepResults result={result} />}
-          <p className="font-mono text-[11px] leading-snug text-secondary">
+          <p className="font-sans text-[12px] leading-relaxed text-secondary">
             Toy-model disclaimer: all values here are outputs of this repository&rsquo;s simplified,
             average-value, lumped-parameter educational model (no switching dynamics, constant
             efficiency, single-capacitance bus, no cabling impedance). They are illustrative only
@@ -202,11 +203,11 @@ function SweepResults({ result }: { result: SweepResult }) {
         Held fixed: {fixedNote}, final load = {(result.draft.finalFraction * 100).toFixed(0)}% of
         rated.
       </span>
-      <div className="overflow-x-auto">
-        <table className="w-full border-collapse font-mono text-[10.5px] tabular-nums text-secondary">
+      <ScrollRegion label="Sensitivity results table">
+        <table className="w-full min-w-[640px] border-collapse font-mono text-[10.5px] tabular-nums text-secondary">
           <thead>
             <tr className="border-b border-hairline text-left font-sans text-[11px] uppercase tracking-[0.04em] text-secondary">
-              <th className="py-1 pr-3 font-semibold">Point</th>
+              <th className="sticky left-0 z-10 bg-surface py-1 pr-3 font-semibold">Point</th>
               <th className="py-1 pr-3 font-semibold">{PARAMETER_LABEL[parameter]}</th>
               <th className="py-1 pr-3 font-semibold">Min V_dc [V]</th>
               <th className="py-1 pr-3 font-semibold">Max dev [V]</th>
@@ -221,7 +222,7 @@ function SweepResults({ result }: { result: SweepResult }) {
                 key={p.value}
                 className={`border-b border-hairline ${p.isCurrent ? "bg-surface-raised text-primary" : ""}`}
               >
-                <td className="py-1 pr-3">{roleLabel(p)}</td>
+                <td className="sticky left-0 z-10 bg-surface py-1 pr-3">{roleLabel(p)}</td>
                 <td className="py-1 pr-3">{formatValue(parameter, p.value)}</td>
                 <td className="py-1 pr-3">{p.metrics.minVdcV.toFixed(1)}</td>
                 <td className="py-1 pr-3">{p.metrics.maxDeviationV.toFixed(1)}</td>
@@ -236,7 +237,7 @@ function SweepResults({ result }: { result: SweepResult }) {
             ))}
           </tbody>
         </table>
-      </div>
+      </ScrollRegion>
     </div>
   );
 }
