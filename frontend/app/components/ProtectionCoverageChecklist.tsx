@@ -20,7 +20,7 @@ export function CoverageChecklist({ coverage }: { coverage: CoverageEntry[] }) {
               {entry.modeled ? "✓" : "✕"}
             </span>
             <span className="font-semibold text-primary">{entry.function}</span>
-            <span className="text-secondary">{entry.detail}</span>
+            <span className="font-sans text-[12px] text-secondary">{entry.detail}</span>
           </li>
         ))}
       </ul>

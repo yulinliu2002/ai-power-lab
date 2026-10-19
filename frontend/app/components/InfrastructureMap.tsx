@@ -120,7 +120,7 @@ function ArchitectureSelector({
             }`}
           >
             <span className="font-sans text-[11px] font-semibold uppercase tracking-[0.03em]">{a.name}</span>
-            <span className="text-[11px] text-secondary">{a.tagline}</span>
+            <span className="text-[12px] text-secondary">{a.tagline}</span>
           </button>
         );
       })}

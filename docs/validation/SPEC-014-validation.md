@@ -76,4 +76,11 @@ Verdict: **CHANGES_REQUIRED**, no new blocking or major implementation regressio
 
 ## Pending
 
-Final Codex narrow check of the last fixes, CI on the fix push, Human Visual QA (AC-22 learner walkthrough), explicit human merge approval.
+CI on the final push, Human Visual QA (AC-22 learner walkthrough), explicit human merge approval.
+
+## Codex rounds on this branch (all sessions read-only; outputs summarized above)
+
+1. Implementation review (01a15293-753f-7e31-81ab-dabd7a8d2c23): CHANGES_REQUIRED, 5 major, 6 minor; all addressed.
+2. Closure review (01a152a5-3474-7042-8c83-416ed7ea496e): items 3, 4, 5, 7 partial; addressed (12px prose, corrected state matrix, real Tab/keyboard checks, tile-parsed Stage 4 values, aria-current default).
+3. Narrow check (01a152b0-0ff4-7cd3-8d54-212e6a3e4ac4): item 3 still partial (Sandbox causal text, KPI and metric captions, comparison detail, error text) and one script that crashed before writing results; fixed and results regenerated.
+4. Narrow check (01a152b8-3529-7922-a7ee-579194f1dde7): evidence for items 4 and 5 confirmed passing; remaining 11px prose lines (System Map taglines, protection coverage and timeline detail, sweep error) and a `d2` assertion gap fixed in the last commit. **No Codex verdict of APPROVE was obtained**: the last recorded verdict is CHANGES_REQUIRED for those lines, now fixed but not re-reviewed; the Human should treat the implementation review as open until a final read-only check or the Human's own review.

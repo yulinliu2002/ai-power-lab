@@ -156,7 +156,7 @@ export function SensitivityStudy({ draft, embedded = false }: SensitivityStudyPr
               {isRunning ? "Running…" : "Run Sweep"}
             </button>
           </div>
-          {error && <span className="font-mono text-[11px] text-status-critical">{error}</span>}
+          {error && <span className="font-sans text-[12px] text-status-critical">{error}</span>}
           {result && isStale && (
             <span data-testid="sweep-stale" className="font-mono text-[11px] text-secondary">
               Values changed since this sweep.

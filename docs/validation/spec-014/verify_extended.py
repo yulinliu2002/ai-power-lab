@@ -161,7 +161,7 @@ with sync_playwright() as p:
     d_strings = re.findall(r'^  (d\d): "([^"]+)",', ld, re.M)
     pg.click("label:has([data-testid=case-option-grid_sag])") if pg.locator("[data-testid=case-option-grid_sag]").count() else None
     vis = {k: pg.get_by_text(v.replace("\\'", "'"), exact=False).first.is_visible() if pg.get_by_text(v, exact=False).count() else False for k, v in d_strings}
-    ok("AC-15 Learn: each LEARN_DISCLOSURES string present and visible (case-dependent d2 checked on the grid-sag case)", bool(d_strings) and all(vis.get(k) for k in ("d1", "d3")), vis)
+    ok("AC-15 Learn: each LEARN_DISCLOSURES string present and visible (case-dependent d2 checked on the grid-sag case)", bool(d_strings) and all(vis.get(k) for k in ("d1", "d2", "d3")), vis)
 
     # --- populated state: Sandbox with sweep results and Compare, then Tab traversal reaches the table scrollers too
     pg.goto(BASE + "/sandbox", wait_until="networkidle"); pg.wait_for_timeout(1500)

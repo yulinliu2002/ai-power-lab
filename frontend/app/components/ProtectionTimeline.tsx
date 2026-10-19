@@ -117,7 +117,7 @@ function EventList({ events }: { events: TimelineEvent[] }) {
         <li key={i} className="flex flex-wrap items-baseline gap-x-2 font-mono text-[11px]">
           <span className="text-secondary">t = {formatSeconds(event.time_s)}</span>
           <span className="font-semibold text-primary">{event.label}</span>
-          {event.detail && <span className="text-secondary">{event.detail}</span>}
+          {event.detail && <span className="font-sans text-[12px] text-secondary">{event.detail}</span>}
         </li>
       ))}
     </ul>
