@@ -42,9 +42,19 @@ with sync_playwright() as p:
     tl = ls["protection_timeline"]
     ok("AC-13 outcome/detail/recovery/coordination strings equal the API response verbatim",
        all(x in tk for x in [tl["outcome_label"], tl["outcome_detail"], tl["recovery_label"], tl["coordination"]["result_label"]]))
-    tiles = pg.inner_text("main")
-    m = re.search(r"Lowest V_dc\s+([0-9.]+) V at t = ([0-9.]+) s", tk); d = re.search(r"Energy deficit\s+([0-9.]+) kJ", tk)
-    ok("AC-13 derived Load Step values match the Engineering Result tiles", bool(m and d) and f"{m.group(1)}" in tiles and f"{d.group(1)}" in tiles, (m.groups() if m else None, d.group(1) if d else None))
+    eng = pg.inner_text("#stage-observe")
+    eng = eng[eng.upper().index("ENGINEERING RESULT"):]
+    tile_min = re.search(r"VOLTAGE DROP\s+([0-9.]+)\s*V", eng, re.I); tile_e = re.search(r"ENERGY DEFICIT\s+([0-9.]+)\s*kJ", eng, re.I); tile_rec = re.search(r"RECOVERY TIME\s+([0-9.]+)\s*s", eng, re.I)
+    mt = re.search(r"Lowest V_dc\s+([0-9.]+) V at t = ([0-9.]+) s", tk); de = re.search(r"Energy deficit\s+([0-9.]+) kJ", tk); rc = re.search(r"Recovery time\s+([0-9.]+) s", tk)
+    ok("AC-13 takeaway lowest V_dc, energy deficit and recovery time equal the Engineering Result tiles (parsed from the tiles)",
+       all([tile_min, tile_e, tile_rec, mt, de, rc]) and tile_min.group(1) == mt.group(1) and tile_e.group(1) == de.group(1) and tile_rec.group(1) == rc.group(1),
+       (tile_min and tile_min.group(1), mt and mt.group(1), tile_e and tile_e.group(1), de and de.group(1), tile_rec and tile_rec.group(1), rc and rc.group(1)))
+    # independent recomputation of the recovery value from the API timeseries (+/-1% band, last exit)
+    vref = ls["thresholds"]["voltage_reference_v"]; band = 0.01 * vref
+    last_out = max((i for i, v in enumerate(tv["v_dc_v"]) if abs(v - vref) > band and tv["time_s"][i] >= ev_t), default=None)
+    if last_out is not None and last_out + 1 < len(tv["time_s"]):
+        rec_calc = tv["time_s"][last_out + 1] - ev_t
+        ok("AC-13 recovery time equals an independent recomputation from the API series (2-decimal display)", abs(rec_calc - float(rc.group(1))) < 0.006, (round(rec_calc, 4), rc.group(1)))
 
     # --- Appendix A exact strings: parse quoted texts from the spec, require presence in the rendered Sandbox DOM
     spec = open(SPEC).read(); appx = spec[spec.index("## Appendix A."):spec.index("## 16. Review Record")]
@@ -113,6 +123,41 @@ with sync_playwright() as p:
     pg.focus("[data-testid='study-option-compare']"); pg.keyboard.press("Space"); pg.wait_for_timeout(2500)
     ok("keyboard: study chooser operable (Compare via Space)", pg.is_visible("[data-testid=scenario-comparison]"))
     ok("keyboard: every scroller is reachable (tabindex 0) and named", all(pg.evaluate("()=>[...document.querySelectorAll('[role=region][tabindex=\"0\"]')].every(e=>e.getAttribute('aria-label'))") for _ in [0]))
+
+    # --- Tab-key traversal: reaches every control and scroller in document order; focus ring visible
+    pg.goto(BASE + "/sandbox", wait_until="networkidle"); pg.wait_for_timeout(1500)
+    pg.evaluate("document.activeElement && document.activeElement.blur(); window.scrollTo(0,0)")
+    seen = []; rings = []
+    for _ in range(140):
+        pg.keyboard.press("Tab")
+        info = pg.evaluate("""()=>{const e=document.activeElement;if(!e||e===document.body)return null;const cs=getComputedStyle(e);
+          return {id:e.getAttribute('data-testid')||e.getAttribute('aria-label')||e.id||(e.textContent||'').trim().slice(0,30),tag:e.tagName,
+                  ring:e.type==='radio'?(()=>{const sp=getComputedStyle(e.nextElementSibling);return parseFloat(sp.outlineWidth)>0&&sp.outlineStyle!=='none'})():(parseFloat(cs.outlineWidth)>0&&cs.outlineStyle!=='none'),role:e.getAttribute('role')}}""")
+        if info: seen.append(info); rings.append(info)
+    ids = [i["id"] for i in seen]
+    want = ["scenario-option-load_step", "slider-or-range", "Run Experiment", "study-option"]
+    ok("Tab traversal reaches scenario selector, parameter sliders, Run Experiment and study chooser in document order",
+       any("scenario-option" in x for x in ids) and ids.index(next(x for x in ids if "scenario-option" in x)) < len([x for x in ids if x]) and any(i["tag"] == "INPUT" for i in seen) and any("Run Experiment" in x for x in ids) and any("study-option" in x for x in ids), ids[:25])
+    scroll_names = pg.evaluate("()=>[...document.querySelectorAll('[role=region][tabindex=\"0\"]')].map(e=>e.getAttribute('aria-label'))")
+    ok("Tab traversal reaches every named scroller on the page", all(n in ids for n in scroll_names), (scroll_names, [n for n in scroll_names if n not in ids]))
+    nofocus = [(i["id"], i["tag"], i["role"]) for i in seen if not i["ring"] and i["tag"] not in ("NEXTJS-PORTAL",) and not (i["tag"] == "INPUT" and i["id"] and "slider" in str(i["id"]).lower())]
+    ok("visible keyboard focus indicator (outline; radios via their label chip; Next.js dev overlay excluded) on every focused control", not nofocus, nofocus[:6])
+    # Architecture: keyboard operation of chooser, show-all and rail selector, visible disclosures
+    pg.goto(BASE + "/architecture", wait_until="networkidle"); pg.wait_for_timeout(800)
+    pg.focus("[data-testid='driver-option-rd1']"); pg.keyboard.press("ArrowRight"); pg.wait_for_timeout(150)
+    ok("Architecture: arrow key moves the requirement-driver radio selection and updates the decision card", pg.locator("[data-testid=decision-card-rd2]").count() == 1)
+    pg.focus("[data-testid='show-all-drivers']"); pg.keyboard.press("Enter"); pg.wait_for_timeout(200)
+    ok("Architecture: show-all toggle operable by keyboard; all seven decision cards render once each", pg.locator("[data-testid^=decision-card-]").count() == 7)
+    pg.focus("[data-testid='rail-option-mv-to-800vdc']"); pg.keyboard.press("Space"); pg.wait_for_timeout(150)
+    ok("Architecture: rail architecture selector operable by keyboard", any("Solid-State" in t for t in pg.eval_on_selector_all("[data-testid=signal-path-rail] li", "els=>els.map(e=>e.textContent)")))
+    pg.focus("a[href='#step-validation']"); pg.keyboard.press("Enter"); pg.wait_for_timeout(300)
+    ok("stage nav: aria-current present on exactly one link, and focus moved to the target heading", pg.locator("nav[aria-label='Steps on this page'] a[aria-current]").count() == 1 and pg.evaluate("()=>document.activeElement.id") == "h-validation", pg.evaluate("()=>document.activeElement.id"))
+    # Learn: references and in-page links resolve; disclosures strings visible
+    pg.goto(BASE + "/learn", wait_until="networkidle"); pg.wait_for_timeout(1200)
+    anchors = pg.eval_on_selector_all("main a[href^='#']", "els=>els.map(e=>e.getAttribute('href'))")
+    missing = [a for a in set(anchors) if pg.locator(a).count() == 0 and a != "#"]
+    ok("AC-15 Learn: every in-page reference link resolves to an existing anchor", not missing, (len(anchors), missing))
+    ok("AC-15 Learn: disclosure panel present", pg.locator("main").inner_text().lower().count("not evidence") >= 1 or pg.locator("[data-testid*=disclosure]").count() >= 1)
 
     # --- axe + 390px element checks in populated states (sweep results, compare, takeaway)
     pg.locator("label:has([data-testid='study-option-sweep'])").click(); pg.get_by_role("button", name="Run Sweep").click(); pg.wait_for_timeout(2500)

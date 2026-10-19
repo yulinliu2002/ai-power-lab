@@ -134,7 +134,7 @@ function OutcomeBanner({ timeline }: { timeline: ProtectionTimelineData }) {
           {timeline.outcome_label}
         </span>
       </div>
-      <p className="font-sans text-[11px] leading-snug text-secondary">{timeline.outcome_detail}</p>
+      <p className="font-sans text-[12px] leading-snug text-secondary">{timeline.outcome_detail}</p>
       <p className="font-mono text-[11px] text-secondary">RECOVERY: {timeline.recovery_label}</p>
     </div>
   );

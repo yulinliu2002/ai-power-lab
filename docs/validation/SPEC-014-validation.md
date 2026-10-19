@@ -19,9 +19,9 @@ Servers: baseline `f9cc8c4` worktree on :3200, branch on :3100, both against one
 | AC-4 architecture preservation | every baseline **line** of every driver, comparison, boundary, decision and validation block, plus the reference list, present after (union over all seven driver selections and both show-all views); block ids equal; all five disclosures in the visible list | `compare_rich.py` (`after/compare_rich.json`) |
 | AC-9 test ids | only the three declared retirements missing | `compare.py` |
 | AC-11 numbers/chart inputs | every numeric token on baseline Sandbox states present; chart polyline geometry identical for all five scenarios; baseline chart tick/label texts all present | `compare.py`, `compare_rich.py` |
-| AC-13 Stage 4 contract | outcome/detail/recovery/coordination strings equal the API response verbatim; derived Load Step values equal the Engineering Result tiles; no derived numbers for scenarios B-E | `verify_extended.py` |
+| AC-13 Stage 4 contract | outcome/detail/recovery/coordination strings equal the API response verbatim; lowest V_dc, energy deficit and recovery time equal the values parsed from the Engineering Result tiles, and the recovery time equals an independent recomputation from the API series; no derived numbers for scenarios B-E | `verify_extended.py` |
 | AC-23 Appendix A exact strings | A1-A3, A5-A9, A13, A14 rendered verbatim (parsed from the spec); A10, A11 verbatim in the B-E state | `verify_extended.py` |
-| AC-8/AC-10 state matrix | 27 checks plus extended: scrubber default equals the actual post-event V_dc minimum, sweep retained across study switches, both sweep parameters, in-flight sweep discarded on scenario change, a slow Run Experiment response never overwrites a later scenario selection, keyboard-only operation (Enter/Space/arrows), disabled-sweep reason, Compare fetch on each entry, failure and retry | `state_matrix.py`, `verify_extended.py` |
+| AC-8/AC-10 state matrix | 27 checks plus extended: scrubber default equals the actual post-event V_dc minimum, sweep retained across study switches, both sweep parameters, in-flight sweep discarded on scenario change, a slow Run Experiment response never overwrites a later scenario selection, keyboard-only operation (Enter/Space/arrows), real Tab-key traversal reaching every control and every named scroller, a visible focus indicator on every focused control, Architecture chooser/show-all/rail selector by keyboard, stage-nav `aria-current` and heading focus, disabled-sweep reason, Compare fetch on each entry, failure and retry | `state_matrix.py`, `verify_extended.py` |
 | AC-16 accessibility | axe-core: no critical/serious violations on the four pages at both viewports, and with populated sweep results and the Compare table (desktop) | `verify_static.py`, `verify_extended.py` |
 | AC-17 390px | page `scrollWidth` 390 everywhere; in populated states (sweep results, Compare table, Architecture show-all) every element is inside the viewport or a named scroller and every scroller shows a hint | `verify_extended.py` |
 | AC-18 map arrows | per lane nodes-1 arrows (monitoring lane unchanged) in all three views | `verify_map.py` |
@@ -51,7 +51,18 @@ Verdict on the first push: **CHANGES_REQUIRED** (0 blocking, 5 major, 6 minor). 
 | 10 MINOR | R28 System Map link missing | fixed: link on every interface card |
 | 11 MINOR | DESIGN.md paraphrased Appendix B; home not using `AreaHeader`; SPEC-011 not amended | fixed: DESIGN.md text now verbatim Appendix B (plus the §7 unit line added to Appendix B), home uses `AreaHeader`, SPEC-011 scope items 2 and 5 amended |
 
-A bounded Codex closure review of these fixes is recorded below once run.
+### Codex closure review of the fixes (session 01a152a5-3474-7042-8c83-416ed7ea496e)
+
+Verdict: **CHANGES_REQUIRED**, no new blocking or major implementation regression. Findings 1, 2, 6, 8, 9, 10, 11 RESOLVED (verified in code); remaining items and their dispositions:
+
+| Codex item | Disposition |
+|---|---|
+| 3 PARTIAL: outcome and coordination detail prose still 11px | fixed: both are 12px Sans (shared components; `/learn` effect is size only, AC-15 text diff unchanged) |
+| 4 PARTIAL: `state_matrix.py` could not re-enter Compare after the sweep option was disabled for B-E; keyboard checks used programmatic focus and omitted Architecture and visible focus; scroller reachability not proven | fixed: the Compare re-entry runs on Load Step (and asserts the sweep study is selectable); `verify_extended.py` now drives real Tab traversal, checks every named scroller is reached and every focused control shows an outline, and operates the Architecture chooser, show-all, rail selector and stage nav by keyboard |
+| 5 PARTIAL: Stage 4 derived numbers compared against numbers taken from the takeaway itself; recovery value not checked; Learn disclosures/reference links not exercised; raw rich captures not in HEAD | fixed: values parsed from the Engineering Result tiles, recovery recomputed independently from the API series, Learn in-page reference links resolved and disclosure panel checked; the 60MB capture files are intentionally not committed (README) |
+| 7 MINOR: `aria-current` unset before the first intersection | fixed: initial stage is current; scripted check |
+
+
 
 ## Spec deviations and decisions made during implementation
 

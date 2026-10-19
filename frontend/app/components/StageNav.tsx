@@ -16,7 +16,7 @@ export function StageNav({
   label: string;
   stages: ReadonlyArray<{ id: string; label: string; n?: number }>;
 }) {
-  const [current, setCurrent] = useState<string | null>(null);
+  const [current, setCurrent] = useState<string | null>(stages[0]?.id ?? null);
 
   // Track which stage is nearest the top of the viewport so the matching
   // link can expose aria-current="location".

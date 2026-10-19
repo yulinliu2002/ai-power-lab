@@ -84,11 +84,13 @@ with sync_playwright() as p:
     pg.wait_for_timeout(2500)
     ok("rapid switching: last request wins", "Sustained High Load" in text(pg, "[data-testid=run-provenance]"), text(pg, "[data-testid=run-provenance]"))
 
-    # compare: fetch on every entry; failure + retry; other stages intact
+    # compare: fetch on every entry; failure + retry; other stages intact (sweep is only available on Load Step)
+    pg.click("[data-testid='scenario-option-load_step']"); pg.wait_for_timeout(1800)
     c0 = calls["cmp"]
     pg.locator("label:has([data-testid='study-option-compare'])").click(); pg.wait_for_timeout(2500)
     ok("compare entry 1 fetches once", calls["cmp"] == c0 + 1, calls)
     pg.locator("label:has([data-testid='study-option-sweep'])").click(); pg.wait_for_timeout(300)
+    assert pg.locator("[data-testid=study-option-sweep]").is_checked(), "sweep study must be selectable on Load Step"
     pg.route("**/simulations/comparison", lambda r: r.abort())
     pg.locator("label:has([data-testid='study-option-compare'])").click(); pg.wait_for_timeout(1500)
     ok("compare re-entry fetches again (2nd entry), failure shown in Stage 3 only", calls["cmp"] == c0 + 2 and "API ERROR" in text(pg, "#stage-investigate") and pg.is_visible("[data-testid=state-at-time]") and pg.is_visible("[data-testid=engineering-takeaway]"), calls)

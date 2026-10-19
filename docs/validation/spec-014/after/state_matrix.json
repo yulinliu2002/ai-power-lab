@@ -97,17 +97,17 @@
  {
   "result": "PASS",
   "check": "compare entry 1 fetches once",
-  "detail": "{'load': 12, 'scen': 4, 'cmp': 1}"
+  "detail": "{'load': 13, 'scen': 4, 'cmp': 1}"
  },
  {
   "result": "PASS",
   "check": "compare re-entry fetches again (2nd entry), failure shown in Stage 3 only",
-  "detail": "{'load': 12, 'scen': 4, 'cmp': 2}"
+  "detail": "{'load': 13, 'scen': 4, 'cmp': 2}"
  },
  {
   "result": "PASS",
   "check": "compare retry recovers",
-  "detail": "{'load': 12, 'scen': 4, 'cmp': 3}"
+  "detail": "{'load': 13, 'scen': 4, 'cmp': 3}"
  },
  {
   "result": "PASS",

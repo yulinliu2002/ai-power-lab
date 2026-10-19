@@ -49,7 +49,7 @@ export function ProtectionCoordination({ timeline }: { timeline: ProtectionTimel
             {coordination.result_label}
           </span>
         </div>
-        <p className="font-sans text-[11px] leading-snug text-secondary">
+        <p className="font-sans text-[12px] leading-snug text-secondary">
           {coordination.result_detail}
         </p>
       </div>
