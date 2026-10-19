@@ -57,12 +57,13 @@ export function ExperimentPanel({
 
   return (
     <section className="flex flex-col gap-1.5 border border-hairline bg-surface px-4 py-2">
-      <span className="font-sans text-[11.5px] font-semibold uppercase tracking-[0.04em] text-muted">
+      <span className="font-sans text-[11.5px] font-semibold uppercase tracking-[0.04em] text-secondary">
         EXPERIMENT
       </span>
       <div className="flex flex-wrap items-end gap-4">
         <SliderControl
-          label="AI LOAD STEP"
+          label="AI load step (kW, final demand)"
+          description="Final AI demand after the step, an illustrative test input. In this model, a larger step opens a larger initial gap between demand and SST output, because SST output follows demand with the response time set below."
           readout={`${initialPLoadKw.toFixed(0)} → ${draftFinalKw.toFixed(0)} kW`}
           value={draft.finalFraction}
           range={FINAL_FRACTION_RANGE}
@@ -70,7 +71,8 @@ export function ExperimentPanel({
           onChange={(v) => onDraftChange({ ...draft, finalFraction: v })}
         />
         <SliderControl
-          label="DC BUS CAPACITANCE"
+          label="DC bus capacitance C_dc (F)"
+          description="One lumped capacitance for the whole bus. From E = ½·C·V², the same energy drawn from the bus moves V_dc less when C is larger. This value is not a sized or measured bus."
           readout={`C = ${draft.capacitanceF.toFixed(3)} F`}
           value={draft.capacitanceF}
           range={CAPACITANCE_RANGE}
@@ -78,7 +80,8 @@ export function ExperimentPanel({
           onChange={(v) => onDraftChange({ ...draft, capacitanceF: v })}
         />
         <SliderControl
-          label="SST RESPONSE TIME"
+          label="SST response time τ_sst (ms)"
+          description="Time constant of a first-order lag on SST output power. It is a modeling assumption, not a measured or guaranteed hardware bandwidth. A longer τ_sst keeps the gap between demand and SST output open for longer."
           readout={`τ = ${(draft.timeConstantS * 1000).toFixed(0)} ms`}
           value={draft.timeConstantS}
           range={TIME_CONSTANT_RANGE}
@@ -99,14 +102,14 @@ export function ExperimentPanel({
             type="button"
             onClick={onRun}
             disabled={isRunning}
-            className="rounded border border-accent bg-accent px-3 py-1.5 font-sans text-[11px] font-semibold uppercase tracking-[0.04em] text-primary disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded border border-accent bg-accent px-3 py-1.5 font-sans text-[12px] font-semibold text-canvas disabled:cursor-not-allowed disabled:opacity-50"
           >
             {isRunning ? "Running…" : "Run Experiment"}
           </button>
         </div>
       </div>
       {error && (
-        <span className="font-mono text-[10px] text-status-critical">{error}</span>
+        <span className="font-mono text-[11px] text-status-critical">{error}</span>
       )}
     </section>
   );
@@ -114,6 +117,7 @@ export function ExperimentPanel({
 
 function SliderControl({
   label,
+  description,
   readout,
   value,
   range,
@@ -121,6 +125,7 @@ function SliderControl({
   onChange,
 }: {
   label: string;
+  description: string;
   readout: string;
   value: number;
   range: { min: number; max: number; step: number };
@@ -128,11 +133,9 @@ function SliderControl({
   onChange: (value: number) => void;
 }) {
   return (
-    <div className="flex min-w-[170px] flex-1 flex-col gap-1">
+    <div className="flex min-w-[220px] flex-1 flex-col gap-1.5">
       <div className="flex items-baseline justify-between gap-2">
-        <span className="font-sans text-[10px] font-semibold uppercase tracking-[0.04em] text-muted">
-          {label}
-        </span>
+        <span className="font-sans text-[12px] font-semibold text-primary">{label}</span>
         <span className="font-mono text-[11px] tabular-nums text-secondary">{readout}</span>
       </div>
       <input
@@ -144,7 +147,9 @@ function SliderControl({
         disabled={disabled}
         onChange={(e) => onChange(Number(e.target.value))}
         className="h-1 w-full cursor-pointer appearance-none rounded-none bg-hairline accent-accent disabled:cursor-not-allowed"
+        aria-label={label}
       />
+      <p className="text-[12px] leading-snug text-secondary" data-testid="slider-description">{description}</p>
     </div>
   );
 }

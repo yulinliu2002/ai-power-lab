@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 
 /**
  * Named, keyboard-focusable horizontal scroller with a visible text hint
@@ -13,10 +13,12 @@ export function ScrollRegion({
   label,
   children,
   className = "",
+  style,
 }: {
   label: string;
   children: ReactNode;
   className?: string;
+  style?: CSSProperties;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [scrollable, setScrollable] = useState(false);
@@ -44,6 +46,7 @@ export function ScrollRegion({
         role="region"
         aria-label={label}
         tabIndex={0}
+        style={style}
         className={`min-w-0 overflow-x-auto focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary ${className}`}
       >
         {children}

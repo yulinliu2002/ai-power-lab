@@ -16,7 +16,7 @@ interface TimeScrubberProps {
 export function TimeScrubber({ timeS, index, onChange }: TimeScrubberProps) {
   return (
     <section className="flex items-center gap-3 border-y border-hairline bg-surface px-4 py-1.5">
-      <span className="shrink-0 font-sans text-[11px] font-semibold uppercase tracking-[0.04em] text-muted">
+      <span className="shrink-0 font-sans text-[11px] font-semibold uppercase tracking-[0.04em] text-secondary">
         TIME
       </span>
       <input

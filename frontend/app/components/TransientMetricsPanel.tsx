@@ -87,7 +87,7 @@ export function TransientMetricsPanel({ metrics, voltageReferenceV }: TransientM
       </div>
 
       <div className="flex flex-col gap-0.5 border-t border-hairline pt-1.5">
-        <span className="font-sans text-[9.5px] font-semibold uppercase tracking-[0.04em] text-muted">
+        <span className="font-sans text-[11px] font-semibold uppercase tracking-[0.04em] text-secondary">
           Engineering basis
         </span>
         <p className="font-mono text-[10.5px] text-secondary">
@@ -98,7 +98,7 @@ export function TransientMetricsPanel({ metrics, voltageReferenceV }: TransientM
           &Delta;E = &int;(P_load &minus; P_sst) dt = &#189; C_dc (V_ref&sup2; &minus;
           V_dc,min&sup2;)
         </p>
-        <p className="font-mono text-[9px] leading-snug text-muted">
+        <p className="font-mono text-[11px] leading-snug text-secondary">
           Simplified, average-value system-level model: the SST response time is a tunable
           modeling assumption, not a real hardware bandwidth limit, and the lumped DC-link
           capacitor is the only energy path modeled &mdash; no calibration to any commercial SST
@@ -127,14 +127,14 @@ function MetricTile({
 }) {
   return (
     <div className="flex flex-col gap-0.5 px-3 py-1.5">
-      <span className="font-sans text-[10.5px] font-semibold uppercase tracking-[0.04em] text-muted">
+      <span className="font-sans text-[10.5px] font-semibold uppercase tracking-[0.04em] text-secondary">
         {label}
       </span>
       <span className="font-mono text-[16px] font-semibold leading-none tabular-nums text-primary">
         {value}
         <span className="ml-1 text-[11px] font-normal text-muted">{unit}</span>
       </span>
-      <span className="font-mono text-[9.5px] leading-snug text-secondary">{caption}</span>
+      <span className="font-mono text-[11px] leading-snug text-secondary">{caption}</span>
     </div>
   );
 }

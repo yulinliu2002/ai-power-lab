@@ -55,11 +55,14 @@ export function ProtectionTimeline({ timeline }: { timeline: ProtectionTimelineD
       <EventList events={timeline.events} />
       <OutcomeBanner timeline={timeline} />
 
-      <p className="font-sans text-[10px] leading-snug text-muted">
+      <p className="font-sans text-[12px] leading-snug text-secondary">
         V1 models only sustained thermal overtemperature protection. It has no DC-bus
         undervoltage/overvoltage protection. Thresholds and the outcomes shown here are
-        illustrative, educational model results (see <code>CLAUDE.md</code>) &mdash; not a claim
-        about how a real SST and its surrounding protection system would necessarily behave.
+        illustrative, educational model results &mdash; not a claim about how a real SST and its
+        surrounding protection system would necessarily behave.
+      </p>
+      <p data-testid="outcome-caution" className="font-sans text-[12px] leading-snug text-secondary">
+        Outcome labels are this simplified model&rsquo;s classification of the run, not certified hardware fault-ride-through performance. The model has no fault ride-through dynamics.
       </p>
     </section>
   );
@@ -90,7 +93,7 @@ function SegmentBar({
       </div>
       <div className="flex flex-wrap gap-x-4 gap-y-0.5">
         {segments.map((segment, i) => (
-          <span key={i} className="font-mono text-[10px] text-secondary">
+          <span key={i} className="font-mono text-[11px] text-secondary">
             {segment.state} &mdash; {segment.is_open_ended ? "at least " : ""}
             {formatSeconds(segment.duration_s)}
             {segment.is_open_ended ? " (ongoing)" : ""}
@@ -104,7 +107,7 @@ function SegmentBar({
 function EventList({ events }: { events: TimelineEvent[] }) {
   if (events.length === 0) {
     return (
-      <p className="font-mono text-[10.5px] text-muted">No timeline events recorded for this run.</p>
+      <p className="font-mono text-[10.5px] text-secondary">No timeline events recorded for this run.</p>
     );
   }
   return (
@@ -113,7 +116,7 @@ function EventList({ events }: { events: TimelineEvent[] }) {
         <li key={i} className="flex flex-wrap items-baseline gap-x-2 font-mono text-[10.5px]">
           <span className="text-secondary">t = {formatSeconds(event.time_s)}</span>
           <span className="font-semibold text-primary">{event.label}</span>
-          {event.detail && <span className="text-muted">{event.detail}</span>}
+          {event.detail && <span className="text-secondary">{event.detail}</span>}
         </li>
       ))}
     </ul>
@@ -131,7 +134,7 @@ function OutcomeBanner({ timeline }: { timeline: ProtectionTimelineData }) {
         </span>
       </div>
       <p className="font-sans text-[11px] leading-snug text-secondary">{timeline.outcome_detail}</p>
-      <p className="font-mono text-[10px] text-muted">RECOVERY: {timeline.recovery_label}</p>
+      <p className="font-mono text-[11px] text-secondary">RECOVERY: {timeline.recovery_label}</p>
     </div>
   );
 }
