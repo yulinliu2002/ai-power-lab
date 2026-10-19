@@ -358,6 +358,8 @@ Approval of SPEC-014 is also the Human approval for these changes to components 
 | `TelemetryChart`, `SweepChart` | minimum drawn width in scroller (R30); cursor/label overprint fix and tick thinning (R31) | chart rendering changes on `/learn` at narrow widths |
 | `PowerFlowSchematic` | scroll cue text (R30) | none unless composed |
 | `SiteNav`, `layout.tsx` description | nav wrap and disabled styling (R30); metadata description (R1) | global |
+| `TransientMetricsPanel`, `ProtectionTimeline`, `ProtectionCoordination`, `ProtectionCoverageChecklist`, `KpiTile`, `TimeScrubber` | essential labels move from `muted` to `text-secondary` and sub-11px sizes to 11px (R39a, F7); `TransientMetricsPanel` gains an opt-in `comfortable` prop (12px Sans basis prose) used only by the Sandbox | contrast and size changes visible on `/learn` where these components are composed; no content change (AC-15 diff) |
+| `EvidenceTag` | optional `glyph` prop (default rendering byte-identical, AC-28) | none |
 | `/learn` page itself | **not edited**; R35 role lines and next-step links apply to `/`, `/system-map`, `/architecture`, `/sandbox` only | none |
 
 SPEC-012's acceptance criteria are re-run after these changes (AC-15). If SPEC-012 needs a text amendment because of them, it is made in the SPEC-014 PR and listed in AC-19.

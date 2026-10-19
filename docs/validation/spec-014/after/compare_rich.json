@@ -1,0 +1,347 @@
+[
+ {
+  "result": "PASS",
+  "check": "AC-4 driver: same block ids (7 baseline blocks)",
+  "detail": "missing [] extra []"
+ },
+ {
+  "result": "PASS",
+  "check": "AC-4 driver:driver-rd1 every baseline line preserved",
+  "detail": "[]"
+ },
+ {
+  "result": "PASS",
+  "check": "AC-4 driver:driver-rd2 every baseline line preserved",
+  "detail": "[]"
+ },
+ {
+  "result": "PASS",
+  "check": "AC-4 driver:driver-rd3 every baseline line preserved",
+  "detail": "[]"
+ },
+ {
+  "result": "PASS",
+  "check": "AC-4 driver:driver-rd4 every baseline line preserved",
+  "detail": "[]"
+ },
+ {
+  "result": "PASS",
+  "check": "AC-4 driver:driver-rd5 every baseline line preserved",
+  "detail": "[]"
+ },
+ {
+  "result": "PASS",
+  "check": "AC-4 driver:driver-rd6 every baseline line preserved",
+  "detail": "[]"
+ },
+ {
+  "result": "PASS",
+  "check": "AC-4 driver:driver-rd7 every baseline line preserved",
+  "detail": "[]"
+ },
+ {
+  "result": "PASS",
+  "check": "AC-4 compare: same block ids (7 baseline blocks)",
+  "detail": "missing [] extra []"
+ },
+ {
+  "result": "PASS",
+  "check": "AC-4 compare:compare-rd1 every baseline line preserved",
+  "detail": "[]"
+ },
+ {
+  "result": "PASS",
+  "check": "AC-4 compare:compare-rd2 every baseline line preserved",
+  "detail": "[]"
+ },
+ {
+  "result": "PASS",
+  "check": "AC-4 compare:compare-rd3 every baseline line preserved",
+  "detail": "[]"
+ },
+ {
+  "result": "PASS",
+  "check": "AC-4 compare:compare-rd4 every baseline line preserved",
+  "detail": "[]"
+ },
+ {
+  "result": "PASS",
+  "check": "AC-4 compare:compare-rd5 every baseline line preserved",
+  "detail": "[]"
+ },
+ {
+  "result": "PASS",
+  "check": "AC-4 compare:compare-rd6 every baseline line preserved",
+  "detail": "[]"
+ },
+ {
+  "result": "PASS",
+  "check": "AC-4 compare:compare-rd7 every baseline line preserved",
+  "detail": "[]"
+ },
+ {
+  "result": "PASS",
+  "check": "AC-4 boundary: same block ids (5 baseline blocks)",
+  "detail": "missing [] extra []"
+ },
+ {
+  "result": "PASS",
+  "check": "AC-4 boundary:boundary-mv-utility every baseline line preserved",
+  "detail": "[]"
+ },
+ {
+  "result": "PASS",
+  "check": "AC-4 boundary:boundary-conversion-distribution every baseline line preserved",
+  "detail": "[]"
+ },
+ {
+  "result": "PASS",
+  "check": "AC-4 boundary:boundary-distribution-rack every baseline line preserved",
+  "detail": "[]"
+ },
+ {
+  "result": "PASS",
+  "check": "AC-4 boundary:boundary-storage-backup every baseline line preserved",
+  "detail": "[]"
+ },
+ {
+  "result": "PASS",
+  "check": "AC-4 boundary:boundary-monitoring-control every baseline line preserved",
+  "detail": "[]"
+ },
+ {
+  "result": "PASS",
+  "check": "AC-4 decision: same block ids (7 baseline blocks)",
+  "detail": "missing [] extra []"
+ },
+ {
+  "result": "PASS",
+  "check": "AC-4 decision:decision-card-rd1 every baseline line preserved",
+  "detail": "[]"
+ },
+ {
+  "result": "PASS",
+  "check": "AC-4 decision:decision-card-rd2 every baseline line preserved",
+  "detail": "[]"
+ },
+ {
+  "result": "PASS",
+  "check": "AC-4 decision:decision-card-rd3 every baseline line preserved",
+  "detail": "[]"
+ },
+ {
+  "result": "PASS",
+  "check": "AC-4 decision:decision-card-rd4 every baseline line preserved",
+  "detail": "[]"
+ },
+ {
+  "result": "PASS",
+  "check": "AC-4 decision:decision-card-rd5 every baseline line preserved",
+  "detail": "[]"
+ },
+ {
+  "result": "PASS",
+  "check": "AC-4 decision:decision-card-rd6 every baseline line preserved",
+  "detail": "[]"
+ },
+ {
+  "result": "PASS",
+  "check": "AC-4 decision:decision-card-rd7 every baseline line preserved",
+  "detail": "[]"
+ },
+ {
+  "result": "PASS",
+  "check": "AC-4 validation: same block ids (3 baseline blocks)",
+  "detail": "missing [] extra []"
+ },
+ {
+  "result": "PASS",
+  "check": "AC-4 validation:validation-conventional-ac every baseline line preserved",
+  "detail": "[]"
+ },
+ {
+  "result": "PASS",
+  "check": "AC-4 validation:validation-ac-to-800vdc every baseline line preserved",
+  "detail": "[]"
+ },
+ {
+  "result": "PASS",
+  "check": "AC-4 validation:validation-mv-to-800vdc every baseline line preserved",
+  "detail": "[]"
+ },
+ {
+  "result": "PASS",
+  "check": "AC-4 reference list lines preserved",
+  "detail": "[]"
+ },
+ {
+  "result": "PASS",
+  "check": "AC-28 architecture evidence-tag text (label + basis + refs) identical multiset subset",
+  "detail": "[]"
+ },
+ {
+  "result": "PASS",
+  "check": "AC-26 five disclosures present in visible list after",
+  "detail": "5"
+ },
+ {
+  "result": "PASS",
+  "check": "AC-15 Learn: five cases both",
+  "detail": ""
+ },
+ {
+  "result": "PASS",
+  "check": "AC-15 Learn case1: text identical except authorized caution/footnote/chart-title casing",
+  "detail": "([], [])"
+ },
+ {
+  "result": "PASS",
+  "check": "AC-15 Learn case1: links identical",
+  "detail": ""
+ },
+ {
+  "result": "PASS",
+  "check": "AC-28 Learn case1: default EvidenceTag HTML byte-identical",
+  "detail": "9 tags"
+ },
+ {
+  "result": "PASS",
+  "check": "AC-11 Learn case1: chart polylines identical",
+  "detail": ""
+ },
+ {
+  "result": "PASS",
+  "check": "AC-15 Learn case2: text identical except authorized caution/footnote/chart-title casing",
+  "detail": "([], [])"
+ },
+ {
+  "result": "PASS",
+  "check": "AC-15 Learn case2: links identical",
+  "detail": ""
+ },
+ {
+  "result": "PASS",
+  "check": "AC-28 Learn case2: default EvidenceTag HTML byte-identical",
+  "detail": "9 tags"
+ },
+ {
+  "result": "PASS",
+  "check": "AC-11 Learn case2: chart polylines identical",
+  "detail": ""
+ },
+ {
+  "result": "PASS",
+  "check": "AC-15 Learn case3: text identical except authorized caution/footnote/chart-title casing",
+  "detail": "([], [])"
+ },
+ {
+  "result": "PASS",
+  "check": "AC-15 Learn case3: links identical",
+  "detail": ""
+ },
+ {
+  "result": "PASS",
+  "check": "AC-28 Learn case3: default EvidenceTag HTML byte-identical",
+  "detail": "13 tags"
+ },
+ {
+  "result": "PASS",
+  "check": "AC-11 Learn case3: chart polylines identical",
+  "detail": ""
+ },
+ {
+  "result": "PASS",
+  "check": "AC-15 Learn case4: text identical except authorized caution/footnote/chart-title casing",
+  "detail": "([], [])"
+ },
+ {
+  "result": "PASS",
+  "check": "AC-15 Learn case4: links identical",
+  "detail": ""
+ },
+ {
+  "result": "PASS",
+  "check": "AC-28 Learn case4: default EvidenceTag HTML byte-identical",
+  "detail": "11 tags"
+ },
+ {
+  "result": "PASS",
+  "check": "AC-11 Learn case4: chart polylines identical",
+  "detail": ""
+ },
+ {
+  "result": "PASS",
+  "check": "AC-15 Learn case5: text identical except authorized caution/footnote/chart-title casing",
+  "detail": "([], [])"
+ },
+ {
+  "result": "PASS",
+  "check": "AC-15 Learn case5: links identical",
+  "detail": ""
+ },
+ {
+  "result": "PASS",
+  "check": "AC-28 Learn case5: default EvidenceTag HTML byte-identical",
+  "detail": "10 tags"
+ },
+ {
+  "result": "PASS",
+  "check": "AC-11 Learn case5: chart polylines identical",
+  "detail": ""
+ },
+ {
+  "result": "PASS",
+  "check": "AC-11 load_step: chart polylines (data geometry) identical",
+  "detail": ""
+ },
+ {
+  "result": "PASS",
+  "check": "AC-11 load_step: baseline chart tick/label texts all present",
+  "detail": "[]"
+ },
+ {
+  "result": "PASS",
+  "check": "AC-11 sustained_high_load: chart polylines (data geometry) identical",
+  "detail": ""
+ },
+ {
+  "result": "PASS",
+  "check": "AC-11 sustained_high_load: baseline chart tick/label texts all present",
+  "detail": "[]"
+ },
+ {
+  "result": "PASS",
+  "check": "AC-11 thermal_trip: chart polylines (data geometry) identical",
+  "detail": ""
+ },
+ {
+  "result": "PASS",
+  "check": "AC-11 thermal_trip: baseline chart tick/label texts all present",
+  "detail": "[]"
+ },
+ {
+  "result": "PASS",
+  "check": "AC-11 grid_sag: chart polylines (data geometry) identical",
+  "detail": ""
+ },
+ {
+  "result": "PASS",
+  "check": "AC-11 grid_sag: baseline chart tick/label texts all present",
+  "detail": "[]"
+ },
+ {
+  "result": "PASS",
+  "check": "AC-11 grid_loss: chart polylines (data geometry) identical",
+  "detail": ""
+ },
+ {
+  "result": "PASS",
+  "check": "AC-11 grid_loss: baseline chart tick/label texts all present",
+  "detail": "[]"
+ },
+ {
+  "result": "PASS",
+  "check": "AC-7 API JSON identical per endpoint",
+  "detail": "[]"
+ }
+]

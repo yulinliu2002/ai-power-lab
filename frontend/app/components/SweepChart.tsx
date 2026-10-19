@@ -180,7 +180,7 @@ export function SweepChart({ title, xAxisLabel, yUnit, points, xTickFormat }: Sw
             <text
               key={i}
               x={px}
-              y={H - MARGIN.bottom + 14 + (staggered ? 11 : 0)}
+              y={H - MARGIN.bottom + 14 + (staggered ? 13 : 0)}
               textAnchor="middle"
               fontFamily="var(--font-mono)"
               fontSize={9.5}
