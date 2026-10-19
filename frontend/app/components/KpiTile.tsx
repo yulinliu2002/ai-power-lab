@@ -42,7 +42,7 @@ export function KpiReadout({ label, caption, value, unit, role }: KpiReadoutProp
         <span className="ml-1 text-[10.5px] font-normal text-secondary">{unit}</span>
       </span>
       {caption && (
-        <span className="font-sans text-[11px] leading-tight text-secondary">{caption}</span>
+        <span className="font-sans text-[12px] leading-tight text-secondary">{caption}</span>
       )}
     </div>
   );

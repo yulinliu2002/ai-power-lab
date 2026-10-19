@@ -16,7 +16,7 @@
  },
  {
   "id": "Q4",
-  "observed": "compare table 2492px in named scroller 'Scenario comparison table', hint True, sticky first column: sticky",
+  "observed": "compare table 2465px in named scroller 'Scenario comparison table', hint True, sticky first column: sticky",
   "fixed": true
  },
  {

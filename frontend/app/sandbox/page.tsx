@@ -694,7 +694,7 @@ function EventBanner({
           at t = {stepTimeS.toFixed(3)} s
         </span>
       </div>
-      <p className="max-w-md text-[11.5px] leading-snug text-secondary">
+      <p className="max-w-md text-[12px] leading-snug text-secondary">
         AI compute demand jumps almost instantly &mdash; far faster than this model&rsquo;s SST
         (solid-state transformer) response time constant lets delivered power follow.
       </p>

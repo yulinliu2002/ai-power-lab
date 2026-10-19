@@ -76,4 +76,4 @@ Verdict: **CHANGES_REQUIRED**, no new blocking or major implementation regressio
 
 ## Pending
 
-Codex closure review of the fixes, CI on the fix push, Human Visual QA (AC-22 learner walkthrough), explicit human merge approval.
+Final Codex narrow check of the last fixes, CI on the fix push, Human Visual QA (AC-22 learner walkthrough), explicit human merge approval.

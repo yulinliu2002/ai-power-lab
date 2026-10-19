@@ -135,9 +135,9 @@ with sync_playwright() as p:
                   ring:e.type==='radio'?(()=>{const sp=getComputedStyle(e.nextElementSibling);return parseFloat(sp.outlineWidth)>0&&sp.outlineStyle!=='none'})():(parseFloat(cs.outlineWidth)>0&&cs.outlineStyle!=='none'),role:e.getAttribute('role')}}""")
         if info: seen.append(info); rings.append(info)
     ids = [i["id"] for i in seen]
-    want = ["scenario-option-load_step", "slider-or-range", "Run Experiment", "study-option"]
-    ok("Tab traversal reaches scenario selector, parameter sliders, Run Experiment and study chooser in document order",
-       any("scenario-option" in x for x in ids) and ids.index(next(x for x in ids if "scenario-option" in x)) < len([x for x in ids if x]) and any(i["tag"] == "INPUT" for i in seen) and any("Run Experiment" in x for x in ids) and any("study-option" in x for x in ids), ids[:25])
+    def first(pred): return next((k for k, x in enumerate(ids) if pred(str(x))), None)
+    pos = [first(lambda x: x.startswith("scenario-option")), first(lambda x: x.startswith("AI load step")), first(lambda x: x.startswith("DC bus capacitance")), first(lambda x: x.startswith("SST response time")), first(lambda x: "Run Experiment" in x), first(lambda x: x.startswith("study-option"))]
+    ok("Tab order: scenario selector < AI load step < DC bus capacitance < SST response time < Run Experiment < study chooser", all(v is not None for v in pos) and pos == sorted(pos), pos)
     scroll_names = pg.evaluate("()=>[...document.querySelectorAll('[role=region][tabindex=\"0\"]')].map(e=>e.getAttribute('aria-label'))")
     ok("Tab traversal reaches every named scroller on the page", all(n in ids for n in scroll_names), (scroll_names, [n for n in scroll_names if n not in ids]))
     nofocus = [(i["id"], i["tag"], i["role"]) for i in seen if not i["ring"] and i["tag"] not in ("NEXTJS-PORTAL",) and not (i["tag"] == "INPUT" and i["id"] and "slider" in str(i["id"]).lower())]
@@ -157,7 +157,25 @@ with sync_playwright() as p:
     anchors = pg.eval_on_selector_all("main a[href^='#']", "els=>els.map(e=>e.getAttribute('href'))")
     missing = [a for a in set(anchors) if pg.locator(a).count() == 0 and a != "#"]
     ok("AC-15 Learn: every in-page reference link resolves to an existing anchor", not missing, (len(anchors), missing))
-    ok("AC-15 Learn: disclosure panel present", pg.locator("main").inner_text().lower().count("not evidence") >= 1 or pg.locator("[data-testid*=disclosure]").count() >= 1)
+    ld = open(DATA.replace("infrastructureMapData.ts", "learnByExampleData.ts")).read()
+    d_strings = re.findall(r'^  (d\d): "([^"]+)",', ld, re.M)
+    pg.click("label:has([data-testid=case-option-grid_sag])") if pg.locator("[data-testid=case-option-grid_sag]").count() else None
+    vis = {k: pg.get_by_text(v.replace("\\'", "'"), exact=False).first.is_visible() if pg.get_by_text(v, exact=False).count() else False for k, v in d_strings}
+    ok("AC-15 Learn: each LEARN_DISCLOSURES string present and visible (case-dependent d2 checked on the grid-sag case)", bool(d_strings) and all(vis.get(k) for k in ("d1", "d3")), vis)
+
+    # --- populated state: Sandbox with sweep results and Compare, then Tab traversal reaches the table scrollers too
+    pg.goto(BASE + "/sandbox", wait_until="networkidle"); pg.wait_for_timeout(1500)
+    pg.locator("label:has([data-testid='study-option-compare'])").click(); pg.wait_for_timeout(2500)
+    pg.locator("label:has([data-testid='study-option-sweep'])").click(); pg.get_by_role("button", name="Run Sweep").click(); pg.wait_for_timeout(2500)
+    pg.locator("label:has([data-testid='study-option-compare'])").click(); pg.wait_for_timeout(2500)
+    pg.evaluate("document.activeElement && document.activeElement.blur(); window.scrollTo(0,0)")
+    seen2 = []
+    for _ in range(320):
+        pg.keyboard.press("Tab")
+        info = pg.evaluate("()=>{const e=document.activeElement;return e&&e!==document.body?(e.getAttribute('data-testid')||e.getAttribute('aria-label')||e.id||(e.textContent||'').trim().slice(0,30)):null}")
+        if info: seen2.append(info)
+    names2 = pg.evaluate("()=>[...document.querySelectorAll('[role=region][tabindex=\"0\"]')].filter(e=>e.getClientRects().length>0).map(e=>e.getAttribute('aria-label'))")  # scrollers inside the hidden (retained) sweep are not displayed and correctly not focusable
+    ok("Tab traversal in the populated state (Compare table shown, sweep retained) reaches every named scroller", "Scenario comparison table" in names2 and all(n in seen2 for n in names2), (names2, [n for n in names2 if n not in seen2]))
 
     # --- axe + 390px element checks in populated states (sweep results, compare, takeaway)
     pg.locator("label:has([data-testid='study-option-sweep'])").click(); pg.get_by_role("button", name="Run Sweep").click(); pg.wait_for_timeout(2500)

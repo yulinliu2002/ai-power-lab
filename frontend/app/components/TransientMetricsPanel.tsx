@@ -50,18 +50,21 @@ export function TransientMetricsPanel({ metrics, voltageReferenceV, comfortable 
       </div>
       <div className="grid grid-cols-2 gap-x-2 border-y border-hairline sm:grid-cols-5 sm:gap-x-0 sm:divide-x sm:divide-hairline">
         <MetricTile
+          comfortable={comfortable}
           label="VOLTAGE DROP"
           value={metrics.minVdcV.toFixed(1)}
           unit="V"
           caption={`lowest V_dc, at t = ${metrics.minVdcTimeS.toFixed(3)} s`}
         />
         <MetricTile
+          comfortable={comfortable}
           label="PEAK DEVIATION"
           value={metrics.maxDeviationV.toFixed(1)}
           unit="V"
           caption={`${metrics.maxDeviationPercent.toFixed(1)}% ${metrics.maxDeviationIsAbove ? "above" : "below"} the ${voltageReferenceV.toFixed(0)} V reference, at t = ${metrics.maxDeviationTimeS.toFixed(3)} s`}
         />
         <MetricTile
+          comfortable={comfortable}
           label="POWER MISMATCH"
           value={hasDeficit ? metrics.peakDeficitKw.toFixed(1) : "0.0"}
           unit="kW"
@@ -72,12 +75,14 @@ export function TransientMetricsPanel({ metrics, voltageReferenceV, comfortable 
           }
         />
         <MetricTile
+          comfortable={comfortable}
           label="ENERGY DEFICIT"
           value={formatEnergyDeficitKj(metrics)}
           unit="kJ"
           caption="drawn from the DC link, event to V_dc minimum (accumulated, not instantaneous)"
         />
         <MetricTile
+          comfortable={comfortable}
           label="RECOVERY TIME"
           value={metrics.recoveryElapsedS === null ? "—" : metrics.recoveryElapsedS.toFixed(2)}
           unit={metrics.recoveryElapsedS === null ? "NOT SETTLED" : "s"}
@@ -118,6 +123,7 @@ export function TransientMetricsPanel({ metrics, voltageReferenceV, comfortable 
 }
 
 function MetricTile({
+  comfortable = false,
   label,
   value,
   unit,
@@ -127,6 +133,7 @@ function MetricTile({
   value: string;
   unit: string;
   caption: string;
+  comfortable?: boolean;
 }) {
   return (
     <div className="flex flex-col gap-0.5 px-3 py-1.5">
@@ -137,7 +144,7 @@ function MetricTile({
         {value}
         <span className="ml-1 text-[11px] font-normal text-secondary">{unit}</span>
       </span>
-      <span className="font-mono text-[11px] leading-snug text-secondary">{caption}</span>
+      <span className={comfortable ? "font-sans text-[12px] leading-snug text-secondary" : "font-mono text-[11px] leading-snug text-secondary"}>{caption}</span>
     </div>
   );
 }

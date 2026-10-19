@@ -248,7 +248,7 @@ function Row({
       </td>
       <td className="px-2 py-1.5 text-secondary">
         <span className="font-semibold text-primary">{entry.stress_profile.dominant_stress_label}</span>
-        <span className="block text-[11px] text-secondary">{entry.stress_profile.dominant_stress_detail}</span>
+        <span className="block font-sans text-[12px] text-secondary">{entry.stress_profile.dominant_stress_detail}</span>
       </td>
     </tr>
   );

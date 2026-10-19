@@ -109,7 +109,7 @@ export function ExperimentPanel({
         </div>
       </div>
       {error && (
-        <span className="font-mono text-[11px] text-status-critical">{error}</span>
+        <span className="font-sans text-[12px] text-status-critical">{error}</span>
       )}
     </section>
   );
