@@ -13,6 +13,8 @@
   --color-text-secondary: #aab4bd;
   --color-muted: #6b7680;
   --color-hairline: #24303c;
+  --color-surface-inset: #0d131a;
+  --color-hairline-strong: rgba(226, 232, 240, 0.22);
   --color-accent: #3987e5;
   --color-status-good: #0ca30c;
   --color-status-warning: #fab219;
@@ -28,6 +30,8 @@
   --color-secondary: var(--color-text-secondary);
   --color-muted: var(--color-muted);
   --color-hairline: var(--color-hairline);
+  --color-surface-inset: var(--color-surface-inset);
+  --color-hairline-strong: var(--color-hairline-strong);
   --color-accent: var(--color-accent);
   --color-status-good: var(--color-status-good);
   --color-status-warning: var(--color-status-warning);
@@ -39,4 +43,53 @@
 
 body {
   background: var(--color-canvas);
+}
+
+/*
+ * Named type tiers (DESIGN.md section 6). Weight does most of the
+ * differentiating; page titles are sentence-case Plex Sans, 28px on
+ * phones up to 40px from the `sm` breakpoint. Essential prose is never
+ * below 12px; the metadata tier is for labels, units and tags.
+ */
+@utility text-page-title {
+  font-size: 28px;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  font-weight: 600;
+  text-wrap: balance;
+  @media (min-width: 40rem) {
+    font-size: 40px;
+  }
+}
+
+@utility text-heading {
+  font-size: 15px;
+  line-height: 1.3;
+  font-weight: 600;
+  @media (min-width: 40rem) {
+    font-size: 16px;
+  }
+}
+
+@utility text-body {
+  font-size: 13px;
+  line-height: 1.55;
+  @media (min-width: 40rem) {
+    font-size: 14px;
+  }
+}
+
+@utility text-lede {
+  font-size: 15px;
+  line-height: 1.55;
+  @media (min-width: 40rem) {
+    font-size: 16px;
+  }
+}
+
+@utility text-meta {
+  font-size: 11px;
+  line-height: 1.35;
+  letter-spacing: 0.04em;
+  font-weight: 500;
 }
