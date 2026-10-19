@@ -55,9 +55,9 @@ export default function LearnLab() {
       <div className="lab-wrap">
         <BasisBar
           notes={[
-            "The case runs on the Advanced Sandbox's simplified average-value model (Conceptual MV-to-800 VDC via SST slice). It does not validate, size or benchmark any facility or architecture.",
-            "Thresholds and the derating curve are illustrative educational assumptions, not data. This model has thermal protection only: no bus-voltage or grid protection, and a latched trip has no reset.",
-            "After a collapse the bus voltage shown is the integrator's numerical floor, not a physically meaningful residual voltage.",
+            { tag: "Simulated slice", text: "The case runs on the Advanced Sandbox's simplified average-value model of the Conceptual MV-to-800 VDC via SST slice. It does not validate, size or benchmark any facility or other architecture." },
+            { tag: "Assumptions", text: "Thresholds and the derating curve are illustrative educational assumptions, not data. The model has thermal protection only: no bus-voltage or grid protection, and a latched trip has no reset." },
+            { tag: "Numerical floor", text: "After a collapse the bus voltage shown is the integrator's numerical floor, not a physically meaningful residual voltage." },
           ]}
         />
       </div>

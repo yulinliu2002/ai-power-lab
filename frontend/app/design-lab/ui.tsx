@@ -28,27 +28,36 @@ export function AreaHeader({
 
 /* ---------- basis & limits: disclosures stay verbatim, one click away ---------- */
 
+export type BasisNote = string | { tag: string; text: string };
+
 export function BasisBar({
   notes,
   labels,
+  heading = "Basis & limits",
 }: {
-  notes: readonly string[];
+  notes: readonly BasisNote[];
   labels?: ReactNode;
+  heading?: string;
 }) {
   return (
-    <details className="lab-basis">
-      <summary>
-        <strong>Basis &amp; limits</strong>
-        <span>{notes.length} notes apply to everything on this page</span>
+    <section className="lab-basis" aria-label={heading}>
+      <div className="lab-basis-head">
+        <strong>{heading}</strong>
+        <span className="s">Applies to everything on this page.</span>
         {labels}
-        <span className="lab-chev" aria-hidden />
-      </summary>
-      <ul>
-        {notes.map((n) => (
-          <li key={n}>{n}</li>
-        ))}
+      </div>
+      <ul className="lab-basis-grid">
+        {notes.map((n, i) => {
+          const note = typeof n === "string" ? { tag: i === 0 ? "Scope" : "Note", text: n } : n;
+          return (
+            <li key={note.text}>
+              <b>{note.tag}</b>
+              <span>{note.text}</span>
+            </li>
+          );
+        })}
       </ul>
-    </details>
+    </section>
   );
 }
 

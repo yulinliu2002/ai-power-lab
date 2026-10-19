@@ -3,13 +3,19 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+import { ARCHITECTURES, type ArchitectureId, type CategoryId } from "../lib/infrastructureMapData";
+import { useArch } from "./ArchContext";
+
 /**
  * Shared shell: five areas + the signal-path rail.
  *
- * The rail is the identity motif. It draws the real chain the product
- * teaches (grid -> MV switchgear -> SST / conversion -> 800 VDC bus ->
- * rack) and each area marks the span it works on. "Focus" is shown by
- * surface tier + text weight (DESIGN.md §19), never by a new color.
+ * The rail is architecture-aware. It draws the *selected* architecture's
+ * own main power path (Conventional AC, AC-fed 800 VDC, or the conceptual
+ * MV-to-800 VDC via SST), never a single universal chain; an SST appears
+ * only in the SST architecture. Pages that run the simulation (Learn,
+ * Sandbox) pin the rail to the SST architecture and mark the simulated
+ * slice with a dashed bracket and an explicit "simulated slice" label.
+ * Focus is shown by surface tier + weight (DESIGN.md §19), not color.
  */
 const AREAS = [
   { href: "/design-lab/system-map", label: "System Map", n: "01" },
@@ -20,30 +26,49 @@ const AREAS = [
 
 const SANDBOX = { href: "/design-lab/sandbox", label: "Advanced Sandbox" } as const;
 
-const RAIL = ["Utility grid", "MV switchgear", "SST / conversion", "800 VDC bus", "Rack & compute"] as const;
-
-/** Which rail nodes each area works on. */
-const FOCUS: Record<string, readonly number[]> = {
-  "/design-lab": [0, 1, 2, 3, 4],
-  "/design-lab/system-map": [0, 1, 2, 3, 4],
-  "/design-lab/architecture": [1, 2, 3],
-  "/design-lab/learn": [2, 3, 4],
-  "/design-lab/industry": [1, 2, 3],
-  "/design-lab/sandbox": [2, 3, 4],
+const SHORT: Record<ArchitectureId, string> = {
+  "conventional-ac": "Conventional AC",
+  "ac-to-800vdc": "AC-fed 800 VDC",
+  "mv-to-800vdc": "MV-to-800 VDC via SST (conceptual)",
 };
 
-const FOCUS_NOTE: Record<string, string> = {
-  "/design-lab": "Whole chain",
-  "/design-lab/system-map": "Whole chain",
-  "/design-lab/architecture": "Where architectures diverge",
-  "/design-lab/learn": "Scenario slice",
-  "/design-lab/industry": "Where the industry is moving",
-  "/design-lab/sandbox": "Simulated slice",
+interface RailSpec {
+  note: string;
+  focus: readonly CategoryId[];
+  pinned?: ArchitectureId;
+  slice?: boolean;
+}
+
+const RAIL_SPEC: Record<string, RailSpec> = {
+  "/design-lab": { note: "Context", focus: [] },
+  "/design-lab/system-map": { note: "Whole path", focus: [] },
+  "/design-lab/architecture": {
+    note: "Where architectures diverge",
+    focus: ["substation", "power_conversion", "distribution", "rack_power"],
+  },
+  "/design-lab/learn": {
+    note: "Simulated slice: SST, 800 VDC bus, lumped AI load",
+    focus: ["power_conversion", "distribution", "compute"],
+    pinned: "mv-to-800vdc",
+    slice: true,
+  },
+  "/design-lab/industry": { note: "Industry attention", focus: ["power_conversion", "distribution", "rack_power"] },
+  "/design-lab/sandbox": {
+    note: "Simulated slice: SST, 800 VDC bus, lumped AI load",
+    focus: ["power_conversion", "distribution", "compute"],
+    pinned: "mv-to-800vdc",
+    slice: true,
+  },
 };
 
 export function LabNav() {
   const pathname = usePathname().replace(/\/$/, "");
-  const focus = FOCUS[pathname] ?? FOCUS["/design-lab"];
+  const { arch } = useArch();
+  const spec = RAIL_SPEC[pathname] ?? RAIL_SPEC["/design-lab"];
+  const archId = spec.pinned ?? arch;
+  const archDef = ARCHITECTURES.find((a) => a.id === archId)!;
+  const main = archDef.nodes.filter((n) => n.lane === "main");
+  const allOn = spec.focus.length === 0 && pathname === "/design-lab/system-map";
 
   return (
     <>
@@ -71,19 +96,29 @@ export function LabNav() {
           </nav>
         </div>
       </header>
-      <div className="lab-rail" role="img" aria-label={`Signal path. Focus: ${FOCUS_NOTE[pathname] ?? ""}`}>
+      <div
+        className="lab-rail"
+        role="img"
+        aria-label={`Power path for ${SHORT[archId]}. ${spec.note}. ${spec.pinned ? "Simulated slice only; not evidence for other architectures." : "One representative architecture, not universal."}`}
+      >
         <div className="lab-wrap lab-rail-in">
-          <span className="lab-rail-label">{FOCUS_NOTE[pathname] ?? "Whole chain"}</span>
-          <div className="lab-rail-track">
-            {RAIL.map((name, i) => (
-              <div key={name} style={{ display: "contents" }}>
-                <span className="lab-rail-node" data-on={focus.includes(i)}>
-                  <i />
-                  {name}
-                </span>
-                {i < RAIL.length - 1 && <span className="lab-rail-link" />}
-              </div>
-            ))}
+          <span className="lab-rail-label">
+            <b>{SHORT[archId]}</b>
+            <span className="lab-rail-note">{spec.note}</span>
+          </span>
+          <div className="lab-rail-track" data-slice={spec.slice ? "true" : undefined}>
+            {main.map((n, i) => {
+              const on = allOn || spec.focus.includes(n.categoryId);
+              return (
+                <div key={n.id} style={{ display: "contents" }}>
+                  <span className="lab-rail-node" data-on={on} data-slice={on && spec.slice ? "true" : undefined}>
+                    <i />
+                    {n.label}
+                  </span>
+                  {i < main.length - 1 && <span className="lab-rail-link" />}
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>

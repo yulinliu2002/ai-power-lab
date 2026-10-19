@@ -2,7 +2,9 @@
 
 import { useState } from "react";
 
-import { ARCHITECTURES, CATEGORIES, LANE_META, type ArchitectureId, type Lane } from "../../lib/infrastructureMapData";
+import { useArch } from "../ArchContext";
+
+import { ARCHITECTURES, CATEGORIES, LANE_META, type Lane } from "../../lib/infrastructureMapData";
 import { AreaHeader, BasisBar } from "../ui";
 
 /**
@@ -13,7 +15,7 @@ import { AreaHeader, BasisBar } from "../ui";
 const LANES: Lane[] = ["backup", "cooling", "monitoring"];
 
 export default function SystemMapLab() {
-  const [archId, setArchId] = useState<ArchitectureId>("mv-to-800vdc");
+  const { arch: archId, setArch: setArchId } = useArch();
   const arch = ARCHITECTURES.find((a) => a.id === archId)!;
   const main = arch.nodes.filter((n) => n.lane === "main");
   const [selId, setSelId] = useState<string | null>(null);
@@ -31,8 +33,8 @@ export default function SystemMapLab() {
       <div className="lab-wrap" style={{ paddingBottom: 8 }}>
         <BasisBar
           notes={[
-            "Illustrative, not universal: each view is one representative, simplified pattern. Real facilities vary in redundancy, UPS topology and distribution voltage.",
-            "This map is conceptual reference content. It is not a live reading and no value on it comes from the simulation.",
+            { tag: "Not universal", text: "Each view is one representative, simplified pattern. Real facilities vary in redundancy, UPS topology and distribution voltage. An SST is one candidate for the MV-to-DC stage, not a requirement." },
+            { tag: "Conceptual", text: "This map is reference content. It is not a live reading and no value on it comes from the simulation." },
           ]}
         />
       </div>

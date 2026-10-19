@@ -59,11 +59,11 @@ export default function Direction() {
         <div className="lab-grid lab-g3">
           <div className="lab-panel">
             <h3 className="lab-h3">1 · The signal path</h3>
-            <p className="lab-body" style={{ marginBottom: 0 }}>The strip under the nav draws the real chain. Each area highlights the span it works on, using surface tier and weight only, so no new color is needed to say where you are.</p>
+            <p className="lab-body" style={{ marginBottom: 0 }}>The strip under the nav draws the selected architecture&apos;s own main path, never one universal chain. Each area highlights the span it works on with surface tier and weight. Pages that run the model pin it to the conceptual SST architecture and mark the simulated slice.</p>
           </div>
           <div className="lab-panel">
             <h3 className="lab-h3">2 · Question, then instrument</h3>
-            <p className="lab-body" style={{ marginBottom: 0 }}>Every page leads with one engineering question and a one-sentence answer, followed immediately by the instrument. Caveats fold into one Basis &amp; limits bar, kept verbatim and one click away.</p>
+            <p className="lab-body" style={{ marginBottom: 0 }}>Every page leads with one engineering question and a one-sentence answer, followed immediately by the instrument. Mandatory caveats stay visible on load, verbatim, in one structured Basis &amp; limits panel.</p>
           </div>
           <div className="lab-panel">
             <h3 className="lab-h3">3 · Quiet type, loud structure</h3>
@@ -100,8 +100,8 @@ export default function Direction() {
       <section className="lab-wrap lab-section">
         <BasisBar
           notes={[
-            "This page is the design rationale for the prototype. Content in the five area pages reuses existing repository data; Learn and Sandbox read live model runs from the existing API.",
-            "Design-direction prototype only. No engine, API or numeric changes.",
+            { tag: "Provenance", text: "Content in the five area pages reuses existing repository data; Learn and Sandbox read live model runs from the existing API." },
+            { tag: "Status", text: "Design demonstration only, not feature-parity replacements. No engine, API or numeric changes." },
           ]}
         />
       </section>

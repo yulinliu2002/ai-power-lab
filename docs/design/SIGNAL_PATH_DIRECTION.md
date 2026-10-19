@@ -1,44 +1,53 @@
-# Signal Path — design direction (prototype, not approved)
+# Signal Path: design direction
 
-**Status:** proposal with a working prototype at `/design-lab` (frontend only). Nothing in `DESIGN.md`,
-production routes, the engine, the API or any number has been changed. Adopting this direction is a
-`DESIGN.md` revision and needs human approval.
+**Status:** APPROVED WITH CONDITIONS by the Human Engineering Lead (2026-10-19). Approved: D1 (headlines up to 40px),
+D2 (sentence-case Plex Sans headings, Plex Mono for engineering values, equations and concise metadata).
+Conditional: D3 (rail), D4 (disclosures). This document is the revised proposal; the bounded `DESIGN.md` text is in
+`DESIGN_MD_REVISIONS.md` and the landing plan is in `INTEGRATION_PLAN.md`. Prototype: `/design-lab` on branch
+`claude/project-thread-gjf3nc`. The prototype pages are design demonstrations, not feature-parity replacements,
+and the branch is not to be merged into `main`.
 
-## Why change direction
+## Why
 
-Baseline (`/system-map`, `/architecture`, the Learn prototype) shares one pattern: uppercase mono labels, five
-caveat bullets before the first instrument, and one long document per page. The content is strong; the
-hierarchy is flat, so every page reads as a text dump and the five areas are visually indistinguishable in
-*how* you use them. Further cosmetic patches would not fix that.
+The baseline pages share one pattern: uppercase mono labels, several caveat bullets before the first instrument, and one long
+document per page. The content is strong; the hierarchy is flat, and the five areas are indistinguishable in *how* you use
+them. Cosmetic patches do not fix that.
 
-## References and what was taken (principles only)
+## References (principles only)
 
 | Reference | Taken | Not taken |
 |---|---|---|
-| Variant (variant.com) | Minimal chrome, a distinct typographic voice, density treated as a deliberate lever, and "visual DNA" (palette + type rhythm + density) as an explicit, reusable set of tokens | Endless-scroll exploration, generative variety, marketing-style range. A learning instrument needs one stable identity |
-| Linear / Raycast (already in DESIGN.md) | Surface ladder, one accent, no shadow | — |
-| Observable / Distill-style explorables | One question per view, the instrument is the content, explanation follows interaction | Long scrolly essays |
-| Brilliant / Desmos | Predict-then-reveal, immediate manipulation | Gamification, mascots, streaks |
-| Grafana / engineering consoles | Real data in the chart, parameter rail + instruments workbench | Dense unlabeled dashboards |
+| Variant | Minimal chrome, a distinct typographic voice, density as a deliberate lever, "visual DNA" (palette + type rhythm + density) as explicit tokens | Endless-scroll generative exploration |
+| Linear / Raycast (already in DESIGN.md) | Surface ladder, one accent, no shadow | n/a |
+| Observable / Distill-style explorables | One question per view, the instrument is the content | Long scrolly essays |
+| Brilliant / Desmos | Predict-then-reveal, immediate manipulation | Gamification, mascots |
+| Grafana / engineering consoles | Real data in the chart, parameter rail + instruments | Dense unlabeled dashboards |
 
-Limitation: variant.com and the shared chat link were not directly viewable from this environment (sign-in
-page only; browser network access blocked). Variant input is from its public pages and press descriptions, not
-from seeing the chat's designs. If the chat holds specific screens, share screenshots.
+Limitation: variant.com and the shared chat were not viewable from the build environment (sign-in page; network blocked).
+Variant input comes from its public descriptions only.
 
-## The one recommended direction: Signal Path
+## The direction
 
-1. **Signal path rail.** A strip under the nav draws the real chain (utility grid, MV switchgear, SST /
-   conversion, 800 VDC bus, rack and compute). Each area highlights the span it works on, via surface tier
-   and weight only (DESIGN.md §19). It is the shared identity and the "where am I in the chain" cue.
-2. **Question, then instrument.** Every page opens with one engineering question and a one-sentence answer,
-   then the instrument. Disclosures fold into one *Basis & limits* bar with the verbatim text one click away.
-3. **Quiet type, loud structure.** Plex Sans, sentence case, 40/18/14/12 scale, weight <= 600; Plex Mono only
-   for numbers, tags, equations.
-4. **Neutral evidence chips.** Evidence is not health, so chips use glyph + text in neutral color. Status
-   colors stay reserved for engineering state.
-5. **Interaction verb per area**, same visual language:
+1. **Architecture-aware signal-path rail (D3, revised).** The rail under the nav draws the *selected architecture's own main
+   power path*, taken from the System Map data. It is never one universal chain.
+   - Conventional AC shows grid, substation, MV switchgear, UPS + battery plant, AC distribution, rack PSUs, servers.
+   - AC-fed 800 VDC shows its own stages, with no SST.
+   - The SST appears only in the Conceptual MV-to-800 VDC via SST architecture, labeled "(conceptual)".
+   - System Map and Architecture Choices set the selected architecture; other pages show the last selection.
+   - Learn by Example and the Advanced Sandbox pin the rail to the SST architecture and mark the simulated slice with a dashed
+     bracket and an explicit "Simulated slice: SST, 800 VDC bus, lumped AI load" note. The gap on the rail (rack DC-DC is not
+     modeled) is intentional.
+   - Focus is shown by surface tier and weight only. Mobile: label row plus a dot track, no node names.
+2. **Question, then instrument.** Every page opens with one engineering question and a one-sentence answer, then the instrument.
+3. **Disclosures stay visible (D4, revised).** The mandatory disclosures render on initial load, verbatim, in one structured
+   "Basis & limits" panel (mono tag + text, two columns on desktop, one on mobile). They cannot be collapsed. Evidence
+   labels remain on every item.
+4. **Quiet type.** Plex Sans, sentence case, 40/18/14/12 scale, weight at most 600. Plex Mono only for engineering values, equations,
+   tags and concise metadata.
+5. **Neutral evidence chips.** Glyph plus text in neutral color; status colors stay reserved for engineering state.
+6. **Five interaction models, one language:**
 
-| Area | Verb | Pattern |
+| Area | Model | Pattern |
 |---|---|---|
 | System Map | Inspect | Path + stage inspector |
 | Architecture Choices | Compare | Driver lens, evidence grid, three columns |
@@ -46,31 +55,17 @@ from seeing the chat's designs. If the chat holds specific screens, share screen
 | Industry & Career | Trace | Claim, source, strength, what it does not show; competency map linking back |
 | Advanced Sandbox | Experiment | Parameter rail + instruments |
 
-## Compatibility with DESIGN.md
-
-Unchanged: tokens, dark canvas, flat surfaces, one accent, status roles, 4px radius, no gradient/shadow,
-Plex families, tabular mono for numbers, Implementation Contract.
-
-Needs an explicit decision (each is a DESIGN.md revision):
-- D1. Page-headline size above the 22px display ceiling (prototype: 40px, weight 600).
-- D2. Sentence-case headings and Plex Sans labels replacing the uppercase-heading tier (§6).
-- D3. A second nav row (the signal path rail), purely orienting.
-- D4. SPEC-011 R2 mandatory disclosures are collapsed by default behind a visible "Basis & limits" bar. This may
-  conflict with R2's wording; if R2 requires default-visible text, the bar must open by default.
-- D5. Step-to-step state change in Learn (no animation was added).
-
 ## Prototype data provenance
 
-System Map and Architecture Choices read `infrastructureMapData` / `architectureChoicesData` unchanged.
-Learn (thermal trip) and Sandbox (load step) read live runs through the existing API; metrics reuse
-`computeTransientMetrics`. Chart drawing decimates to ~700 points per series (presentation only). Industry
-uses the audited `REFERENCES` plus the Eaton record already in `data/industry/`; the competency map is an
-illustrative teaching framework, labeled as such. Sandbox kW axes divide W by 1000 at the display boundary.
+System Map and Architecture Choices read `infrastructureMapData` and `architectureChoicesData` unchanged. Learn (thermal trip)
+and Sandbox (load step) read live runs through the existing API; metrics reuse `computeTransientMetrics`. The Learn and Industry
+prose in the prototype is demonstration copy, **not** the SPEC-012/013 content; integration must use their data modules.
+Chart drawing decimates to about 700 points (presentation only); Sandbox power axes divide W by 1000 at the display boundary.
 
 ## Run it
 
 ```
 pip install -r requirements.txt fastapi uvicorn
 AI_POWER_LAB_EXTRA_CORS_ORIGINS=http://localhost:3200 python3 -m uvicorn backend.app:app --port 8000
-cd frontend && npm ci && npx next dev -p 3200      # open http://localhost:3200/design-lab
+cd frontend && npm ci && npx next dev -p 3200      # http://localhost:3200/design-lab
 ```

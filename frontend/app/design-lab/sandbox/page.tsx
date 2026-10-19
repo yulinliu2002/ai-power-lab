@@ -52,8 +52,8 @@ export default function SandboxLab() {
       <div className="lab-wrap">
         <BasisBar
           notes={[
-            "Simplified average-value model of the Conceptual MV-to-800 VDC via SST slice. It is not a switching-level model and is not calibrated to any commercial product.",
-            "Parameters and ranges are educational assumptions. Results are model outputs, not predictions for real equipment.",
+            { tag: "Simulated slice", text: "Simplified average-value model of the Conceptual MV-to-800 VDC via SST slice only. Not a switching-level model, not calibrated to any commercial product, and not evidence about other architectures." },
+            { tag: "Assumptions", text: "Parameters and ranges are educational assumptions. Results are model outputs, not predictions for real equipment." },
           ]}
         />
       </div>

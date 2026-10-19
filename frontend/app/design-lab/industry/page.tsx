@@ -78,9 +78,9 @@ export default function IndustryLab() {
       <div className="lab-wrap">
         <BasisBar
           notes={[
-            "Three distinct public sources support this page. It is a context layer, not a live news feed.",
-            "Vendor and consortium statements are attributed, not endorsed. Emerging architectures and draft specifications are marked as such.",
-            "The competency map is an illustrative teaching framework, not a hiring standard or a statement about any employer.",
+            { tag: "Sources", text: "Three distinct public sources support this page. It is a context layer, not a live news feed." },
+            { tag: "Attribution", text: "Vendor and consortium statements are attributed, not endorsed. Emerging architectures and draft specifications are marked as such." },
+            { tag: "Competencies", text: "The competency map is an illustrative teaching framework, not a hiring standard or a statement about any employer." },
           ]}
           labels={<EvidenceLegend />}
         />

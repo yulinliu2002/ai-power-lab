@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 
+import { useArch } from "../ArchContext";
+
 import {
   ARCHITECTURE_CHOICE_NAMES,
   ARCHITECTURE_ORDER,
@@ -22,6 +24,7 @@ import { AreaHeader, BasisBar, EvidenceChip, EvidenceLegend } from "../ui";
  */
 export default function ArchitectureLab() {
   const [driverId, setDriverId] = useState<DriverId>("rd2");
+  const { arch, setArch } = useArch();
   const driver = DRIVERS.find((d) => d.id === driverId)!;
   const decision = CONDITIONAL_DECISIONS[driverId];
 
@@ -35,7 +38,13 @@ export default function ArchitectureLab() {
       />
       <div className="lab-wrap">
         <BasisBar
-          notes={Object.values(DISCLOSURES)}
+          notes={[
+            { tag: "SST optional", text: DISCLOSURES.sst },
+            { tag: "Blocks", text: DISCLOSURES.block },
+            { tag: "Simulation scope", text: DISCLOSURES.sim },
+            { tag: "Drivers", text: DISCLOSURES.illustrative },
+            { tag: "No ranking", text: DISCLOSURES.noWinner },
+          ]}
           labels={<EvidenceLegend />}
         />
       </div>
@@ -111,9 +120,11 @@ export default function ArchitectureLab() {
           {ARCHITECTURE_ORDER.map((a) => {
             const c = CELLS[driverId][a];
             return (
-              <article key={a} className="lab-col">
+              <article key={a} className="lab-col" data-on={a === arch}>
                 <header>
-                  <h3 className="lab-h3" style={{ fontSize: 14 }}>{ARCHITECTURE_CHOICE_NAMES[a]}</h3>
+                  <button className="lab-link-btn" aria-pressed={a === arch} onClick={() => setArch(a)} title="Show this architecture's path in the rail">
+                    <h3 className="lab-h3" style={{ fontSize: 14, margin: 0 }}>{ARCHITECTURE_CHOICE_NAMES[a]}</h3>
+                  </button>
                   <EvidenceChip kind={c.evidence} short />
                 </header>
                 <div>
