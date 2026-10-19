@@ -1,5 +1,7 @@
 # Signal Path: implementation plan (one page, revised after Codex review)
 
+**Status (2026-10-19):** Signal Path approved; D-A and D-B approved by the Human Engineering Lead (below). Ownership-table confirmations from the SPEC-012, SPEC-013 and SPEC-014 owners and the Mac-based Codex closure review of 653a03e are **pending** (routed by the coordinator). Claude's fixes in 653a03e are not independently approved until that review returns.
+
 **Principle.** `/design-lab` is a design reference, not a merge candidate and not a conforming implementation of any SPEC.
 Production code is rebuilt from it in gated PRs that reuse existing data modules and components. No change to `src/`,
 `backend/`, API shapes, thresholds or engineering claims. PR #9's branch and other threads' worktrees are not touched.
@@ -20,12 +22,17 @@ before it is treated as agreed.**
 | `/industry`, Industry nav item, home Industry card | SPEC-013 | trace pattern as a design input | SPEC-013 flips the "(planned)" item and the home card; the foundation PR leaves it "(planned)". SPEC-013 consumes foundation components after they land |
 | `DESIGN.md` | foundation PR | `DESIGN_MD_REVISIONS.md` | Reviewed text only, merged with the foundation PR |
 
-## 2. Sequence
+## 2. Sequence (approved, D-B)
 
-1. SPEC-012 / PR #9 reviewed and merged as designed (prerequisite retained; captures re-baselined on the synchronized base).
-2. Foundation + System Map + Architecture Choices + Sandbox restyle (SPEC-014). Rebases over PR #9 (`SiteNav`, `page.tsx`, `EvidenceTag` props).
-3. Industry & Career V1 (SPEC-013, after its own CHANGES_REQUIRED findings are resolved), built on the foundation components.
-4. Learn restyle only if D-A is approved, as a SPEC-012 amendment PR.
+1. Close SPEC-012 / PR #9: final engineering and Human Visual QA gates, then explicit merge approval.
+2. Signal Path foundation + SPEC-014 UX redesign from synchronized `main` (applies the approved `DESIGN_MD_REVISIONS.md`).
+3. SPEC-013 Industry & Career on the approved foundation components; its research and design review continue in parallel now.
+4. Four-stage Learn visual shell as a bounded SPEC-012 amendment after PR #9 merges (approved, D-A). Preserve the five cases, claims, backend behavior,
+   disclosures and the prediction/reveal capability. The design-lab prototype is not feature-complete and is not the implementation.
+
+Rules for every PR: do not ship `/design-lab` or the `SiteNav.tsx` bypass; preserve all current production capabilities (Sandbox scenarios, comparison, sensitivity
+studies, timeline, scrubber, architecture interfaces, validation needs, evidence traceability); each PR is separately verified (tests, CI, Codex review, browser
+evidence, Human Visual QA) and needs explicit human merge approval.
 
 ## 3. Production preservation inventory (must survive restyle)
 
@@ -40,12 +47,10 @@ before it is treated as agreed.**
   null wording ("not settled before the run ends"), existing chart behavior or a sampling method that preserves extrema (see check below).
 - **Industry (SPEC-013):** five featured sources, standards section, ten career priorities, read-date field, Eaton figures as enumerated.
 
-## 4. Decisions for Jason
+## 4. Decisions
 
-- **D-A (Learn):** The prototype's stepper is presentation only (ungated, native reveal, backend-independent static steps), but SPEC-012 as drafted has a single
-  page of eight ordered parts and SPEC-014 excludes `/learn`. Recommended: approve a small SPEC-012 amendment *after* PR #9 merges, adopting the four-step shell with
-  the mapping above and no behavior change; otherwise Learn keeps SPEC-012's layout and takes only tokens, header, disclosure panel and rail.
-- **D-B (sequence):** Recommended order is PR #9, then SPEC-014 foundation, then SPEC-013. If SPEC-013 must land first, it builds on existing components and SPEC-014 restyles it.
+- **D-A (Learn shell): APPROVED** as above (bounded SPEC-012 amendment after PR #9 merges).
+- **D-B (sequence): APPROVED** as above.
 
 ## 5. Gates for every PR
 
