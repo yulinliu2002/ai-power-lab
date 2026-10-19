@@ -117,8 +117,8 @@ const LEARNING_AREAS: ReadonlyArray<LearningArea> = [
     description:
       "Annotated walkthroughs of the simulated chain under load steps, grid faults, and " +
       "thermal trips — the same engine the Advanced Sandbox exposes in full.",
-    href: null,
-    status: "planned",
+    href: "/learn",
+    status: "live",
   },
   {
     title: "Industry & Career",
