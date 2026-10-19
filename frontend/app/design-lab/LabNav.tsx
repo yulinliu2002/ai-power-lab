@@ -99,7 +99,7 @@ export function LabNav() {
       <div
         className="lab-rail"
         role="img"
-        aria-label={`Power path for ${SHORT[archId]}. ${spec.note}. ${spec.pinned ? "Simulated slice only; not evidence for other architectures." : "One representative architecture, not universal."}`}
+        aria-label={`Power path for ${SHORT[archId]}: ${main.map((n) => n.label).join(", then ")}. ${spec.note}. ${spec.pinned ? "Dashed stages are the simulated slice; rack DC-DC conversion is not modeled. Not evidence for other architectures." : "One representative architecture, not universal."}`}
       >
         <div className="lab-wrap lab-rail-in">
           <span className="lab-rail-label">

@@ -1,6 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+
+import { DISCLOSURES } from "../../lib/architectureChoicesData";
 
 import { fetchLoadStep, type LoadStepResponse } from "../../lib/simulationApi";
 import { computeTransientMetrics, formatEnergyDeficitKj } from "../../lib/transientMetrics";
@@ -20,23 +22,65 @@ export default function SandboxLab() {
   const [data, setData] = useState<LoadStepResponse | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  /** Parameters the displayed run was made with; null = API baseline defaults. */
+  const [shown, setShown] = useState<{ f: number; c: number; t: number } | null>(null);
+  /** Request generation: only the latest request may update the display. */
+  const gen = useRef(0);
 
   const run = useCallback(async () => {
+    const mine = ++gen.current;
+    const snap = { f: finalFraction, c: capF, t: tau };
     setBusy(true);
     setErr(null);
     try {
-      setData(await fetchLoadStep({ final_fraction: finalFraction, capacitance_f: capF, time_constant_s: tau }));
+      const res = await fetchLoadStep({ final_fraction: snap.f, capacitance_f: snap.c, time_constant_s: snap.t });
+      if (mine !== gen.current) return;
+      setData(res);
+      setShown(snap);
     } catch (e) {
+      if (mine !== gen.current) return;
       setErr((e as Error).message);
     } finally {
-      setBusy(false);
+      if (mine === gen.current) setBusy(false);
     }
   }, [finalFraction, capF, tau]);
 
-  useEffect(() => {
-    // Baseline run on mount (API defaults).
-    fetchLoadStep().then(setData).catch((e: Error) => setErr(e.message));
+  const reset = useCallback(async () => {
+    const mine = ++gen.current;
+    setFinal(0.8);
+    setCap(0.02);
+    setTau(0.02);
+    setBusy(true);
+    setErr(null);
+    try {
+      const res = await fetchLoadStep();
+      if (mine !== gen.current) return;
+      setData(res);
+      setShown(null);
+    } catch (e) {
+      if (mine !== gen.current) return;
+      setErr((e as Error).message);
+    } finally {
+      if (mine === gen.current) setBusy(false);
+    }
   }, []);
+
+  useEffect(() => {
+    // Baseline run on mount (API defaults), guarded like any other request.
+    const mine = ++gen.current;
+    fetchLoadStep()
+      .then((res) => {
+        if (mine === gen.current) setData(res);
+      })
+      .catch((e: Error) => {
+        if (mine === gen.current) setErr(e.message);
+      });
+  }, []);
+
+  const stale =
+    shown !== null
+      ? shown.f !== finalFraction || shown.c !== capF || shown.t !== tau
+      : finalFraction !== 0.8 || capF !== 0.02 || tau !== 0.02;
 
   const m = data ? computeTransientMetrics(data) : null;
   const t = data?.timeseries;
@@ -52,7 +96,8 @@ export default function SandboxLab() {
       <div className="lab-wrap">
         <BasisBar
           notes={[
-            { tag: "Simulated slice", text: "Simplified average-value model of the Conceptual MV-to-800 VDC via SST slice only. Not a switching-level model, not calibrated to any commercial product, and not evidence about other architectures." },
+            { tag: "Simulation scope", text: DISCLOSURES.sim },
+            { tag: "Rail legend", text: "Dashed nodes are the simulated slice. Rack DC-DC conversion is not modeled; the AI load is lumped. The rail shows one representative architecture, not a universal path." },
             { tag: "Assumptions", text: "Parameters and ranges are educational assumptions. Results are model outputs, not predictions for real equipment." },
           ]}
         />
@@ -83,15 +128,26 @@ export default function SandboxLab() {
             <button className="lab-btn primary" onClick={run} disabled={busy} style={{ width: "100%" }}>
               {busy ? "Running…" : "Run experiment"}
             </button>
+            <button className="lab-btn" onClick={reset} disabled={busy} style={{ width: "100%", marginTop: 8 }}>
+              Reset to baseline
+            </button>
             {err && <p role="alert" className="lab-section-sub" style={{ marginTop: 10 }}>Run failed: {err}</p>}
           </aside>
 
           <div>
+            {data && (
+              <p className="lab-section-sub" role="status" style={{ marginBottom: 10 }}>
+                {shown
+                  ? `Showing the run for ${(shown.f * 100).toFixed(0)} % post-step load, ${(shown.c * 1000).toFixed(0)} mF, ${(shown.t * 1000).toFixed(0)} ms.`
+                  : "Showing the baseline run (API defaults)."}
+                {stale && <b style={{ color: "var(--color-text-primary)", fontWeight: 600 }}> The parameters have changed since this run; run again to update.</b>}
+              </p>
+            )}
             <div className="lab-kpis">
               <Kpi label="Minimum bus voltage" value={m ? m.minVdcV.toFixed(1) : "—"} unit="V" />
               <Kpi label="Largest deviation" value={m ? m.maxDeviationPercent.toFixed(1) : "—"} unit="% of V_ref" />
               <Kpi label="Energy drawn from link" value={m ? formatEnergyDeficitKj(m) : "—"} unit="kJ" />
-              <Kpi label="Settles within ±1%" value={m ? (m.recoveryElapsedS === null ? "never" : (m.recoveryElapsedS * 1000).toFixed(0)) : "—"} unit={m && m.recoveryElapsedS !== null ? "ms" : ""} />
+              <Kpi label="Settles within ±1% (before the run ends)" value={m ? (m.recoveryElapsedS === null ? "Not settled" : (m.recoveryElapsedS * 1000).toFixed(0)) : "—"} unit={m && m.recoveryElapsedS !== null ? "ms" : ""} />
             </div>
             {data && t && (
               <div className="lab-grid lab-g2">
@@ -101,7 +157,7 @@ export default function SandboxLab() {
                     unit="V"
                     series={[{ name: "V_dc", x: t.time_s, y: t.v_dc_v, color: SVG_COLOR.accent }]}
                     markers={data.events.map((e) => ({ x: e.time_s, label: e.label }))}
-                    hlines={[{ y: data.thresholds.voltage_reference_v, label: "V_ref", color: SVG_COLOR.muted }]}
+                    hlines={[{ y: data.thresholds.voltage_reference_v, label: "V_ref", color: SVG_COLOR.textSecondary }]}
                   />
                 </div>
                 <div className="lab-panel">

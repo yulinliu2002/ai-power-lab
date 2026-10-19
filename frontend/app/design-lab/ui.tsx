@@ -2,6 +2,8 @@
 
 import type { ReactNode } from "react";
 
+import { decimateMinMax } from "./decimate";
+
 /* ---------- page header: one question, one answer, one mode ---------- */
 
 export function AreaHeader({
@@ -65,10 +67,11 @@ export function BasisBar({
 
 export type Evidence = "public-fact" | "assumption" | "model-output" | "emerging";
 
+/** Canonical labels: identical to EVIDENCE_LABEL_TEXT in architectureChoicesData.ts. */
 const EVIDENCE_TEXT: Record<Evidence, string> = {
   "public-fact": "Public fact",
   assumption: "Illustrative assumption",
-  "model-output": "Model output",
+  "model-output": "Model output (simplified)",
   emerging: "Emerging / uncertain",
 };
 
@@ -84,11 +87,19 @@ function Glyph({ kind }: { kind: Evidence }) {
   );
 }
 
+/** `short` only abbreviates the visible text in dense grids; the full canonical label stays in the accessible name. */
 export function EvidenceChip({ kind, short }: { kind: Evidence; short?: boolean }) {
   return (
     <span className="lab-chip" title={EVIDENCE_TEXT[kind]}>
       <Glyph kind={kind} />
-      {short ? EVIDENCE_TEXT[kind].split(" ")[0] : EVIDENCE_TEXT[kind]}
+      {short ? (
+        <>
+          <span aria-hidden>{EVIDENCE_TEXT[kind].split(" ")[0]}</span>
+          <span className="lab-sr">{EVIDENCE_TEXT[kind]}</span>
+        </>
+      ) : (
+        EVIDENCE_TEXT[kind]
+      )}
     </span>
   );
 }
@@ -120,21 +131,6 @@ export interface HLine {
   y: number;
   label: string;
   color: string;
-}
-
-function decimate(x: readonly number[], y: readonly number[], max = 700) {
-  const stride = Math.max(1, Math.floor(x.length / max));
-  const xs: number[] = [];
-  const ys: number[] = [];
-  for (let i = 0; i < x.length; i += stride) {
-    xs.push(x[i]);
-    ys.push(y[i]);
-  }
-  if (xs[xs.length - 1] !== x[x.length - 1]) {
-    xs.push(x[x.length - 1]);
-    ys.push(y[y.length - 1]);
-  }
-  return { xs, ys };
 }
 
 export function LineChart({
@@ -190,6 +186,7 @@ export function LineChart({
           ))}
         </span>
       </figcaption>
+      <div className="lab-chart-scroll" tabIndex={0} role="group" aria-label={`${title} chart (scrolls sideways on narrow screens)`}>
       <svg className="lab-chart" viewBox={`0 0 ${W} ${H}`} width="100%" role="img" aria-label={`${title} chart`}>
         {yt.map((v) => (
           <g key={v}>
@@ -222,11 +219,12 @@ export function LineChart({
           </g>
         ))}
         {series.map((s) => {
-          const { xs, ys } = decimate(s.x, s.y);
+          const { xs, ys } = decimateMinMax(s.x, s.y);
           const d = xs.map((xv, i) => `${i ? "L" : "M"}${sx(xv).toFixed(1)},${sy(ys[i]).toFixed(1)}`).join(" ");
           return <path key={s.name} d={d} fill="none" stroke={s.color} strokeWidth="1.6" strokeLinejoin="round" />;
         })}
       </svg>
+      </div>
     </figure>
   );
 }

@@ -24,7 +24,7 @@ export default function Direction() {
     <>
       <div className="lab-wrap lab-head" style={{ paddingTop: 56 }}>
         <div className="lab-mode"><b>Direction</b> Signal Path</div>
-        <h1 className="lab-h1" style={{ fontSize: 48, maxWidth: "20ch" }}>Every page follows the power.</h1>
+        <h1 className="lab-h1">Every page follows the power.</h1>
         <p className="lab-lede">
           One identity for five areas: an editorial question at the top, an instrument underneath, and the grid-to-rack signal path as the thread that
           shows where you are in the chain. Each area keeps its own way of interacting.

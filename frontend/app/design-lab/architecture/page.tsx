@@ -11,9 +11,35 @@ import {
   CONDITIONAL_DECISIONS,
   DISCLOSURES,
   DRIVERS,
+  REFERENCES,
+  SOURCE_KIND_TEXT,
   type DriverId,
+  type ReferenceId,
 } from "../../lib/architectureChoicesData";
+import Link from "next/link";
+
 import { AreaHeader, BasisBar, EvidenceChip, EvidenceLegend } from "../ui";
+
+/** Basis text and reference links stay attached to every evidence-labelled statement. */
+function BasisLine({ basis, refs }: { basis: string; refs?: readonly ReferenceId[] }) {
+  return (
+    <p className="lab-section-sub" style={{ fontSize: 12, marginTop: 8 }}>
+      <b style={{ fontWeight: 600 }}>Basis.</b> {basis}
+      {refs && refs.length > 0 && (
+        <>
+          {" "}
+          <b style={{ fontWeight: 600 }}>Refs:</b>{" "}
+          {refs.map((r, i) => (
+            <span key={r}>
+              {i > 0 && ", "}
+              <a href={`#ref-${r}`} style={{ textDecoration: "underline", textUnderlineOffset: 2 }}>{r}</a>
+            </span>
+          ))}
+        </>
+      )}
+    </p>
+  );
+}
 
 /**
  * Architecture Choices — interaction signature: COMPARE.
@@ -27,6 +53,9 @@ export default function ArchitectureLab() {
   const { arch, setArch } = useArch();
   const driver = DRIVERS.find((d) => d.id === driverId)!;
   const decision = CONDITIONAL_DECISIONS[driverId];
+  const usedRefs = new Set<ReferenceId>();
+  for (const a of ARCHITECTURE_ORDER) CELLS[driverId][a].refs?.forEach((r) => usedRefs.add(r));
+  decision.refs?.forEach((r) => usedRefs.add(r));
 
   return (
     <>
@@ -58,7 +87,7 @@ export default function ArchitectureLab() {
                 <p className="lab-section-sub">How well supported each statement is. Select a row to open it.</p>
               </div>
             </div>
-            <div className="lab-panel" style={{ padding: 0, overflowX: "auto" }}>
+            <div className="lab-panel" style={{ padding: 0, overflowX: "auto" }} tabIndex={0} role="region" aria-label="Evidence by driver table (scrolls sideways on narrow screens)">
               <table className="lab-matrix">
                 <thead>
                   <tr>
@@ -86,6 +115,7 @@ export default function ArchitectureLab() {
                 </tbody>
               </table>
             </div>
+            <p className="lab-scrollhint">Scroll the table sideways for all columns.</p>
           </div>
 
           <div>
@@ -135,6 +165,12 @@ export default function ArchitectureLab() {
                   <p className="lab-label">What gets harder</p>
                   <p className="lab-body" style={{ marginBottom: 0 }}>{c.harder}</p>
                 </div>
+                <BasisLine basis={c.basis} refs={c.refs} />
+                {c.evidence === "model-output" && (
+                  <p style={{ margin: 0 }}>
+                    <Link className="lab-btn" href="/design-lab/sandbox">Open the Sandbox slice</Link>
+                  </p>
+                )}
               </article>
             );
           })}
@@ -166,8 +202,37 @@ export default function ArchitectureLab() {
             </ul>
             <p className="lab-label">Decision it informs</p>
             <p className="lab-body" style={{ marginBottom: 0 }}>{decision.informs}</p>
+            <BasisLine basis={decision.basis} refs={decision.refs} />
           </div>
         </div>
+        <p className="lab-section-sub" style={{ marginTop: 14 }}>
+          <b style={{ fontWeight: 600 }}>Driver decision.</b> {driver.decision}
+        </p>
+      </section>
+
+      <section className="lab-wrap lab-section">
+        <div className="lab-section-head">
+          <div>
+            <h2 className="lab-h2">References for this driver</h2>
+            <p className="lab-section-sub">
+              Interfaces by boundary, validation needs by architecture and the full reference list are not part of this demonstration; production keeps all of them.
+            </p>
+          </div>
+        </div>
+        <ul style={{ margin: 0, paddingLeft: 18, display: "grid", gap: 8 }}>
+          {[...usedRefs].map((id) => {
+            const r = REFERENCES[id];
+            return (
+              <li key={id} id={`ref-${id}`} className="lab-body" style={{ marginBottom: 0 }}>
+                <b style={{ color: "var(--color-text-primary)", fontWeight: 600 }}>{id}</b> [{SOURCE_KIND_TEXT[r.kind]}] {r.citation}.{" "}
+                {r.url && (
+                  <a href={r.url} target="_blank" rel="noreferrer" style={{ textDecoration: "underline", textUnderlineOffset: 2 }}>Source</a>
+                )}{" "}
+                <span style={{ fontSize: 12 }}>Inspection: {r.inspection}</span>
+              </li>
+            );
+          })}
+        </ul>
       </section>
     </>
   );

@@ -139,7 +139,7 @@
 
 /* ---- learn stepper ---- */
 .lab-steps { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border: 1px solid var(--color-hairline); border-radius: 4px; background: var(--lab-inset); overflow: hidden; }
-.lab-step { background: transparent; border: 0; border-right: 1px solid var(--color-hairline); padding: 12px 14px; text-align: left; display: flex; gap: 10px; align-items: center; color: var(--color-text-secondary); }
+.lab-step { position: relative; background: transparent; border: 0; border-right: 1px solid var(--color-hairline); padding: 12px 14px; text-align: left; display: flex; gap: 10px; align-items: center; color: var(--color-text-secondary); }
 .lab-step:last-child { border-right: 0; }
 .lab-step .i { font-family: var(--font-mono), monospace; font-size: 11px; width: 22px; height: 22px; border: 1px solid var(--color-hairline); border-radius: 50%; display: grid; place-items: center; flex: none; }
 .lab-step[aria-current="step"] { background: var(--color-surface-raised); color: var(--color-text-primary); }
@@ -220,8 +220,7 @@
   .lab-node:not(:last-child)::before { right: auto; left: calc(50% - 3px); top: auto; bottom: -22px; transform: rotate(135deg); }
   .lab-steps { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .lab-step { padding: 10px 6px; justify-content: center; }
-  .lab-step > div { display: none; }
-  .lab-step[aria-current="step"] > div { display: none; }
+  .lab-step > div { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   .lab-value { font-size: 18px; }
   .lab-tab small { display: none; }
 }
@@ -236,3 +235,10 @@
 @media (max-width: 720px) {
   .lab-rail-node[data-slice="true"] { border-style: dashed; }
 }
+
+/* ---- accessibility helpers ---- */
+.lab-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.lab-chart-scroll { overflow-x: auto; }
+.lab-chart-scroll > svg { min-width: 480px; display: block; }
+.lab-scrollhint { display: none; font-size: 12px; color: var(--color-text-secondary); margin: 6px 0 0; }
+@media (max-width: 720px) { .lab-scrollhint { display: block; } }
