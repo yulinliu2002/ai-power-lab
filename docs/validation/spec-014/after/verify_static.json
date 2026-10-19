@@ -1,0 +1,277 @@
+[
+ {
+  "result": "PASS",
+  "check": "AC-26 desktop /architecture D-sst visible verbatim on load",
+  "detail": ""
+ },
+ {
+  "result": "PASS",
+  "check": "AC-26 desktop /architecture D-block visible verbatim on load",
+  "detail": ""
+ },
+ {
+  "result": "PASS",
+  "check": "AC-26 desktop /architecture D-sim visible verbatim on load",
+  "detail": ""
+ },
+ {
+  "result": "PASS",
+  "check": "AC-26 desktop /architecture D-illustrative visible verbatim on load",
+  "detail": ""
+ },
+ {
+  "result": "PASS",
+  "check": "AC-26 desktop /architecture D-noWinner visible verbatim on load",
+  "detail": ""
+ },
+ {
+  "result": "PASS",
+  "check": "AC-26 desktop /sandbox D-SIM visible verbatim on load",
+  "detail": ""
+ },
+ {
+  "result": "PASS",
+  "check": "AC-25 desktop rail conventional-ac: SST node only in conceptual SST architecture",
+  "detail": "['Utility Grid', 'Substation', 'MV Switchgear', 'UPS + Battery Plant', 'AC Distribution', 'Rack PSUs', 'AI Servers']"
+ },
+ {
+  "result": "PASS",
+  "check": "AC-25 desktop rail conventional-ac: accessible name lists node sequence",
+  "detail": "Power path for Conventional AC: Utility Grid, then Substation, then MV Switchgear, then UPS + Battery Plant, then AC Distribution, then Rack"
+ },
+ {
+  "result": "PASS",
+  "check": "AC-25 desktop rail ac-to-800vdc: SST node only in conceptual SST architecture",
+  "detail": "['Utility Grid', 'Substation', 'MV Switchgear', 'Centralized AC-DC Conversion', '800 VDC Distribution', 'Rack DC-DC Conversion', 'AI Servers']"
+ },
+ {
+  "result": "PASS",
+  "check": "AC-25 desktop rail ac-to-800vdc: accessible name lists node sequence",
+  "detail": "Power path for AC-fed 800 VDC: Utility Grid, then Substation, then MV Switchgear, then Centralized AC-DC Conversion, then 800 VDC Distributi"
+ },
+ {
+  "result": "PASS",
+  "check": "AC-25 desktop rail mv-to-800vdc: SST node only in conceptual SST architecture",
+  "detail": "['Utility Grid', 'MV Switchgear', 'Solid-State Transformer', '800 VDC Distribution', 'Rack DC-DC Conversion', 'AI Servers']"
+ },
+ {
+  "result": "PASS",
+  "check": "AC-25 desktop rail mv-to-800vdc: accessible name lists node sequence",
+  "detail": "Power path for Conceptual MV-to-800 VDC via SST: Utility Grid, then MV Switchgear, then Solid-State Transformer, then 800 VDC Distribution, "
+ },
+ {
+  "result": "PASS",
+  "check": "AC-25 desktop rail compact, no page overflow",
+  "detail": "height 66px [1440, 1440]"
+ },
+ {
+  "result": "PASS",
+  "check": "AC-25 desktop /sandbox rail pinned to SST arch with dashed simulated nodes + legend",
+  "detail": "['Solid-State Transformer', '800 VDC Distribution', 'AI Servers']"
+ },
+ {
+  "result": "PASS",
+  "check": "AC-27 desktop /: one h1, 40px, weight 600",
+  "detail": "[{'t': 'Understanding AI data-center power infrastructure, from the grid to the rack.', 'fs': '40px', 'fw': '600'}]"
+ },
+ {
+  "result": "PASS",
+  "check": "AC-27 desktop /system-map: one h1, 40px, weight 600",
+  "detail": "[{'t': 'System map', 'fs': '40px', 'fw': '600'}]"
+ },
+ {
+  "result": "PASS",
+  "check": "AC-27 desktop /architecture: one h1, 40px, weight 600",
+  "detail": "[{'t': 'Architecture choices', 'fs': '40px', 'fw': '600'}]"
+ },
+ {
+  "result": "PASS",
+  "check": "AC-27 desktop /sandbox: one h1, 40px, weight 600",
+  "detail": "[{'t': 'Advanced Sandbox', 'fs': '40px', 'fw': '600'}]"
+ },
+ {
+  "result": "PASS",
+  "check": "AC-16 desktop /: axe no critical/serious violations",
+  "detail": "0 minor/moderate: []"
+ },
+ {
+  "result": "PASS",
+  "check": "AC-16 desktop /system-map: axe no critical/serious violations",
+  "detail": "0 minor/moderate: []"
+ },
+ {
+  "result": "PASS",
+  "check": "AC-16 desktop /architecture: axe no critical/serious violations",
+  "detail": "0 minor/moderate: []"
+ },
+ {
+  "result": "PASS",
+  "check": "AC-16 desktop /sandbox: axe no critical/serious violations",
+  "detail": "0 minor/moderate: []"
+ },
+ {
+  "result": "PASS",
+  "check": "AC-5 desktop /system-map next-step link to /architecture",
+  "detail": ""
+ },
+ {
+  "result": "PASS",
+  "check": "AC-5 desktop /architecture next-step link to /learn",
+  "detail": ""
+ },
+ {
+  "result": "PASS",
+  "check": "AC-5 desktop /sandbox next-step link to /architecture",
+  "detail": ""
+ },
+ {
+  "result": "PASS",
+  "check": "AC-5 desktop / shows ordered path and Industry as planned text (not a link)",
+  "detail": ""
+ },
+ {
+  "result": "PASS",
+  "check": "AC-26 mobile /architecture D-sst visible verbatim on load",
+  "detail": ""
+ },
+ {
+  "result": "PASS",
+  "check": "AC-26 mobile /architecture D-block visible verbatim on load",
+  "detail": ""
+ },
+ {
+  "result": "PASS",
+  "check": "AC-26 mobile /architecture D-sim visible verbatim on load",
+  "detail": ""
+ },
+ {
+  "result": "PASS",
+  "check": "AC-26 mobile /architecture D-illustrative visible verbatim on load",
+  "detail": ""
+ },
+ {
+  "result": "PASS",
+  "check": "AC-26 mobile /architecture D-noWinner visible verbatim on load",
+  "detail": ""
+ },
+ {
+  "result": "PASS",
+  "check": "AC-26 mobile /sandbox D-SIM visible verbatim on load",
+  "detail": ""
+ },
+ {
+  "result": "PASS",
+  "check": "AC-25 mobile rail conventional-ac: SST node only in conceptual SST architecture",
+  "detail": "['Utility Grid', 'Substation', 'MV Switchgear', 'UPS + Battery Plant', 'AC Distribution', 'Rack PSUs', 'AI Servers']"
+ },
+ {
+  "result": "PASS",
+  "check": "AC-25 mobile rail conventional-ac: accessible name lists node sequence",
+  "detail": "Power path for Conventional AC: Utility Grid, then Substation, then MV Switchgear, then UPS + Battery Plant, then AC Distribution, then Rack"
+ },
+ {
+  "result": "PASS",
+  "check": "AC-25 mobile rail ac-to-800vdc: SST node only in conceptual SST architecture",
+  "detail": "['Utility Grid', 'Substation', 'MV Switchgear', 'Centralized AC-DC Conversion', '800 VDC Distribution', 'Rack DC-DC Conversion', 'AI Servers']"
+ },
+ {
+  "result": "PASS",
+  "check": "AC-25 mobile rail ac-to-800vdc: accessible name lists node sequence",
+  "detail": "Power path for AC-fed 800 VDC: Utility Grid, then Substation, then MV Switchgear, then Centralized AC-DC Conversion, then 800 VDC Distributi"
+ },
+ {
+  "result": "PASS",
+  "check": "AC-25 mobile rail mv-to-800vdc: SST node only in conceptual SST architecture",
+  "detail": "['Utility Grid', 'MV Switchgear', 'Solid-State Transformer', '800 VDC Distribution', 'Rack DC-DC Conversion', 'AI Servers']"
+ },
+ {
+  "result": "PASS",
+  "check": "AC-25 mobile rail mv-to-800vdc: accessible name lists node sequence",
+  "detail": "Power path for Conceptual MV-to-800 VDC via SST: Utility Grid, then MV Switchgear, then Solid-State Transformer, then 800 VDC Distribution, "
+ },
+ {
+  "result": "PASS",
+  "check": "AC-25 mobile rail compact, no page overflow",
+  "detail": "height 72px [390, 390]"
+ },
+ {
+  "result": "PASS",
+  "check": "AC-25 mobile /sandbox rail pinned to SST arch with dashed simulated nodes + legend",
+  "detail": "['Solid-State Transformer', '800 VDC Distribution', 'AI Servers']"
+ },
+ {
+  "result": "PASS",
+  "check": "AC-27 mobile /: one h1, 28px, weight 600",
+  "detail": "[{'t': 'Understanding AI data-center power infrastructure, from the grid to the rack.', 'fs': '28px', 'fw': '600'}]"
+ },
+ {
+  "result": "PASS",
+  "check": "AC-27 mobile /system-map: one h1, 28px, weight 600",
+  "detail": "[{'t': 'System map', 'fs': '28px', 'fw': '600'}]"
+ },
+ {
+  "result": "PASS",
+  "check": "AC-27 mobile /architecture: one h1, 28px, weight 600",
+  "detail": "[{'t': 'Architecture choices', 'fs': '28px', 'fw': '600'}]"
+ },
+ {
+  "result": "PASS",
+  "check": "AC-27 mobile /sandbox: one h1, 28px, weight 600",
+  "detail": "[{'t': 'Advanced Sandbox', 'fs': '28px', 'fw': '600'}]"
+ },
+ {
+  "result": "PASS",
+  "check": "AC-16 mobile /: axe no critical/serious violations",
+  "detail": "0 minor/moderate: []"
+ },
+ {
+  "result": "PASS",
+  "check": "AC-16 mobile /system-map: axe no critical/serious violations",
+  "detail": "0 minor/moderate: []"
+ },
+ {
+  "result": "PASS",
+  "check": "AC-16 mobile /architecture: axe no critical/serious violations",
+  "detail": "0 minor/moderate: []"
+ },
+ {
+  "result": "PASS",
+  "check": "AC-16 mobile /sandbox: axe no critical/serious violations",
+  "detail": "0 minor/moderate: []"
+ },
+ {
+  "result": "PASS",
+  "check": "AC-5 mobile /system-map next-step link to /architecture",
+  "detail": ""
+ },
+ {
+  "result": "PASS",
+  "check": "AC-5 mobile /architecture next-step link to /learn",
+  "detail": ""
+ },
+ {
+  "result": "PASS",
+  "check": "AC-5 mobile /sandbox next-step link to /architecture",
+  "detail": ""
+ },
+ {
+  "result": "PASS",
+  "check": "AC-5 mobile / shows ordered path and Industry as planned text (not a link)",
+  "detail": ""
+ },
+ {
+  "result": "PASS",
+  "check": "AC-17 /system-map: every element inside viewport or a named scroller; scrollers show a hint",
+  "detail": "{'bad': [], 'n': 0, 'bareScrollers': 0, 'hints': [True]}"
+ },
+ {
+  "result": "PASS",
+  "check": "AC-17 /architecture: every element inside viewport or a named scroller; scrollers show a hint",
+  "detail": "{'bad': [], 'n': 0, 'bareScrollers': 0, 'hints': []}"
+ },
+ {
+  "result": "PASS",
+  "check": "AC-17 /sandbox: every element inside viewport or a named scroller; scrollers show a hint",
+  "detail": "{'bad': [], 'n': 0, 'bareScrollers': 0, 'hints': [True, True, True]}"
+ }
+]

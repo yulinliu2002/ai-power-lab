@@ -21,6 +21,7 @@ export function TimeScrubber({ timeS, index, onChange }: TimeScrubberProps) {
       </span>
       <input
         type="range"
+        aria-label="Time"
         min={0}
         max={timeS.length - 1}
         step={1}

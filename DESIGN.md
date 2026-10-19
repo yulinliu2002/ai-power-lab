@@ -118,7 +118,7 @@ Display weight never exceeds 700 anywhere in the product. A heavier weight reads
 
 The single most load-bearing typographic rule in the system: **every number that represents a live simulated value is IBM Plex Mono with tabular numerals, full stop.** This prevents digit-width jitter on every tick and is the one place monospace is not optional.
 
-- Primary KPI values: 20–24px / 600 / `text-primary`, with their unit suffix rendered smaller (11–12px) and in `muted`, baseline-aligned — the number dominates, the unit does not compete with it.
+- Primary KPI values: 20–24px / 600 / `text-primary`, with their unit suffix rendered smaller (11–12px) and in `text-secondary` (`muted` fails AA for small text, §18), baseline-aligned — the number dominates, the unit does not compete with it.
 - Secondary numeric values (schematic stage values): 14–15px / 600, the existing `.console-mono` tier.
 - Numbers are never italicized, never a non-tabular digit face, never animated with easing — a value updates to its new reading instantly, because an eased number is a number lying about when the reading actually changed.
 

@@ -667,12 +667,12 @@ function EventBanner({
   return (
     <section className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 border-b border-hairline pb-2">
       <div className="flex items-baseline gap-3">
-        <span className="font-sans text-[10.5px] font-semibold uppercase tracking-[0.04em] text-muted">
+        <span className="font-sans text-[11px] font-semibold uppercase tracking-[0.04em] text-secondary">
           THE EVENT
         </span>
         <span className="font-mono text-[18px] font-semibold tabular-nums text-primary">
-          {initialKw.toFixed(0)} <span className="text-muted">&rarr;</span> {finalKw.toFixed(0)}{" "}
-          <span className="text-[12px] font-normal text-muted">kW</span>
+          {initialKw.toFixed(0)} <span className="text-secondary">&rarr;</span> {finalKw.toFixed(0)}{" "}
+          <span className="text-[12px] font-normal text-secondary">kW</span>
         </span>
         <span className="font-mono text-[11px] tabular-nums text-secondary">
           at t = {stepTimeS.toFixed(3)} s

@@ -132,7 +132,7 @@ function MetricTile({
       </span>
       <span className="font-mono text-[16px] font-semibold leading-none tabular-nums text-primary">
         {value}
-        <span className="ml-1 text-[11px] font-normal text-muted">{unit}</span>
+        <span className="ml-1 text-[11px] font-normal text-secondary">{unit}</span>
       </span>
       <span className="font-mono text-[11px] leading-snug text-secondary">{caption}</span>
     </div>

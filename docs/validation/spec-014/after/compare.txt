@@ -1,0 +1,36 @@
+PASS AC-6 baseline problems 1 (dev-only font request): [['desktop', 'http://localhost:3100/architecture', 'reqfailed', 'http://localhost:3100/__nextjs_font/geist-latin.woff2']]
+PASS AC-6 after: 0 console/page/network problems []
+PASS AC-7 API request/response set identical baseline 24 unique, after 24 unique; only-baseline []; only-after []
+PASS AC-7 same number of API calls 40 vs 40
+PASS AC-4 architecture testids: baseline union subset of after union missing: []
+PASS AC-9 sandbox testids: only declared retirements missing missing: ['view-mode-option-compare', 'view-mode-option-single', 'view-mode-toggle']
+PASS AC-11 numbers in sandbox-load_step-desktop preserved missing: []
+PASS AC-11 numbers in sandbox-sustained_high_load-desktop preserved missing: []
+PASS AC-11 numbers in sandbox-thermal_trip-desktop preserved missing: []
+PASS AC-11 numbers in sandbox-grid_sag-desktop preserved missing: []
+PASS AC-11 numbers in sandbox-grid_loss-desktop preserved missing: []
+PASS AC-11 numbers in sandbox-experiment-run-desktop preserved missing: []
+PASS AC-11 numbers in sandbox-sweep-run-desktop preserved missing: []
+PASS AC-11 numbers in sandbox-compare-desktop preserved missing: []
+PASS AC-3 decision card text rd1 identical (case/whitespace-normalized; labels were CSS-uppercased before) 
+PASS AC-3 decision card text rd2 identical (case/whitespace-normalized; labels were CSS-uppercased before) 
+PASS AC-3 decision card text rd3 identical (case/whitespace-normalized; labels were CSS-uppercased before) 
+PASS AC-3 decision card text rd4 identical (case/whitespace-normalized; labels were CSS-uppercased before) 
+PASS AC-3 decision card text rd5 identical (case/whitespace-normalized; labels were CSS-uppercased before) 
+PASS AC-3 decision card text rd6 identical (case/whitespace-normalized; labels were CSS-uppercased before) 
+PASS AC-3 decision card text rd7 identical (case/whitespace-normalized; labels were CSS-uppercased before) 
+PASS AC-17 no page overflow home-mobile {'sw': 390, 'W': 390}
+PASS AC-17 no page overflow system-map-mobile {'sw': 390, 'W': 390}
+PASS AC-17 no page overflow learn-mobile {'sw': 390, 'W': 390}
+PASS AC-17 no page overflow architecture-mobile {'sw': 390, 'W': 390}
+PASS AC-17 no page overflow sandbox-mobile {'sw': 390, 'W': 390}
+PASS AC-17 no page overflow architecture-show-all-mobile {'sw': 390, 'W': 390}
+PASS AC-17 no page overflow sandbox-load_step-mobile {'sw': 390, 'W': 390}
+PASS AC-17 no page overflow sandbox-sustained_high_load-mobile {'sw': 390, 'W': 390}
+PASS AC-17 no page overflow sandbox-thermal_trip-mobile {'sw': 390, 'W': 390}
+PASS AC-17 no page overflow sandbox-grid_sag-mobile {'sw': 390, 'W': 390}
+PASS AC-17 no page overflow sandbox-grid_loss-mobile {'sw': 390, 'W': 390}
+PASS AC-17 no page overflow sandbox-experiment-run-mobile {'sw': 390, 'W': 390}
+PASS AC-17 no page overflow sandbox-sweep-run-mobile {'sw': 390, 'W': 390}
+PASS AC-17 no page overflow sandbox-compare-mobile {'sw': 390, 'W': 390}
+FAILS: 0
