@@ -2,6 +2,9 @@
 
 import { useMemo, useRef, useState } from "react";
 
+import { ScrollRegion } from "./ScrollRegion";
+import { SignalPathRail } from "./SignalPathRail";
+
 import {
   ARCHITECTURES,
   CATEGORIES,
@@ -58,6 +61,7 @@ export function InfrastructureMap() {
           Architecture view
         </span>
         <ArchitectureSelector selected={architectureId} onSelect={selectArchitecture} />
+        <SignalPathRail architecture={architectureId} note="Follows the selected architecture view" />
         <p className="max-w-3xl text-[12px] leading-relaxed text-secondary">{architecture.summary}</p>
         <p className="border border-hairline bg-surface-raised px-2.5 py-2 text-[12px] leading-relaxed text-secondary">
           <strong className="text-primary">Illustrative, not universal:</strong> {architecture.caveat}
@@ -116,7 +120,7 @@ function ArchitectureSelector({
             }`}
           >
             <span className="font-sans text-[11px] font-semibold uppercase tracking-[0.03em]">{a.name}</span>
-            <span className="text-[10.5px] text-muted">{a.tagline}</span>
+            <span className="text-[11px] text-secondary">{a.tagline}</span>
           </button>
         );
       })}
@@ -151,29 +155,38 @@ function LaneRow({
         <span className="font-sans text-[11.5px] font-semibold uppercase tracking-[0.04em] text-primary">
           {meta.label}
         </span>
-        <span className="text-[11px] text-muted">{meta.description}</span>
+        <span className="text-[12px] text-secondary">{meta.description}</span>
       </div>
-      <div
-        role="group"
-        aria-label={meta.label}
-        className={
-          isMainPath
-            ? "-mx-1 flex min-w-0 items-stretch gap-1.5 overflow-x-auto px-1 pb-1"
-            : "flex flex-col gap-1 sm:flex-row sm:flex-wrap sm:items-stretch sm:gap-1.5"
-        }
-      >
-        {nodes.map((node, i) => (
-          <div key={node.id} className="flex items-stretch gap-1.5">
-            <NodeButton
-              node={node}
-              isSelected={node.id === selectedNodeId}
-              onSelect={onSelect}
-              noShrink={isMainPath}
-            />
-            {i < nodes.length - 1 && lane !== "monitoring" && <LaneArrow />}
+      {(() => {
+        const row = (
+          <div
+            role="group"
+            aria-label={meta.label}
+            className={
+              isMainPath
+                ? "flex flex-col gap-1 sm:min-w-max sm:flex-row sm:items-stretch sm:gap-1.5"
+                : "flex flex-col gap-1 sm:flex-row sm:flex-wrap sm:items-stretch sm:gap-1.5"
+            }
+          >
+            {nodes.map((node, i) => (
+              <div key={node.id} className="flex shrink-0 flex-col items-stretch gap-1 sm:flex-row sm:gap-1.5">
+                <NodeButton
+                  node={node}
+                  isSelected={node.id === selectedNodeId}
+                  onSelect={onSelect}
+                  noShrink={isMainPath}
+                />
+                {i < nodes.length - 1 && lane !== "monitoring" && <LaneArrow />}
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
+        );
+        return isMainPath ? (
+          <ScrollRegion label={`${meta.label}; scroll sideways to see every stage`}>{row}</ScrollRegion>
+        ) : (
+          row
+        );
+      })()}
     </div>
   );
 }
@@ -183,7 +196,7 @@ function LaneRow({
  * token rather than an ad hoc text color. */
 function LaneArrow() {
   return (
-    <span aria-hidden="true" className="flex shrink-0 items-center text-muted">
+    <span aria-hidden="true" className="flex shrink-0 items-center justify-center text-secondary max-sm:rotate-90 max-sm:self-center">
       <svg width="12" height="10" viewBox="0 0 12 10" fill="none">
         <path d="M1 5h9M6 1l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
@@ -218,7 +231,7 @@ function NodeButton({
       }`}
     >
       <span className="text-[12px] font-semibold text-primary">{node.label}</span>
-      <span className="text-[10.5px] text-muted">{node.detail}</span>
+      <span className="text-[11px] text-secondary">{node.detail}</span>
     </button>
   );
 }
@@ -239,7 +252,7 @@ function DetailPanel({
       className="flex max-w-2xl flex-col gap-2.5 border border-hairline bg-surface-raised px-3 py-3"
     >
       <div className="flex flex-col gap-0.5 border-b border-hairline pb-2">
-        <span className="font-mono text-[10.5px] uppercase tracking-[0.06em] text-muted">
+        <span className="font-mono text-[11px] uppercase tracking-[0.06em] text-secondary">
           {category.title}
         </span>
         <span className="text-[13px] font-bold text-primary">{node.label}</span>
@@ -311,7 +324,7 @@ function DetailList({ label, items }: { label: string; items: readonly string[] 
       <ul className="flex flex-col gap-1">
         {items.map((item) => (
           <li key={item} className="flex gap-1.5 text-[12px] leading-relaxed text-secondary">
-            <span aria-hidden="true" className="text-muted">
+            <span aria-hidden="true" className="text-secondary">
               &middot;
             </span>
             <span>{item}</span>
