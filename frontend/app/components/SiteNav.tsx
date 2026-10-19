@@ -24,6 +24,9 @@ const NAV_ITEMS: ReadonlyArray<{ href: string; label: string; disabled?: boolean
 export function SiteNav() {
   const pathname = usePathname();
 
+  // Design-direction prototype (/design-lab) supplies its own shell.
+  if (pathname.startsWith("/design-lab")) return null;
+
   return (
     <nav aria-label="Primary" className="flex flex-wrap items-center gap-x-5 gap-y-1 border-b border-hairline bg-surface px-6 py-2">
       <Link
