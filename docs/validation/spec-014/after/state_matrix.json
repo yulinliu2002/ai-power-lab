@@ -22,7 +22,7 @@
  {
   "result": "PASS",
   "check": "scrubber End -> last sample",
-  "detail": "TIME\nt = 0.5999 s\nV_DC\n800.9V\nDC bus voltage\nP_LOAD\n320.0kW\nAI demand\nP_SST\n320.0kW\nSST delivered power\n\u0394P\n0.0kW\npower d"
+  "detail": "CURRENT \u00b7 AT THE SCRUBBER TIME\n\n800.9V\nDC bus voltage V_dc at t = 0.5999 s\nREFERENCE\n800 V\nMINIMUM IN RUN\n712.5 V at 0.2"
  },
  {
   "result": "PASS",
@@ -47,7 +47,7 @@
  {
   "result": "PASS",
   "check": "failed Run: previous run retained, error shown, Run re-enabled",
-  "detail": "the gap between demand and SST output open for longer.\n\nRESET\nRun Experiment\nFailed to fetch\n\nSlider values not yet run."
+  "detail": "response time \u03c4_sst\n40 ms\nWHAT DOES THIS DO?\nRun Experiment\nReset to preset\n\nSlider values not yet run.\n\nFailed to fetch"
  },
  {
   "result": "PASS",

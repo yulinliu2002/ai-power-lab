@@ -14,7 +14,10 @@ out = {"arch": {}, "learn": {}, "charts": {}, "api": {}}
 GROUPS = {"driver": "[data-testid^='driver-rd']", "compare": "[data-testid^='compare-rd']", "boundary": "[data-testid^='boundary-']:not([data-testid^='boundary-option'])",
           "decision": "[data-testid^='decision-card-']", "validation": "[data-testid^='validation-']"}
 
+PAGE_LINES = set()
+
 def group_text(pg):
+    PAGE_LINES.update(lines(pg.inner_text("main")))
     res = {}
     for g, sel in GROUPS.items():
         res[g] = {}
@@ -58,13 +61,19 @@ with sync_playwright() as p:
             un.setdefault("decision", {}).update(gt["decision"])
             if i == 1: un.update({k: v for k, v in gt.items() if k != "decision"})
         out["arch"] = un
+    out["arch"]["_page_lines"] = sorted(PAGE_LINES)
     out["arch"]["disclosures_visible"] = [norm(t) for t in [e.inner_text() for e in pg.query_selector_all("[data-testid='disclosures'] li")]]
 
     # ---- Learn: five cases
     pg.goto(BASE + "/learn", wait_until="networkidle"); pg.wait_for_timeout(1500)
     n = pg.locator("label:has([data-testid^=case-option])").count()
     for i in range(n):
-        pg.locator("label:has([data-testid^=case-option])").nth(i).click(); pg.wait_for_timeout(1800)
+        pg.locator("label:has([data-testid^=case-option])").nth(i).click(); pg.wait_for_timeout(1500)
+        prev = None
+        for _ in range(20):  # wait until the live charts have stopped changing (large series render late)
+            cur = pg.evaluate("()=>[...document.querySelectorAll('main svg polyline')].map(e=>(e.getAttribute('points')||'').length).join(',')")
+            if cur == prev and cur: break
+            prev = cur; pg.wait_for_timeout(500)
         out["learn"][f"case{i+1}"] = {
             "text": lines(pg.inner_text("main")),
             "links": sorted(a.get_attribute("href") for a in pg.query_selector_all("main a")),

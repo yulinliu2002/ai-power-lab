@@ -6,38 +6,38 @@
  },
  {
   "result": "PASS",
-  "check": "AC-4 driver:driver-rd1 every baseline line preserved",
-  "detail": "[]"
+  "check": "AC-4 driver:driver-rd1 every baseline line preserved on the page; long (content) lines preserved inside the same block",
+  "detail": "([], [])"
  },
  {
   "result": "PASS",
-  "check": "AC-4 driver:driver-rd2 every baseline line preserved",
-  "detail": "[]"
+  "check": "AC-4 driver:driver-rd2 every baseline line preserved on the page; long (content) lines preserved inside the same block",
+  "detail": "([], [])"
  },
  {
   "result": "PASS",
-  "check": "AC-4 driver:driver-rd3 every baseline line preserved",
-  "detail": "[]"
+  "check": "AC-4 driver:driver-rd3 every baseline line preserved on the page; long (content) lines preserved inside the same block",
+  "detail": "([], [])"
  },
  {
   "result": "PASS",
-  "check": "AC-4 driver:driver-rd4 every baseline line preserved",
-  "detail": "[]"
+  "check": "AC-4 driver:driver-rd4 every baseline line preserved on the page; long (content) lines preserved inside the same block",
+  "detail": "([], [])"
  },
  {
   "result": "PASS",
-  "check": "AC-4 driver:driver-rd5 every baseline line preserved",
-  "detail": "[]"
+  "check": "AC-4 driver:driver-rd5 every baseline line preserved on the page; long (content) lines preserved inside the same block",
+  "detail": "([], [])"
  },
  {
   "result": "PASS",
-  "check": "AC-4 driver:driver-rd6 every baseline line preserved",
-  "detail": "[]"
+  "check": "AC-4 driver:driver-rd6 every baseline line preserved on the page; long (content) lines preserved inside the same block",
+  "detail": "([], [])"
  },
  {
   "result": "PASS",
-  "check": "AC-4 driver:driver-rd7 every baseline line preserved",
-  "detail": "[]"
+  "check": "AC-4 driver:driver-rd7 every baseline line preserved on the page; long (content) lines preserved inside the same block",
+  "detail": "([], [])"
  },
  {
   "result": "PASS",
@@ -46,38 +46,38 @@
  },
  {
   "result": "PASS",
-  "check": "AC-4 compare:compare-rd1 every baseline line preserved",
-  "detail": "[]"
+  "check": "AC-4 compare:compare-rd1 every baseline line preserved on the page; long (content) lines preserved inside the same block",
+  "detail": "([], [])"
  },
  {
   "result": "PASS",
-  "check": "AC-4 compare:compare-rd2 every baseline line preserved",
-  "detail": "[]"
+  "check": "AC-4 compare:compare-rd2 every baseline line preserved on the page; long (content) lines preserved inside the same block",
+  "detail": "([], [])"
  },
  {
   "result": "PASS",
-  "check": "AC-4 compare:compare-rd3 every baseline line preserved",
-  "detail": "[]"
+  "check": "AC-4 compare:compare-rd3 every baseline line preserved on the page; long (content) lines preserved inside the same block",
+  "detail": "([], [])"
  },
  {
   "result": "PASS",
-  "check": "AC-4 compare:compare-rd4 every baseline line preserved",
-  "detail": "[]"
+  "check": "AC-4 compare:compare-rd4 every baseline line preserved on the page; long (content) lines preserved inside the same block",
+  "detail": "([], [])"
  },
  {
   "result": "PASS",
-  "check": "AC-4 compare:compare-rd5 every baseline line preserved",
-  "detail": "[]"
+  "check": "AC-4 compare:compare-rd5 every baseline line preserved on the page; long (content) lines preserved inside the same block",
+  "detail": "([], [])"
  },
  {
   "result": "PASS",
-  "check": "AC-4 compare:compare-rd6 every baseline line preserved",
-  "detail": "[]"
+  "check": "AC-4 compare:compare-rd6 every baseline line preserved on the page; long (content) lines preserved inside the same block",
+  "detail": "([], [])"
  },
  {
   "result": "PASS",
-  "check": "AC-4 compare:compare-rd7 every baseline line preserved",
-  "detail": "[]"
+  "check": "AC-4 compare:compare-rd7 every baseline line preserved on the page; long (content) lines preserved inside the same block",
+  "detail": "([], [])"
  },
  {
   "result": "PASS",
@@ -86,28 +86,28 @@
  },
  {
   "result": "PASS",
-  "check": "AC-4 boundary:boundary-mv-utility every baseline line preserved",
-  "detail": "[]"
+  "check": "AC-4 boundary:boundary-mv-utility every baseline line preserved on the page; long (content) lines preserved inside the same block",
+  "detail": "([], [])"
  },
  {
   "result": "PASS",
-  "check": "AC-4 boundary:boundary-conversion-distribution every baseline line preserved",
-  "detail": "[]"
+  "check": "AC-4 boundary:boundary-conversion-distribution every baseline line preserved on the page; long (content) lines preserved inside the same block",
+  "detail": "([], [])"
  },
  {
   "result": "PASS",
-  "check": "AC-4 boundary:boundary-distribution-rack every baseline line preserved",
-  "detail": "[]"
+  "check": "AC-4 boundary:boundary-distribution-rack every baseline line preserved on the page; long (content) lines preserved inside the same block",
+  "detail": "([], [])"
  },
  {
   "result": "PASS",
-  "check": "AC-4 boundary:boundary-storage-backup every baseline line preserved",
-  "detail": "[]"
+  "check": "AC-4 boundary:boundary-storage-backup every baseline line preserved on the page; long (content) lines preserved inside the same block",
+  "detail": "([], [])"
  },
  {
   "result": "PASS",
-  "check": "AC-4 boundary:boundary-monitoring-control every baseline line preserved",
-  "detail": "[]"
+  "check": "AC-4 boundary:boundary-monitoring-control every baseline line preserved on the page; long (content) lines preserved inside the same block",
+  "detail": "([], [])"
  },
  {
   "result": "PASS",
@@ -116,38 +116,38 @@
  },
  {
   "result": "PASS",
-  "check": "AC-4 decision:decision-card-rd1 every baseline line preserved",
-  "detail": "[]"
+  "check": "AC-4 decision:decision-card-rd1 every baseline line preserved on the page; long (content) lines preserved inside the same block",
+  "detail": "([], [])"
  },
  {
   "result": "PASS",
-  "check": "AC-4 decision:decision-card-rd2 every baseline line preserved",
-  "detail": "[]"
+  "check": "AC-4 decision:decision-card-rd2 every baseline line preserved on the page; long (content) lines preserved inside the same block",
+  "detail": "([], [])"
  },
  {
   "result": "PASS",
-  "check": "AC-4 decision:decision-card-rd3 every baseline line preserved",
-  "detail": "[]"
+  "check": "AC-4 decision:decision-card-rd3 every baseline line preserved on the page; long (content) lines preserved inside the same block",
+  "detail": "([], [])"
  },
  {
   "result": "PASS",
-  "check": "AC-4 decision:decision-card-rd4 every baseline line preserved",
-  "detail": "[]"
+  "check": "AC-4 decision:decision-card-rd4 every baseline line preserved on the page; long (content) lines preserved inside the same block",
+  "detail": "([], [])"
  },
  {
   "result": "PASS",
-  "check": "AC-4 decision:decision-card-rd5 every baseline line preserved",
-  "detail": "[]"
+  "check": "AC-4 decision:decision-card-rd5 every baseline line preserved on the page; long (content) lines preserved inside the same block",
+  "detail": "([], [])"
  },
  {
   "result": "PASS",
-  "check": "AC-4 decision:decision-card-rd6 every baseline line preserved",
-  "detail": "[]"
+  "check": "AC-4 decision:decision-card-rd6 every baseline line preserved on the page; long (content) lines preserved inside the same block",
+  "detail": "([], [])"
  },
  {
   "result": "PASS",
-  "check": "AC-4 decision:decision-card-rd7 every baseline line preserved",
-  "detail": "[]"
+  "check": "AC-4 decision:decision-card-rd7 every baseline line preserved on the page; long (content) lines preserved inside the same block",
+  "detail": "([], [])"
  },
  {
   "result": "PASS",
@@ -156,18 +156,18 @@
  },
  {
   "result": "PASS",
-  "check": "AC-4 validation:validation-conventional-ac every baseline line preserved",
-  "detail": "[]"
+  "check": "AC-4 validation:validation-conventional-ac every baseline line preserved on the page; long (content) lines preserved inside the same block",
+  "detail": "([], [])"
  },
  {
   "result": "PASS",
-  "check": "AC-4 validation:validation-ac-to-800vdc every baseline line preserved",
-  "detail": "[]"
+  "check": "AC-4 validation:validation-ac-to-800vdc every baseline line preserved on the page; long (content) lines preserved inside the same block",
+  "detail": "([], [])"
  },
  {
   "result": "PASS",
-  "check": "AC-4 validation:validation-mv-to-800vdc every baseline line preserved",
-  "detail": "[]"
+  "check": "AC-4 validation:validation-mv-to-800vdc every baseline line preserved on the page; long (content) lines preserved inside the same block",
+  "detail": "([], [])"
  },
  {
   "result": "PASS",

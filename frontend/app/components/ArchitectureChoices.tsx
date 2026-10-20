@@ -3,8 +3,6 @@
 import Link from "next/link";
 import { useState } from "react";
 
-import { AreaHeader } from "./AreaHeader";
-import { BasisPanel } from "./BasisPanel";
 import { EvidenceTag } from "./EvidenceTag";
 import { SignalPathRail } from "./SignalPathRail";
 import { StageNav } from "./StageNav";
@@ -28,14 +26,13 @@ import {
 import { ARCHITECTURES, type ArchitectureId } from "../lib/infrastructureMapData";
 
 /**
- * Architecture Choices as a four-step evaluation (SPEC-014 Scope B):
- * identify the requirement, compare the architectures for it, understand
- * the trade-offs, define the validation needs. Same data module and the
- * same content as SPEC-011 -- only the disclosure of it is progressive:
- * the selected driver's content is shown, and "Show all" controls render
- * the complete reference view (all seven drivers, all 21 comparison
- * cells, all seven decisions, all five boundaries). No scores, no ranking
- * and no "best" statement (SPEC-011 AC-8).
+ * Architecture Choices as a four-step evaluation (SPEC-014 Scope B) in the
+ * "instrument console" composition: a requirement list on the left, and one
+ * decision board on the right where the three architectures sit in aligned
+ * columns so they can be compared at a glance. Same data module and the same
+ * content as SPEC-011; progressive disclosure only. A marked column is a
+ * *conditional tendency* (the data's `favored` set, which can name several
+ * architectures) and never a ranking, score or winner (SPEC-011 AC-8).
  */
 const STAGES = [
   { id: "step-requirement", n: 1, label: "Identify the requirement" },
@@ -63,41 +60,58 @@ export function ArchitectureChoices() {
   const [showAllDrivers, setShowAllDrivers] = useState(false);
   const [showAllBoundaries, setShowAllBoundaries] = useState(false);
 
-  const driver = DRIVERS.find((d) => d.id === driverId)!;
   const nodeLabel = (id: string) =>
     ARCHITECTURES.flatMap((a) => a.nodes).find((n) => n.id === id)?.label ?? id;
+  const boards: readonly Driver[] = showAllDrivers ? DRIVERS : [DRIVERS.find((d) => d.id === driverId)!];
 
   return (
-    <main className="mx-auto flex w-full max-w-[1320px] flex-1 flex-col gap-6 px-4 py-5 sm:px-6">
-      <AreaHeader
-        title="Architecture choices"
-        role="Evaluate alternatives against requirements"
-        lede={
-          <>
-            Three architectures from the{" "}
+    <main className="ic-page">
+      <header className="ic-head">
+        <div>
+          <p className="ic-eyebrow">Evaluate alternatives against requirements</p>
+          <h1 className="ic-h1">Architecture choices</h1>
+          <p className="ic-lede">
+            Pick a requirement. See how three architectures from the{" "}
             <Link href="/system-map" className={link}>
               System Map
             </Link>{" "}
-            &mdash; {ARCHITECTURE_ORDER.map((id) => ARCHITECTURE_CHOICE_NAMES[id]).join(", ")}{" "}
-            &mdash; are compared against seven requirement drivers. The aim is to practice reasoning
-            from requirements to an architecture choice, and to name what must be validated before
-            relying on it.
-          </>
-        }
-        next={{ href: "/learn", label: "Learn by Example: see how the system behaves under a disturbance" }}
-      />
+            meet it, side by side, what each makes harder, and what would have to be validated before relying on it.
+          </p>
+          <p className="ic-small" style={{ marginTop: 10 }}>
+            Next:{" "}
+            <Link href="/learn" className={`text-primary ${link}`}>
+              Learn by Example: see how the system behaves under a disturbance
+            </Link>
+          </p>
+        </div>
+        <ol className="ic-small" style={{ margin: 0, paddingLeft: 18, display: "grid", gap: 6 }}>
+          <li><b style={{ color: "var(--color-text-primary)" }}>Identify</b> the requirement that matters most for a hypothetical site.</li>
+          <li><b style={{ color: "var(--color-text-primary)" }}>Compare</b> the three architectures against it.</li>
+          <li><b style={{ color: "var(--color-text-primary)" }}>Understand</b> the trade-off and the interfaces it creates.</li>
+          <li><b style={{ color: "var(--color-text-primary)" }}>Define</b> the validation needs.</li>
+        </ol>
+      </header>
 
-      <BasisPanel items={DISCLOSURE_ITEMS} />
-      <p className="max-w-3xl text-[12px] leading-relaxed text-secondary">
+      <section aria-label="Basis and limits" data-testid="disclosures-panel">
+        <ul className="ic-basis" data-testid="disclosures">
+          {DISCLOSURE_ITEMS.map((d) => (
+            <li key={d.tag}>
+              <b>{d.tag}</b>
+              <p>{d.text}</p>
+            </li>
+          ))}
+        </ul>
+      </section>
+      <p className="ic-small" style={{ marginTop: 10, maxWidth: "75ch" }}>
         Each item carries an evidence label: <em>Public fact</em> (principle or attributed source),{" "}
-        <em>Illustrative assumption</em>, <em>Model output (simplified)</em>, or{" "}
-        <em>Emerging / uncertain</em>. An item carries the label of its weakest claim.
+        <em>Illustrative assumption</em>, <em>Model output (simplified)</em>, or <em>Emerging / uncertain</em>. An item
+        carries the label of its weakest claim.
       </p>
 
-      <section aria-label="Power path context" className="flex flex-col gap-2">
+      <section aria-label="Power path context" style={{ marginTop: 22, display: "grid", gap: 8 }}>
         <fieldset className="flex flex-wrap items-center gap-2">
           <legend className="sr-only">Architecture shown in the power path</legend>
-          <span className="font-mono text-meta uppercase text-secondary">Power path for</span>
+          <span className="ic-eyebrow" style={{ margin: 0 }}>Power path for</span>
           {ARCHITECTURE_ORDER.map((id) => (
             <label key={id} className="relative">
               <input
@@ -109,13 +123,7 @@ export function ArchitectureChoices() {
                 className="peer sr-only"
                 data-testid={`rail-option-${id}`}
               />
-              <span
-                className={`block cursor-pointer border px-2.5 py-1 text-[12px] font-semibold peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-secondary ${
-                  railArch === id
-                    ? "border-hairline-strong bg-surface-raised text-primary"
-                    : "border-hairline bg-surface text-secondary hover:text-primary"
-                }`}
-              >
+              <span className="ic-chipbtn peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-secondary" data-on={railArch === id}>
                 {ARCHITECTURE_CHOICE_NAMES[id]}
               </span>
             </label>
@@ -126,131 +134,131 @@ export function ArchitectureChoices() {
 
       <StageNav label="Steps on this page" stages={STAGES} />
 
-      <section id="step-requirement" className="flex flex-col gap-3" aria-labelledby="h-requirement">
-        <StepHeading id="h-requirement" n={1} title="Identify the requirement" question="What matters most for the hypothetical site?" />
-        <DriverChooser selected={driverId} onSelect={setDriverId} />
-        <ShowAllToggle
-          pressed={showAllDrivers}
-          onToggle={() => setShowAllDrivers((v) => !v)}
-          offLabel="Show all seven drivers, comparisons and decisions"
-          onLabel="Back to the selected driver"
-          testId="show-all-drivers"
-        />
-        {showAllDrivers ? (
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-            {DRIVERS.map((d) => (
-              <DriverCard key={d.id} driver={d} />
-            ))}
-          </div>
-        ) : (
-          <div className="max-w-3xl">
-            <DriverCard driver={driver} />
-          </div>
-        )}
-      </section>
-
-      <section id="step-compare" className="flex flex-col gap-3 border-t border-hairline pt-4" aria-labelledby="h-compare">
-        <StepHeading id="h-compare" n={2} title="Compare architectures" question="How does each architecture meet this driver?" />
-        <p className="max-w-3xl text-body text-secondary">
-          Qualitative only. &ldquo;Harder&rdquo; is what the architecture makes more difficult for
-          that driver, not a score. {DISCLOSURES.sst}
-        </p>
-        {(showAllDrivers ? DRIVERS : [driver]).map((d) => (
-          <CompareBlock key={d.id} driver={d} />
-        ))}
-        <p className="max-w-3xl text-[12px] leading-relaxed text-secondary">{DISCLOSURES.sim}</p>
-      </section>
-
-      <section id="step-tradeoffs" className="flex flex-col gap-3 border-t border-hairline pt-4" aria-labelledby="h-tradeoffs">
-        <StepHeading id="h-tradeoffs" n={3} title="Understand trade-offs" question="What does this driver favor, under what condition, and where does the choice become a specification?" />
-        <p className="max-w-3xl text-body text-secondary">
-          A conditional tendency with its exceptions, not a verdict. {DISCLOSURES.noWinner}
-        </p>
-        {(showAllDrivers ? DRIVERS : [driver]).map((d) => (
-          <DecisionCard key={d.id} driver={d} />
-        ))}
-
-        <div className="flex flex-col gap-3 pt-2">
-          <h3 className="text-heading text-primary">Interfaces</h3>
-          <p className="max-w-3xl text-body text-secondary">
-            The five boundaries where a choice becomes a specification. These are the same for every
-            driver. Node names are the System Map&rsquo;s. {DISCLOSURES.block}
-          </p>
-          <fieldset className="flex flex-wrap gap-1.5">
-            <legend className="sr-only">Interface boundary</legend>
-            {BOUNDARIES.map((b) => (
-              <label key={b.id} className="relative">
+      <div className="ic-arch">
+        <section id="step-requirement" aria-labelledby="h-requirement" className="ic-reqs">
+          <h2 id="h-requirement" data-stage-heading tabIndex={-1} className="ic-eyebrow focus:outline-none" style={{ paddingLeft: 14 }}>
+            1 · Identify the requirement
+          </h2>
+          <fieldset>
+            <legend className="sr-only">Which requirement driver to examine</legend>
+            {DRIVERS.map((d, i) => (
+              <label key={d.id} className="relative block">
                 <input
                   type="radio"
-                  name="boundary"
-                  value={b.id}
-                  checked={boundaryId === b.id}
-                  onChange={() => setBoundaryId(b.id)}
+                  name="dominant-driver"
+                  value={d.id}
+                  checked={d.id === driverId}
+                  data-testid={`driver-option-${d.id}`}
+                  onChange={() => setDriverId(d.id)}
                   className="peer sr-only"
-                  data-testid={`boundary-option-${b.id}`}
                 />
-                <span
-                  className={`block cursor-pointer border px-2.5 py-1 text-[12px] font-semibold peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-secondary ${
-                    boundaryId === b.id
-                      ? "border-hairline-strong bg-surface-raised text-primary"
-                      : "border-hairline bg-surface text-secondary hover:text-primary"
-                  }`}
-                >
-                  {b.title}
+                <span className="ic-reqbtn peer-focus-visible:outline-2 peer-focus-visible:outline-offset-[-2px] peer-focus-visible:outline-secondary" data-on={d.id === driverId}>
+                  <small>RD{i + 1}</small>
+                  {d.title}
                 </span>
               </label>
             ))}
           </fieldset>
-          <ShowAllToggle
-            pressed={showAllBoundaries}
-            onToggle={() => setShowAllBoundaries((v) => !v)}
-            offLabel="Show all five boundaries"
-            onLabel="Back to the selected boundary"
-            testId="show-all-boundaries"
-          />
-          {(showAllBoundaries ? BOUNDARIES : BOUNDARIES.filter((b) => b.id === boundaryId)).map((b) => (
-            <div key={b.id} data-testid={`boundary-${b.id}`} className="flex flex-col gap-2">
-              <h4 className="text-[13px] font-semibold text-primary">{b.title}</h4>
-              <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
-                {ARCHITECTURE_ORDER.map((arch) => {
-                  const item = INTERFACES[arch][b.id];
-                  return (
-                    <article key={arch} className="flex flex-col gap-1.5 border border-hairline bg-surface px-3 py-2.5">
-                      <h5 className="text-[12px] font-semibold text-secondary">{ARCHITECTURE_CHOICE_NAMES[arch]}</h5>
-                      <p className="font-mono text-meta text-secondary">
-                        {nodeLabel(item.nodeIds[0])} &rarr; {nodeLabel(item.nodeIds[1])}
-                      </p>
-                      <Link href="/system-map" className={`self-start font-mono text-meta uppercase text-secondary ${link}`}>
-                        See these nodes on the System Map
-                      </Link>
-                      <Field label="What crosses" body={item.crosses} />
-                      <Field label="Concern" body={item.concern} />
-                      <EvidenceTag glyph evidence={item.evidence} basis={item.basis} refs={item.refs} />
-                    </article>
-                  );
-                })}
-              </div>
-            </div>
+          <button
+            type="button"
+            aria-pressed={showAllDrivers}
+            onClick={() => setShowAllDrivers((v) => !v)}
+            data-testid="show-all-drivers"
+            className="ic-ghost"
+            style={{ marginTop: 14 }}
+          >
+            {showAllDrivers ? "Back to the selected driver" : "Show all seven drivers, comparisons and decisions"}
+          </button>
+        </section>
+
+        <div className="ic-boards">
+          {boards.map((d, bi) => (
+            <Board key={d.id} driver={d} first={bi === 0} />
           ))}
         </div>
+      </div>
+
+      <hr className="ic-rule" />
+      <section aria-label="Interfaces" className="flex flex-col gap-3">
+        <h2 className="ic-h2"><b>Interfaces</b> where a choice becomes a specification · the same for every requirement</h2>
+        <p className="ic-body" style={{ maxWidth: "75ch" }}>
+          The five boundaries where a choice becomes a specification. Node names are the System Map&rsquo;s. {DISCLOSURES.block}
+        </p>
+        <fieldset className="ic-seg">
+          <legend className="sr-only">Interface boundary</legend>
+          {BOUNDARIES.map((b) => (
+            <label key={b.id} className="relative">
+              <input
+                type="radio"
+                name="boundary"
+                value={b.id}
+                checked={boundaryId === b.id}
+                onChange={() => setBoundaryId(b.id)}
+                className="peer sr-only"
+                data-testid={`boundary-option-${b.id}`}
+              />
+              <span className="ic-segbtn peer-focus-visible:outline-2 peer-focus-visible:outline-offset-[-2px] peer-focus-visible:outline-secondary" data-on={boundaryId === b.id}>
+                {b.title}
+              </span>
+            </label>
+          ))}
+        </fieldset>
+        <button
+          type="button"
+          aria-pressed={showAllBoundaries}
+          onClick={() => setShowAllBoundaries((v) => !v)}
+          data-testid="show-all-boundaries"
+          className="ic-ghost"
+          style={{ width: "auto", alignSelf: "flex-start" }}
+        >
+          {showAllBoundaries ? "Back to the selected boundary" : "Show all five boundaries"}
+        </button>
+        {(showAllBoundaries ? BOUNDARIES : BOUNDARIES.filter((b) => b.id === boundaryId)).map((b) => (
+          <div key={b.id} data-testid={`boundary-${b.id}`} className="flex flex-col gap-2">
+            <h3 className="ic-h3">{b.title}</h3>
+            <div className="ic-three">
+              {ARCHITECTURE_ORDER.map((arch) => {
+                const item = INTERFACES[arch][b.id];
+                return (
+                  <article key={arch}>
+                    <h4 className="ic-h4">{ARCHITECTURE_CHOICE_NAMES[arch]}</h4>
+                    <p className="ic-small ic-mono" style={{ marginBottom: 10 }}>
+                      {nodeLabel(item.nodeIds[0])} &rarr; {nodeLabel(item.nodeIds[1])}
+                    </p>
+                    <Field label="What crosses" body={item.crosses} />
+                    <Field label="Concern" body={item.concern} />
+                    <Link href="/system-map" className={`ic-small ${link}`}>
+                      See these nodes on the System Map
+                    </Link>
+                    <EvidenceTag glyph evidence={item.evidence} basis={item.basis} refs={item.refs} />
+                  </article>
+                );
+              })}
+            </div>
+          </div>
+        ))}
       </section>
 
-      <section id="step-validation" className="flex flex-col gap-3 border-t border-hairline pt-4" aria-labelledby="h-validation">
-        <StepHeading id="h-validation" n={4} title="Define validation needs" question="What would have to be shown before relying on it?" />
-        <p className="max-w-3xl text-body text-secondary">
-          What would have to be shown, and by what kind of evidence, before relying on each
-          architecture. Validation needs are defined per architecture, not per driver. Not a
-          complete plan for any facility.
+      <hr className="ic-rule" />
+      <section id="step-validation" aria-labelledby="h-validation" className="flex flex-col gap-3">
+        <h2 id="h-validation" data-stage-heading tabIndex={-1} className="ic-h2 focus:outline-none">
+          <b>4 · Define validation needs</b> what would have to be shown before relying on it
+        </h2>
+        <p className="ic-body" style={{ maxWidth: "75ch" }}>
+          What would have to be shown, and by what kind of evidence, before relying on each architecture. Validation
+          needs are defined per architecture, not per driver. Not a complete plan for any facility.
         </p>
-        <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
+        <div className="ic-three">
           {ARCHITECTURE_ORDER.map((arch) => (
-            <article key={arch} data-testid={`validation-${arch}`} className="flex flex-col gap-2 border border-hairline bg-surface px-3 py-2.5">
-              <h3 className="text-[12px] font-semibold text-secondary">{ARCHITECTURE_CHOICE_NAMES[arch]}</h3>
-              <ul className="flex flex-col gap-2">
+            <article key={arch} data-testid={`validation-${arch}`}>
+              <h3 className="ic-h3">{ARCHITECTURE_CHOICE_NAMES[arch]}</h3>
+              <ul className="flex flex-col gap-3">
                 {VALIDATION_NEEDS[arch].map((v) => (
-                  <li key={v.verifies} className="flex flex-col gap-0.5 text-[13px] leading-relaxed text-secondary">
-                    <span>{v.verifies}</span>
-                    <span className="font-mono text-meta uppercase text-secondary">Evidence: {v.kinds.join(" + ")}</span>
+                  <li key={v.verifies} className="flex flex-col gap-1">
+                    <span className="ic-body" style={{ color: "var(--color-text-primary)" }}>{v.verifies}</span>
+                    <span className="ic-kinds">
+                      Evidence: {v.kinds.join(" + ")}
+                    </span>
                   </li>
                 ))}
               </ul>
@@ -260,21 +268,21 @@ export function ArchitectureChoices() {
         </div>
       </section>
 
-      <section id="references" className="flex flex-col gap-2 border-t border-hairline pt-4" aria-labelledby="h-references">
-        <h2 id="h-references" data-stage-heading tabIndex={-1} className="text-heading text-primary">
-          References
+      <hr className="ic-rule" />
+      <section id="references" aria-labelledby="h-references" className="flex flex-col gap-2">
+        <h2 id="h-references" data-stage-heading tabIndex={-1} className="ic-h2 focus:outline-none">
+          <b>References</b>
         </h2>
-        <p className="max-w-3xl text-[12px] leading-relaxed text-secondary">
-          Each reference states what was actually inspected in the 2026-10-18 source audit. Textbook
-          and standard references that were not opened are background for general principles and are
-          not verified against their text. Vendor and consortium statements are attributed, not
-          endorsed.
+        <p className="ic-small" style={{ maxWidth: "75ch" }}>
+          Each reference states what was actually inspected in the 2026-10-18 source audit. Textbook and standard
+          references that were not opened are background for general principles and are not verified against their text.
+          Vendor and consortium statements are attributed, not endorsed.
         </p>
-        <ul className="flex flex-col gap-1.5">
+        <ul className="ic-refs">
           {Object.values(REFERENCES).map((r) => (
-            <li key={r.id} className="text-[12px] leading-relaxed text-secondary">
-              <span className="font-mono text-[11px] text-primary">{r.id}</span>{" "}
-              <span className="font-mono text-meta uppercase">[{SOURCE_KIND_TEXT[r.kind]}]</span> &mdash;{" "}
+            <li key={r.id}>
+              <b style={{ color: "var(--color-text-primary)" }}>{r.id}</b>{" "}
+              <span className="ic-mono" style={{ fontSize: 11 }}>[{SOURCE_KIND_TEXT[r.kind]}]</span> &mdash;{" "}
               {r.url ? (
                 <a href={r.url} className={link} rel="noreferrer">
                   {r.citation}
@@ -283,7 +291,7 @@ export function ArchitectureChoices() {
                 r.citation
               )}
               {r.verifiedDate ? ` (recorded in industry data, verified ${r.verifiedDate})` : ""}
-              <span className="block text-[12px]">Inspection: {r.inspection}</span>
+              <span className="block">Inspection: {r.inspection}</span>
             </li>
           ))}
         </ul>
@@ -292,152 +300,123 @@ export function ArchitectureChoices() {
   );
 }
 
-function StepHeading({ id, n, title, question }: { id: string; n: number; title: string; question: string }) {
+/** One decision board: the selected (or every) driver, with the three architectures in aligned columns. */
+function Board({ driver: d, first }: { driver: Driver; first: boolean }) {
+  const decision = CONDITIONAL_DECISIONS[d.id];
   return (
-    <div className="flex flex-col gap-0.5">
-      <h2 id={id} data-stage-heading tabIndex={-1} className="text-heading text-primary focus:outline-none">
-        <span className="mr-2 font-mono text-meta text-secondary">{n}</span>
-        {title}
-      </h2>
-      <p className="text-[13px] text-secondary">{question}</p>
-    </div>
-  );
-}
-
-function DriverChooser({ selected, onSelect }: { selected: DriverId; onSelect: (id: DriverId) => void }) {
-  return (
-    <fieldset className="flex flex-wrap gap-1.5">
-      <legend className="sr-only">Which requirement driver to examine</legend>
-      {DRIVERS.map((d) => {
-        const isSelected = d.id === selected;
-        return (
-          <label key={d.id} className="relative">
-            <input
-              type="radio"
-              name="dominant-driver"
-              value={d.id}
-              checked={isSelected}
-              data-testid={`driver-option-${d.id}`}
-              onChange={() => onSelect(d.id)}
-              className="peer sr-only"
-            />
-            <span
-              className={`block cursor-pointer border px-2.5 py-1 text-[12px] font-semibold peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-secondary ${
-                isSelected
-                  ? "border-hairline-strong bg-surface-raised text-primary"
-                  : "border-hairline bg-surface text-secondary hover:text-primary"
-              }`}
-            >
-              {d.title}
-            </span>
-          </label>
-        );
-      })}
-    </fieldset>
-  );
-}
-
-function ShowAllToggle({
-  pressed,
-  onToggle,
-  offLabel,
-  onLabel,
-  testId,
-}: {
-  pressed: boolean;
-  onToggle: () => void;
-  offLabel: string;
-  onLabel: string;
-  testId: string;
-}) {
-  return (
-    <button
-      type="button"
-      aria-pressed={pressed}
-      onClick={onToggle}
-      data-testid={testId}
-      className="self-start border border-hairline bg-surface px-2.5 py-1 font-mono text-meta uppercase text-secondary hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary"
-    >
-      {pressed ? onLabel : offLabel}
-    </button>
-  );
-}
-
-function DriverCard({ driver: d }: { driver: Driver }) {
-  return (
-    <article data-testid={`driver-${d.id}`} className="flex flex-col gap-1.5 border border-hairline bg-surface px-3 py-3">
-      <h3 className="text-[14px] font-semibold text-primary">{d.title}</h3>
-      <p className="text-[13px] italic leading-snug text-secondary">{d.question}</p>
-      <div className="flex flex-col gap-1.5">
-        <Field label="What it is" body={d.what} />
-        <Field label="Why it matters" body={d.why} />
-        <Field label="System connection" body={d.system} />
-        <Field label="Constraints and trade-offs" body={d.tradeoffs} />
-        <Field label="Decision it informs" body={d.decision} />
+    <div className="ic-board">
+      <div className="ic-board-head">
+        <h2 {...(first ? { id: "h-compare", "data-stage-heading": true, tabIndex: -1 } : {})} className="ic-eyebrow focus:outline-none" style={{ margin: 0 }}>
+          2 · Compare architectures
+        </h2>
+        <p className="ic-q">{d.question}</p>
+        <p className="ic-small">
+          {d.title}. Qualitative only: &ldquo;harder&rdquo; is what an architecture makes more difficult for this
+          requirement, not a score. {DISCLOSURES.sst}
+        </p>
+        <article data-testid={`driver-${d.id}`} className="ic-driverfields">
+          <h3 className="sr-only">{d.title}</h3>
+          <Field label="What it is" body={d.what} />
+          <Field label="Why it matters" body={d.why} />
+          <Field label="System connection" body={d.system} />
+          <Field label="Constraints and trade-offs" body={d.tradeoffs} />
+          <Field label="Decision it informs" body={d.decision} />
+        </article>
       </div>
-    </article>
-  );
-}
 
-function CompareBlock({ driver: d }: { driver: Driver }) {
-  return (
-    <div data-testid={`compare-${d.id}`} className="flex flex-col gap-2">
-      <h3 className="text-[14px] font-semibold text-primary">{d.title}</h3>
-      <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
+      <div id={first ? "step-compare" : undefined} data-testid={`compare-${d.id}`} className="ic-cols">
+        <p className="ic-legend">
+          Columns marked <b>Tends to favor</b> are a <b>conditional tendency</b> if this requirement dominates for a
+          site, with the exceptions below. They are not a ranking, a score or a winner.
+        </p>
+        <div />
         {ARCHITECTURE_ORDER.map((arch) => {
-          const cell = CELLS[d.id][arch];
+          const fav = decision.favored.includes(arch);
           return (
-            <article key={arch} className="flex flex-col gap-1.5 border border-hairline bg-surface px-3 py-2.5">
-              <h4 className="text-[12px] font-semibold text-secondary">{ARCHITECTURE_CHOICE_NAMES[arch]}</h4>
-              <Field label="How it is addressed" body={cell.how} />
-              <Field label="What it makes harder" body={cell.harder} />
-              <EvidenceTag glyph evidence={cell.evidence} basis={cell.basis} refs={cell.refs} />
-              {cell.evidence === "model-output" && (
-                <Link href="/sandbox" className={`self-start font-mono text-meta uppercase text-secondary ${link}`}>
+            <div key={arch} className="ic-colhead" data-fav={fav}>
+              {fav ? (
+                <span className="ic-favor">
+                  Tends to favor<span className="sr-only"> if this requirement dominates; a conditional tendency, not a ranking or a winner</span>
+                </span>
+              ) : (
+                <span className="ic-favor-none" aria-hidden="true">&nbsp;</span>
+              )}
+              <h3>{ARCHITECTURE_CHOICE_NAMES[arch]}</h3>
+            </div>
+          );
+        })}
+
+        <div className="ic-rowlabel">How it is addressed</div>
+        {ARCHITECTURE_ORDER.map((arch) => (
+          <div key={arch} className="ic-cell">
+            {decision.favored.includes(arch) && (
+              <span className="ic-favor ic-mfavor" aria-hidden="true">Tends to favor · conditional</span>
+            )}
+            <span className="ic-mlabel">{ARCHITECTURE_CHOICE_NAMES[arch]} · how it is addressed</span>
+            {CELLS[d.id][arch].how}
+          </div>
+        ))}
+
+        <div className="ic-rowlabel">What it makes harder</div>
+        {ARCHITECTURE_ORDER.map((arch) => (
+          <div key={arch} className="ic-cell" data-kind="harder">
+            <span className="ic-mlabel">{ARCHITECTURE_CHOICE_NAMES[arch]} · what it makes harder</span>
+            {CELLS[d.id][arch].harder}
+          </div>
+        ))}
+
+        <div className="ic-rowlabel">Evidence</div>
+        {ARCHITECTURE_ORDER.map((arch) => {
+          const c = CELLS[d.id][arch];
+          return (
+            <div key={arch} className="ic-cell" data-kind="evidence">
+              <EvidenceTag glyph evidence={c.evidence} basis={c.basis} refs={c.refs} />
+              {c.evidence === "model-output" && (
+                <Link href="/sandbox" className={`ic-small ${link}`}>
                   Open the Advanced Sandbox
                 </Link>
               )}
-            </article>
+            </div>
           );
         })}
       </div>
-    </div>
-  );
-}
 
-function DecisionCard({ driver }: { driver: Driver }) {
-  const decision = CONDITIONAL_DECISIONS[driver.id];
-  return (
-    <div
-      data-testid={`decision-card-${driver.id}`}
-      className="flex max-w-3xl flex-col gap-2 border border-hairline bg-surface-raised px-3 py-3"
-    >
-      <p className="font-mono text-meta uppercase text-secondary">If &ldquo;{driver.title}&rdquo; dominates</p>
-      <Field label="Tends to favor" body={decision.favored.map((id) => ARCHITECTURE_CHOICE_NAMES[id]).join(" · ")} />
-      <Field label="Because" body={decision.because} />
-      <div className="flex flex-col gap-0.5">
-        <span className="text-[12px] font-semibold text-secondary">Unless</span>
-        <ul className="flex flex-col gap-1">
-          {decision.unless.map((u) => (
-            <li key={u} className="flex gap-1.5 text-[13px] leading-relaxed text-secondary">
-              <span aria-hidden="true" className="text-secondary">&middot;</span>
-              <span>{u}</span>
-            </li>
-          ))}
-        </ul>
+      <div id={first ? "step-tradeoffs" : undefined} data-testid={`decision-card-${d.id}`} className="ic-decision">
+        <h2 {...(first ? { id: "h-tradeoffs", "data-stage-heading": true, tabIndex: -1 } : {})} className="ic-rowlabel focus:outline-none" style={{ border: 0, padding: "4px 14px 0 0" }}>
+          3 · Understand trade-offs
+        </h2>
+        <div>
+          <h4 className="ic-h4">If &ldquo;{d.title}&rdquo; dominates, this tends to favor</h4>
+          <p className="ic-q" style={{ fontSize: 22, marginBottom: 12 }}>
+            {decision.favored.map((id) => ARCHITECTURE_CHOICE_NAMES[id]).join(" · ")}
+          </p>
+          <p className="ic-small" style={{ marginBottom: 12 }}>
+            A conditional tendency with its exceptions, not a verdict. {DISCLOSURES.noWinner}
+          </p>
+          <Field label="Because" body={decision.because} />
+          <Field label="How it connects" body={decision.connects} />
+          <Field label="Decision it informs" body={decision.informs} />
+        </div>
+        <div>
+          <h4 className="ic-h4">Unless</h4>
+          <ul className="ic-unless">
+            {decision.unless.map((u) => (
+              <li key={u}>{u}</li>
+            ))}
+          </ul>
+          <EvidenceTag glyph evidence={decision.evidence} basis={decision.basis} refs={decision.refs} />
+        </div>
       </div>
-      <Field label="How it connects" body={decision.connects} />
-      <Field label="Decision it informs" body={decision.informs} />
-      <EvidenceTag glyph evidence={decision.evidence} basis={decision.basis} refs={decision.refs} />
+      <p className="ic-small" style={{ padding: "0 28px 20px" }}>{DISCLOSURES.sim}</p>
     </div>
   );
 }
 
 function Field({ label, body }: { label: string; body: string }) {
   return (
-    <div className="flex flex-col gap-0.5">
-      <span className="text-[12px] font-semibold text-secondary">{label}</span>
-      <p className="text-[13px] leading-relaxed text-secondary">{body}</p>
+    <div className="flex flex-col gap-0.5" style={{ marginBottom: 8 }}>
+      <span className="ic-flabel">{label}</span>
+      <p className="ic-body">{body}</p>
     </div>
   );
 }

@@ -55,15 +55,13 @@ export function InfrastructureMap() {
   const lanes: Lane[] = ["main", "backup", "cooling", "monitoring"];
 
   return (
-    <section className="flex flex-col gap-3 border border-hairline bg-surface px-4 py-3.5">
+    <section className="ic-map">
       <div className="flex flex-col gap-2">
-        <span className="font-sans text-[11.5px] font-semibold uppercase tracking-[0.04em] text-secondary">
-          Architecture view
-        </span>
+        <span className="ic-eyebrow" style={{ margin: 0 }}>Architecture view</span>
         <ArchitectureSelector selected={architectureId} onSelect={selectArchitecture} />
         <SignalPathRail architecture={architectureId} note="Follows the selected architecture view" />
-        <p className="max-w-3xl text-[12px] leading-relaxed text-secondary">{architecture.summary}</p>
-        <p className="border border-hairline bg-surface-raised px-2.5 py-2 text-[12px] leading-relaxed text-secondary">
+        <p className="ic-body" style={{ maxWidth: "80ch" }}>{architecture.summary}</p>
+        <p className="ic-small" style={{ maxWidth: "80ch", borderLeft: "2px solid var(--color-hairline-strong)", paddingLeft: 12 }}>
           <strong className="text-primary">Illustrative, not universal:</strong> {architecture.caveat}
         </p>
       </div>
@@ -78,7 +76,8 @@ export function InfrastructureMap() {
        * `overflow-x-auto` main-lane row below can't shrink below its
        * unscrolled width on narrow viewports where scrolling is
        * actually needed. */}
-      <div className="flex min-w-0 flex-col gap-3">
+      <div className="ic-map-grid">
+      <div className="ic-topology flex min-w-0 flex-col gap-5">
         {lanes.map((lane) => (
           <LaneRow
             key={lane}
@@ -91,6 +90,7 @@ export function InfrastructureMap() {
       </div>
 
       <DetailPanel ref={detailRef} node={selectedNode} />
+      </div>
     </section>
   );
 }
@@ -103,7 +103,7 @@ function ArchitectureSelector({
   onSelect: (id: ArchitectureId) => void;
 }) {
   return (
-    <div role="radiogroup" aria-label="Architecture view" className="flex flex-wrap gap-1.5">
+    <div role="radiogroup" aria-label="Architecture view" className="ic-archtabs">
       {ARCHITECTURES.map((a) => {
         const isSelected = a.id === selected;
         return (
@@ -113,14 +113,11 @@ function ArchitectureSelector({
             role="radio"
             aria-checked={isSelected}
             onClick={() => onSelect(a.id)}
-            className={`flex flex-col items-start gap-0.5 rounded border-2 px-2.5 py-1.5 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary ${
-              isSelected
-                ? "border-primary bg-surface-raised text-primary"
-                : "border-hairline bg-surface text-secondary hover:bg-surface-raised"
-            }`}
+            data-on={isSelected}
+            className="focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-secondary"
           >
-            <span className="font-sans text-[11px] font-semibold uppercase tracking-[0.03em]">{a.name}</span>
-            <span className="text-[12px] text-secondary">{a.tagline}</span>
+            <span className="t">{a.name}</span>
+            <span className="s">{a.tagline}</span>
           </button>
         );
       })}
@@ -164,12 +161,12 @@ function LaneRow({
             aria-label={meta.label}
             className={
               isMainPath
-                ? "flex flex-col gap-1 sm:min-w-max sm:flex-row sm:items-stretch sm:gap-1.5"
+                ? "flex flex-col gap-1 sm:min-w-[900px] sm:flex-row sm:items-stretch sm:gap-1.5"
                 : "flex flex-col gap-1 sm:flex-row sm:flex-wrap sm:items-stretch sm:gap-1.5"
             }
           >
             {nodes.map((node, i) => (
-              <div key={node.id} className="flex shrink-0 flex-col items-stretch gap-1 sm:flex-row sm:gap-1.5">
+              <div key={node.id} className={`flex flex-col items-stretch gap-1 sm:flex-row sm:gap-1.5 ${isMainPath ? "sm:min-w-0 sm:flex-1" : "shrink-0"}`}>
                 <NodeButton
                   node={node}
                   isSelected={node.id === selectedNodeId}
@@ -222,16 +219,14 @@ function NodeButton({
       type="button"
       aria-pressed={isSelected}
       onClick={() => onSelect(node.id)}
-      className={`flex min-w-[132px] flex-col gap-0.5 border-2 px-2.5 py-1.5 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary ${
-        noShrink ? "shrink-0 basis-[150px]" : "flex-1 sm:flex-none sm:basis-[150px]"
-      } ${
-        isSelected
-          ? "border-primary bg-surface-raised"
-          : "border-hairline bg-surface hover:bg-surface-raised"
+      data-on={isSelected}
+      data-main={noShrink}
+      className={`ic-node flex flex-col gap-1 text-left focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary ${
+        noShrink ? "min-w-0 flex-1" : "min-w-[132px] flex-1 sm:flex-none"
       }`}
     >
-      <span className="text-[12px] font-semibold text-primary">{node.label}</span>
-      <span className="text-[11px] text-secondary">{node.detail}</span>
+      <span className="ic-node-t">{node.label}</span>
+      <span className="ic-node-d">{node.detail}</span>
     </button>
   );
 }
@@ -249,7 +244,7 @@ function DetailPanel({
     <div
       ref={ref}
       tabIndex={-1}
-      className="flex max-w-2xl flex-col gap-2.5 border border-hairline bg-surface-raised px-3 py-3"
+      className="ic-detail flex flex-col gap-3"
     >
       <div className="flex flex-col gap-0.5 border-b border-hairline pb-2">
         <span className="font-mono text-[11px] uppercase tracking-[0.06em] text-secondary">

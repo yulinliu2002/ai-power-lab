@@ -1,22 +1,21 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { AreaHeader } from "../components/AreaHeader";
-import { BasisPanel } from "../components/BasisPanel";
 import { EngineeringInterpretation } from "../components/EngineeringInterpretation";
 import { EngineeringTakeaway } from "../components/EngineeringTakeaway";
 import {
   BASELINE_EXPERIMENT_PARAMS,
-  ExperimentPanel,
+  CAPACITANCE_RANGE,
+  FINAL_FRACTION_RANGE,
+  TIME_CONSTANT_RANGE,
   type ExperimentParams,
 } from "../components/ExperimentPanel";
-import { KpiReadout } from "../components/KpiTile";
 import { PowerFlowSchematic } from "../components/PowerFlowSchematic";
 import { ProtectionCoordination } from "../components/ProtectionCoordination";
 import { ProtectionTimeline } from "../components/ProtectionTimeline";
-import { SCENARIO_OPTIONS, ScenarioSelector } from "../components/ScenarioSelector";
+import { SCENARIO_OPTIONS } from "../components/ScenarioSelector";
 import { ScenarioComparison } from "../components/ScenarioComparison";
 import { SensitivityStudy } from "../components/SensitivityStudy";
 import { SignalPathRail } from "../components/SignalPathRail";
@@ -46,12 +45,19 @@ import {
   type ScenarioComparisonResponse,
   type ScenarioName,
   type ScenarioRunResponse,
-  type Sample,
 } from "../lib/simulationApi";
 import { busStatus, sstStatus } from "../lib/statusRoles";
 import { SVG_COLOR } from "../lib/theme";
 import { computeTransientMetrics, formatEnergyDeficitKj } from "../lib/transientMetrics";
 
+/**
+ * Advanced Sandbox (SPEC-014 Scope A) in the "instrument console" composition:
+ * a control rail (Stage 1) beside the observe stage (Stage 2) where the live
+ * state and the principal transient dominate; investigate (Stage 3) and the
+ * takeaway (Stage 4) follow. All state logic, request guards and behaviors are
+ * unchanged from the four-stage restructure; this layer is composition only.
+ * Every large live value reads the displayed run at the scrubber's sample.
+ */
 // The initial AI load fraction (before the step) is fixed in V1 --
 // Scenario A always starts at 40% rated load, matching
 // `backend/schemas.py: LoadStepRequest.initial_fraction`'s own
@@ -287,31 +293,37 @@ export default function SandboxPage() {
         : `Showing Load Step with experiment values: ${describeParams(displayedParams)}.`;
 
   return (
-    <main className="mx-auto flex w-full max-w-[1320px] flex-1 flex-col gap-5 px-4 py-5 sm:px-6">
-      <AreaHeader
-        title="Advanced Sandbox"
-        role="Free experimentation on one simplified slice of one architecture"
-        next={{ href: "/architecture", label: "Architecture Choices: compare the three architectures" }}
-      >
-        <p className="text-body text-secondary">
-          Want a guided walkthrough first?{" "}
-          <Link
-            href="/learn"
-            className="text-primary underline underline-offset-2 hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary"
-          >
-            Learn by Example
-          </Link>
-          .
-        </p>
-      </AreaHeader>
-
-      <BasisPanel title="Scope of this simulation" testId="sandbox-scope" items={[{ tag: "Simulation", text: DISCLOSURES.sim }]} />
+    <main className="ic-page">
+      <header className="ic-head">
+        <div>
+          <p className="ic-eyebrow">Free experimentation on one simplified slice of one architecture</p>
+          <h1 className="ic-h1">Advanced Sandbox</h1>
+          <p className="ic-lede">
+            Pick a disturbance, set the parameters, run it, and watch the power system respond. For a guided
+            walkthrough first, see{" "}
+            <Link href="/learn" className="text-primary underline underline-offset-2 hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary">
+              Learn by Example
+            </Link>
+            .
+          </p>
+          <p className="ic-small" style={{ marginTop: 10 }}>
+            Next:{" "}
+            <Link href="/architecture" className="text-primary underline underline-offset-2 hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary">
+              Architecture Choices: compare the three architectures
+            </Link>
+          </p>
+        </div>
+        <div style={{ borderLeft: "2px solid var(--color-text-primary)", paddingLeft: 18 }} data-testid="sandbox-scope">
+          <p className="ic-eyebrow" style={{ marginBottom: 6 }}>Scope of this simulation</p>
+          <p className="ic-small" style={{ color: "var(--color-text-primary)", fontSize: 13.5 }}>{DISCLOSURES.sim}</p>
+        </div>
+      </header>
 
       <SignalPathRail architecture="mv-to-800vdc" simulatedSlice note="Simulated slice of one conceptual architecture" />
 
-      <div className="flex flex-col gap-2">
+      <div style={{ display: "grid", gap: 8, marginTop: 14 }}>
         <StageNav label="Sandbox stages" stages={STAGES} />
-        <details className="max-w-3xl border border-hairline bg-surface px-3 py-2" data-testid="model-scope">
+        <details className="max-w-3xl" data-testid="model-scope">
           <summary className="cursor-pointer font-mono text-meta uppercase text-secondary hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary">
             Model scope and limits
           </summary>
@@ -324,104 +336,148 @@ export default function SandboxPage() {
         </details>
       </div>
 
-      {/* Stage 1 */}
-      <Stage id="stage-configure" n={1} title="Configure & run" question="What disturbance, and with what parameters?">
-        <ScenarioSelector selected={activeScenario} onSelect={selectScenario} disabled={state.status === "loading"} />
-        {isLoadStep ? (
-          readyData ? (
-            <>
-              <ExperimentPanel
-                draft={draftParams}
-                onDraftChange={setDraftParams}
-                onRun={() => runExperiment(draftParams)}
-                onReset={handleReset}
-                isRunning={isRunning}
-                initialPLoadKw={initialPLoadKw}
-                loadRatedPowerW={loadRatedPowerW}
-                error={runError}
-              />
-              {draftDiffersFromRun && (
-                <p data-testid="unrun-values" className="font-mono text-[11px] text-secondary">
-                  {UNRUN_VALUES_MARKER}
-                </p>
-              )}
-            </>
+      <div className="ic-console">
+        <aside id="stage-configure" className="ic-ctrl" aria-labelledby="stage-configure-h">
+          <div>
+            <h2 id="stage-configure-h" data-stage-heading tabIndex={-1} className="ic-eyebrow focus:outline-none">
+              1 · Configure &amp; run
+            </h2>
+            <p className="ic-small" style={{ marginBottom: 8 }}>What disturbance, and with what parameters?</p>
+            <div className="ic-scen" role="radiogroup" aria-label="Scenario" data-testid="scenario-select">
+              {SCENARIO_OPTIONS.map((o) => (
+                <button
+                  key={o.key}
+                  type="button"
+                  role="radio"
+                  aria-checked={o.key === activeScenario}
+                  disabled={state.status === "loading"}
+                  data-testid={`scenario-option-${o.key}`}
+                  onClick={() => selectScenario(o.key)}
+                >
+                  {o.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          {isLoadStep ? (
+            readyData ? (
+              <>
+                <Slider
+                  label="AI load step (kW, final demand)"
+                  short="AI load step"
+                  unit="kW"
+                  readout={`${initialPLoadKw.toFixed(0)} → ${((draftParams.finalFraction * loadRatedPowerW) / 1e3).toFixed(0)}`}
+                  value={draftParams.finalFraction}
+                  range={FINAL_FRACTION_RANGE}
+                  disabled={isRunning}
+                  onChange={(v) => setDraftParams({ ...draftParams, finalFraction: v })}
+                  help="Final AI demand after the step, an illustrative test input. In this model, a larger step opens a larger initial gap between demand and SST output, because SST output follows demand with the response time set below."
+                />
+                <Slider
+                  label="DC bus capacitance C_dc (F)"
+                  short="DC bus capacitance C_dc"
+                  unit="F"
+                  readout={draftParams.capacitanceF.toFixed(3)}
+                  value={draftParams.capacitanceF}
+                  range={CAPACITANCE_RANGE}
+                  disabled={isRunning}
+                  onChange={(v) => setDraftParams({ ...draftParams, capacitanceF: v })}
+                  help="One lumped capacitance for the whole bus. From E = ½·C·V², the same energy drawn from the bus moves V_dc less when C is larger. This value is not a sized or measured bus."
+                />
+                <Slider
+                  label="SST response time τ_sst (ms)"
+                  short="SST response time τ_sst"
+                  unit="ms"
+                  readout={(draftParams.timeConstantS * 1000).toFixed(0)}
+                  value={draftParams.timeConstantS}
+                  range={TIME_CONSTANT_RANGE}
+                  disabled={isRunning}
+                  onChange={(v) => setDraftParams({ ...draftParams, timeConstantS: v })}
+                  help="Time constant of a first-order lag on SST output power. It is a modeling assumption, not a measured or guaranteed hardware bandwidth. A longer τ_sst keeps the gap between demand and SST output open for longer."
+                />
+                <div style={{ display: "grid", gap: 8 }}>
+                  <button type="button" className="ic-run" disabled={isRunning} onClick={() => runExperiment(draftParams)}>
+                    {isRunning ? "Running…" : "Run Experiment"}
+                  </button>
+                  <button type="button" className="ic-ghost" disabled={isRunning} onClick={handleReset}>
+                    Reset to preset
+                  </button>
+                  {draftDiffersFromRun && (
+                    <p data-testid="unrun-values" className="ic-small ic-mono">{UNRUN_VALUES_MARKER}</p>
+                  )}
+                  {runError && <p className="ic-small" style={{ color: "var(--color-status-critical)" }}>{runError}</p>}
+                </div>
+              </>
+            ) : (
+              <p className="ic-small">Parameters appear once the run has loaded.</p>
+            )
           ) : (
-            <p className="text-[13px] text-secondary">Parameters appear once the run has loaded.</p>
-          )
-        ) : (
-          <p data-testid="fixed-preset-note" className="text-[13px] text-secondary">
-            {FIXED_PRESET_NOTE}
-          </p>
-        )}
-      </Stage>
+            <p data-testid="fixed-preset-note" className="ic-small">{FIXED_PRESET_NOTE}</p>
+          )}
+        </aside>
 
-      {/* Stage 2 */}
-      <Stage id="stage-observe" n={2} title="Observe & explain" question="What happened, and why?">
-        {state.status === "loading" && <p className="font-mono text-xs text-secondary">LOADING TELEMETRY&hellip;</p>}
-        {state.status === "error" && (
-          <p className="border border-status-critical bg-surface px-3 py-2 font-mono text-xs text-status-critical">
-            API ERROR: {state.message}
-          </p>
-        )}
-        {readyData && (
-          <Observe
-            data={readyData}
-            index={index}
-            onIndexChange={setIndex}
-            metrics={metrics}
-            provenance={provenance}
-            stale={draftDiffersFromRun}
-          />
-        )}
-      </Stage>
+        <section id="stage-observe" className="ic-stage" aria-labelledby="stage-observe-h">
+          <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", gap: 8 }}>
+            <h2 id="stage-observe-h" data-stage-heading tabIndex={-1} className="ic-eyebrow focus:outline-none" style={{ margin: 0 }}>
+              2 · Observe &amp; explain
+            </h2>
+            {readyData && (
+              <div className="ic-small ic-mono" style={{ textAlign: "right" }}>
+                <span data-testid="run-provenance">{provenance}</span>
+                {draftDiffersFromRun && <span data-testid="run-stale"> {STALE_RUN_MARKER}</span>}
+              </div>
+            )}
+          </div>
+          {state.status === "loading" && <p className="ic-small ic-mono">LOADING TELEMETRY…</p>}
+          {state.status === "error" && (
+            <p className="ic-small" style={{ color: "var(--color-status-critical)" }}>API ERROR: {state.message}</p>
+          )}
+          {readyData && <Observe data={readyData} index={index} setIndex={setIndex} metrics={metrics} />}
+        </section>
+      </div>
 
-      {/* Stage 3 */}
-      <Stage id="stage-investigate" n={3} title="Investigate & compare" question="How sensitive is this, and how do the scenarios differ?">
-        <fieldset className="flex flex-wrap gap-1.5" data-testid="study-chooser">
+      {readyData && (
+        <section className="ic-section ic-bare" aria-label="Protection">
+          <h2 className="ic-h2"><b>Protection</b> timeline, outcome and coordination</h2>
+          <div className="ic-two" data-testid="protection-group" style={{ marginTop: 14 }}>
+            <ProtectionTimeline timeline={readyData.protection_timeline} />
+            <ProtectionCoordination timeline={readyData.protection_timeline} />
+          </div>
+        </section>
+      )}
+
+      <section id="stage-investigate" className="ic-section" aria-labelledby="stage-investigate-h">
+        <h2 id="stage-investigate-h" data-stage-heading tabIndex={-1} className="ic-h2 focus:outline-none">
+          <b>3 · Investigate &amp; compare</b> how sensitive is this, and how do the scenarios differ?
+        </h2>
+        <fieldset className="ic-seg" data-testid="study-chooser" style={{ marginTop: 14 }}>
           <legend className="sr-only">Study</legend>
           <StudyOption id="sweep" label="Vary a parameter" selected={studyMode === "sweep"} disabled={!isLoadStep} onSelect={() => selectStudy("sweep")} />
           <StudyOption id="compare" label="Compare all five scenarios" selected={studyMode === "compare"} onSelect={() => selectStudy("compare")} />
         </fieldset>
         {!isLoadStep && studyMode !== "sweep" && (
-          <p data-testid="sweep-disabled-reason" className="text-[13px] text-secondary">
+          <p data-testid="sweep-disabled-reason" className="ic-small" style={{ marginBottom: 8 }}>
             {SWEEP_LOAD_STEP_ONLY} Select Load Step above to use it.
           </p>
         )}
         {studyMode === "none" && (
-          <p className="text-[13px] text-secondary">
-            Choose a study: sweep one parameter around the values set above, or compare all five fixed scenarios.
-          </p>
+          <p className="ic-small">Choose a study: sweep one parameter around the values set above, or compare all five fixed scenarios.</p>
         )}
-        {/* The sweep stays mounted (hidden) while the Compare study is shown, so
-            its result, parameter and snapshot survive switching between studies; it
-            unmounts, clearing and invalidating any in-flight sweep, only when the
-            scenario changes away from Load Step. */}
         {isLoadStep && (
           <div hidden={studyMode !== "sweep"}>
             <SensitivityStudy draft={draftParams} embedded />
           </div>
         )}
         {studyMode === "sweep" && !isLoadStep && (
-          <p data-testid="sweep-unavailable" className="text-[13px] text-secondary">
-            {SWEEP_LOAD_STEP_ONLY} Select Load Step above to use it.
-          </p>
+          <p data-testid="sweep-unavailable" className="ic-small">{SWEEP_LOAD_STEP_ONLY} Select Load Step above to use it.</p>
         )}
         {studyMode === "compare" && (
           <>
-            {comparisonState.status === "loading" && (
-              <p className="font-mono text-xs text-secondary">LOADING COMPARISON&hellip;</p>
-            )}
+            {comparisonState.status === "loading" && <p className="ic-small ic-mono">LOADING COMPARISON&hellip;</p>}
             {comparisonState.status === "error" && (
               <div className="flex flex-wrap items-center gap-3">
-                <p className="border border-status-critical bg-surface px-3 py-2 font-mono text-xs text-status-critical">
-                  API ERROR: {comparisonState.message}
-                </p>
-                <button
-                  type="button"
-                  onClick={fetchComparison}
-                  className="border border-hairline bg-surface-raised px-3 py-1.5 text-[12px] font-semibold text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary"
-                >
+                <p className="ic-small" style={{ color: "var(--color-status-critical)" }}>API ERROR: {comparisonState.message}</p>
+                <button type="button" onClick={fetchComparison} className="ic-ghost" style={{ width: "auto" }}>
                   Retry
                 </button>
               </div>
@@ -429,320 +485,224 @@ export default function SandboxPage() {
             {comparisonState.status === "ready" && <ScenarioComparison entries={comparisonState.data.scenarios} />}
           </>
         )}
-      </Stage>
+      </section>
 
-      {/* Stage 4 */}
-      <Stage id="stage-takeaway" n={4} title="Engineering takeaway" question="What can I conclude, and what can't I?">
+      <section id="stage-takeaway" className="ic-section" aria-labelledby="stage-takeaway-h">
+        <h2 id="stage-takeaway-h" data-stage-heading tabIndex={-1} className="ic-h2 focus:outline-none" style={{ marginBottom: 14 }}>
+          <b>4 · Engineering takeaway</b> what can I conclude, and what can&rsquo;t I?
+        </h2>
         {readyData ? (
           <EngineeringTakeaway data={readyData} metrics={metrics} provenance={provenance} />
         ) : (
-          <p className="text-[13px] text-secondary">The takeaway appears once a scenario has run.</p>
+          <p className="ic-small">The takeaway appears once a scenario has run.</p>
         )}
-      </Stage>
+      </section>
     </main>
   );
 }
 
-function Stage({
-  id,
-  n,
-  title,
-  question,
-  children,
+function Slider({
+  label, short, unit, readout, value, range, disabled, onChange, help,
 }: {
-  id: string;
-  n: number;
-  title: string;
-  question: string;
-  children: ReactNode;
+  label: string; short: string; unit: string; readout: string; value: number;
+  range: { min: number; max: number; step: number }; disabled: boolean; onChange: (v: number) => void; help: string;
 }) {
   return (
-    <section id={id} aria-labelledby={`${id}-h`} className="flex flex-col gap-3 border-t border-hairline pt-4">
-      <div className="flex flex-col gap-0.5">
-        <h2 id={`${id}-h`} data-stage-heading tabIndex={-1} className="text-heading text-primary focus:outline-none">
-          <span className="mr-2 font-mono text-meta text-secondary">{n}</span>
-          {title}
-        </h2>
-        <p className="text-[13px] text-secondary">{question}</p>
+    <div className="ic-slider">
+      <div className="ic-slider-row">
+        <span>{short}</span>
+        <span className="v">{readout}<span className="u"> {unit}</span></span>
       </div>
-      {children}
-    </section>
+      <input
+        type="range"
+        aria-label={label}
+        min={range.min}
+        max={range.max}
+        step={range.step}
+        value={value}
+        disabled={disabled}
+        onChange={(e) => onChange(Number(e.target.value))}
+      />
+      <details>
+        <summary>What does this do?</summary>
+        <p className="ic-small" data-testid="slider-description" style={{ marginTop: 6 }}>{help}</p>
+      </details>
+    </div>
   );
 }
 
-function StudyOption({
-  id,
-  label,
-  selected,
-  disabled = false,
-  onSelect,
-}: {
-  id: "sweep" | "compare";
-  label: string;
-  selected: boolean;
-  disabled?: boolean;
-  onSelect: () => void;
-}) {
+function StudyOption({ id, label, selected, disabled = false, onSelect }: { id: "sweep" | "compare"; label: string; selected: boolean; disabled?: boolean; onSelect: () => void }) {
   return (
     <label className="relative">
-      <input
-        type="radio"
-        name="study"
-        checked={selected}
-        disabled={disabled}
-        onChange={onSelect}
-        data-testid={`study-option-${id}`}
-        className="peer sr-only"
-      />
-      <span
-        className={`block cursor-pointer border px-3 py-1.5 text-[12px] font-semibold peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-secondary peer-disabled:cursor-not-allowed peer-disabled:opacity-60 ${
-          selected
-            ? "border-hairline-strong bg-surface-raised text-primary"
-            : "border-hairline bg-surface text-secondary hover:text-primary"
-        }`}
-      >
+      <input type="radio" name="study" checked={selected} disabled={disabled} onChange={onSelect} data-testid={`study-option-${id}`} className="peer sr-only" />
+      <span className="ic-segbtn peer-focus-visible:outline-2 peer-focus-visible:outline-offset-[-2px] peer-focus-visible:outline-secondary peer-disabled:cursor-not-allowed peer-disabled:opacity-60" data-on={selected}>
         {label}
       </span>
     </label>
   );
 }
 
-function Observe({
-  data,
-  index,
-  onIndexChange,
-  metrics,
-  provenance,
-  stale,
-}: {
-  data: ScenarioRunResponse;
-  index: number;
-  onIndexChange: (index: number) => void;
-  metrics: ReturnType<typeof computeTransientMetrics>;
-  provenance: string;
-  stale: boolean;
-}) {
-  const isLoadStep = data.scenario === "load_step";
+const ROLE_COLOR: Record<string, string> = {
+  good: "var(--color-status-good)",
+  warning: "var(--color-status-warning)",
+  critical: "var(--color-status-critical)",
+  neutral: "var(--color-status-neutral)",
+};
 
-  // One index selected from the already-loaded run -- no new
-  // simulation run, no new API request, no interpolation.
+function Observe({ data, index, setIndex, metrics }: { data: ScenarioRunResponse; index: number; setIndex: (i: number) => void; metrics: ReturnType<typeof computeTransientMetrics> }) {
+  // One index selected from the already-loaded run -- no new simulation
+  // run, no API request, no interpolation. Every live value below reads it.
   const sample = sampleAt(data, index);
   const timeS = data.timeseries.time_s;
   const eventMarkers = data.events.map((e) => ({ time: e.time_s, label: e.label }));
+  const vref = data.thresholds.voltage_reference_v;
+  const bus = busStatus(sample.v_dc_v, vref);
+  const sst = sstStatus(sample.operating_state);
+  const gap = sample.p_load_w - sample.p_sst_w;
+  const isLoadStep = data.scenario === "load_step";
   const event = data.events[0];
-
-  // The initial (pre-step) P_load sample is always real engine
-  // output, never a hardcoded "160" -- and since INITIAL_FRACTION is
-  // fixed, dividing it back out gives the load's rated power without
-  // the frontend ever hardcoding that config value either.
   const initialPLoadKw = data.timeseries.p_load_w[0] / 1e3;
   const finalPLoadKw = data.timeseries.p_load_w[data.timeseries.p_load_w.length - 1] / 1e3;
+  const vFinal = data.timeseries.v_dc_v[data.timeseries.v_dc_v.length - 1];
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
-        <p className="text-[13px] text-secondary" data-testid="run-provenance">
-          {provenance}
-        </p>
-        {stale && (
-          <p data-testid="run-stale" className="font-mono text-[11px] text-secondary">
-            {STALE_RUN_MARKER}
-          </p>
-        )}
-      </div>
-
+    <>
       {isLoadStep && event && (
-        <EventBanner initialKw={initialPLoadKw} finalKw={finalPLoadKw} stepTimeS={event.time_s} />
+        <div className="ic-event" data-testid="event-banner">
+          <span className="ic-eyebrow" style={{ margin: 0 }}>The event</span>
+          <span className="ic-mono" style={{ fontSize: 20, fontWeight: 600 }}>
+            {initialPLoadKw.toFixed(0)} <span className="text-secondary">&rarr;</span> {finalPLoadKw.toFixed(0)}{" "}
+            <span style={{ fontSize: 12, fontWeight: 400 }} className="text-secondary">kW</span>
+          </span>
+          <span className="ic-small ic-mono">at t = {event.time_s.toFixed(3)} s</span>
+          <p className="ic-small" style={{ maxWidth: "48ch" }}>
+            AI compute demand jumps almost instantly &mdash; far faster than this model&rsquo;s SST (solid-state
+            transformer) response time constant lets delivered power follow.
+          </p>
+        </div>
       )}
 
-      <div className="flex flex-col gap-3" data-testid="state-at-time">
-        <TimeScrubber timeS={timeS} index={index} onChange={onIndexChange} />
-        <KpiStrip sample={sample} voltageReferenceV={data.thresholds.voltage_reference_v} />
-        <PowerFlowSchematic
-          live={{
-            sample,
-            ratedPowerW: data.thresholds.rated_power_w,
-            voltageReferenceV: data.thresholds.voltage_reference_v,
-            capacitanceF: data.thresholds.capacitance_f,
-          }}
-        />
-      </div>
+      <div data-testid="state-at-time" className="flex flex-col gap-6">
+        <div className="ic-metrics">
+          <div>
+            <p className="ic-eyebrow" style={{ margin: "0 0 6px" }}>Current · at the scrubber time</p>
+            <div className="ic-hero-num">
+              {sample.v_dc_v.toFixed(1)}
+              <small>V</small>
+            </div>
+            <div className="ic-hero-cap">
+              <span className="ic-dot" style={{ background: ROLE_COLOR[bus.role] }} />
+              DC bus voltage V_dc at t = {sample.t_s.toFixed(4)} s
+            </div>
+            <dl className="ic-refvals" data-testid="reference-values">
+              <div>
+                <dt>Reference</dt>
+                <dd>{vref.toFixed(0)} V</dd>
+              </div>
+              {metrics && (
+                <div>
+                  <dt>Minimum in run</dt>
+                  <dd>{metrics.minVdcV.toFixed(1)} V at {metrics.minVdcTimeS.toFixed(3)} s</dd>
+                </div>
+              )}
+              <div>
+                <dt>Final (end of run)</dt>
+                <dd>{vFinal.toFixed(1)} V</dd>
+              </div>
+            </dl>
+          </div>
+          <div className="ic-minis">
+            <div>
+              <div className="l">Current P_load · AI demand</div>
+              <div className="n">{(sample.p_load_w / 1e3).toFixed(1)}<small>kW</small></div>
+            </div>
+            <div>
+              <div className="l" style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                <span className="ic-dot" style={{ background: ROLE_COLOR[sst.role] }} />
+                Current P_sst · delivered
+              </div>
+              <div className="n">{(sample.p_sst_w / 1e3).toFixed(1)}<small>kW</small></div>
+            </div>
+            <div>
+              <div className="l">Current ΔP · {gap >= 0 ? "power deficit, bus is supplying this" : "power surplus, bus is recharging"}</div>
+              <div className="n">{(Math.abs(gap) / 1e3).toFixed(1)}<small>kW</small></div>
+            </div>
+          </div>
+        </div>
 
-      <div className="flex flex-col gap-1.5">
-        <h3 className="text-heading text-primary">Synchronized transient</h3>
-        <div className="grid grid-cols-1 gap-2 xl:grid-cols-2">
-          <div className="flex min-w-0 flex-col gap-1.5">
-            <TelemetryChart
-              title="DC Bus Voltage — V_dc(t)"
-              timeS={timeS}
-              series={[{ label: "V_dc", values: data.timeseries.v_dc_v, color: SVG_COLOR.accent }]}
-              yUnit="V"
-              currentTimeS={sample.t_s}
-              referenceLines={[
-                {
-                  value: data.thresholds.voltage_reference_v,
-                  label: `V_ref = ${data.thresholds.voltage_reference_v.toFixed(0)} V`,
-                },
-              ]}
-              eventMarkers={eventMarkers}
-              markerPoint={
-                metrics
-                  ? {
-                      time: metrics.minVdcTimeS,
-                      value: metrics.minVdcV,
-                      label: `min ${metrics.minVdcV.toFixed(0)} V`,
-                    }
-                  : undefined
-              }
-            />
-            <ChartHelp testId="chart-help-vdc">{VDC_CHART_CAPTION}</ChartHelp>
-          </div>
-          <div className="flex min-w-0 flex-col gap-1.5">
-            <TelemetryChart
-              title="Power Balance — P_load vs P_sst"
-              timeS={timeS}
-              series={[
-                {
-                  label: "P_sst",
-                  values: data.timeseries.p_sst_w.map((w) => w / 1e3),
-                  color: SVG_COLOR.accent,
-                },
-                {
-                  label: "P_load",
-                  values: data.timeseries.p_load_w.map((w) => w / 1e3),
-                  color: SVG_COLOR.neutral,
-                  dashed: true,
-                },
-              ]}
-              yUnit="kW"
-              currentTimeS={sample.t_s}
-              eventMarkers={eventMarkers}
-              deficitFill={
-                metrics
-                  ? {
-                      aboveLabel: "P_load",
-                      baselineLabel: "P_sst",
-                      windowEndS: metrics.minVdcTimeS,
-                      label: `shaded area ≈ ${formatEnergyDeficitKj(metrics)} kJ drawn from the DC bus (energy, not power)`,
-                    }
-                  : undefined
-              }
-            />
-            <ChartHelp testId="chart-help-power">
-              {POWER_BALANCE_CAPTION}
-              {isLoadStep ? ` ${POWER_BALANCE_CAPTION_LOAD_STEP}` : ""}
-            </ChartHelp>
-          </div>
+        <div className="ic-bare ic-schematic">
+          <PowerFlowSchematic
+            live={{
+              sample,
+              ratedPowerW: data.thresholds.rated_power_w,
+              voltageReferenceV: vref,
+              capacitanceF: data.thresholds.capacitance_f,
+            }}
+          />
+        </div>
+
+        <div className="ic-hero-chart">
+          <TelemetryChart
+            title="DC Bus Voltage — V_dc(t)"
+            timeS={timeS}
+            series={[{ label: "V_dc", values: data.timeseries.v_dc_v, color: SVG_COLOR.accent }]}
+            yUnit="V"
+            currentTimeS={sample.t_s}
+            referenceLines={[{ value: vref, label: `V_ref = ${vref.toFixed(0)} V` }]}
+            eventMarkers={eventMarkers}
+            markerPoint={metrics ? { time: metrics.minVdcTimeS, value: metrics.minVdcV, label: `min ${metrics.minVdcV.toFixed(0)} V` } : undefined}
+          />
+          <TimeScrubber timeS={timeS} index={index} onChange={setIndex} />
+          <details data-testid="chart-help-vdc" className="ic-small" style={{ padding: "8px 4px" }}>
+            <summary style={{ cursor: "pointer" }}>How to read this chart</summary>
+            <p style={{ marginTop: 6 }}>{VDC_CHART_CAPTION}</p>
+          </details>
         </div>
       </div>
 
-      {metrics && (
-        <EngineeringInterpretation metrics={metrics} voltageReferenceV={data.thresholds.voltage_reference_v} />
-      )}
-
-      <div className="flex flex-col gap-2" data-testid="protection-group">
-        <h3 className="text-heading text-primary">Protection</h3>
-        <ProtectionTimeline timeline={data.protection_timeline} />
-        <ProtectionCoordination timeline={data.protection_timeline} />
+      <div className="ic-split">
+        <div className="ic-hero-chart">
+          <TelemetryChart
+            title="Power Balance — P_load vs P_sst"
+            timeS={timeS}
+            series={[
+              { label: "P_sst", values: data.timeseries.p_sst_w.map((w) => w / 1e3), color: SVG_COLOR.accent },
+              { label: "P_load", values: data.timeseries.p_load_w.map((w) => w / 1e3), color: SVG_COLOR.neutral, dashed: true },
+            ]}
+            yUnit="kW"
+            currentTimeS={sample.t_s}
+            eventMarkers={eventMarkers}
+            deficitFill={
+              metrics
+                ? {
+                    aboveLabel: "P_load",
+                    baselineLabel: "P_sst",
+                    windowEndS: metrics.minVdcTimeS,
+                    label: `shaded area ≈ ${formatEnergyDeficitKj(metrics)} kJ drawn from the DC bus (energy, not power)`,
+                  }
+                : undefined
+            }
+          />
+          <details data-testid="chart-help-power" className="ic-small" style={{ padding: "8px 4px" }}>
+            <summary style={{ cursor: "pointer" }}>How to read this chart</summary>
+            <p style={{ marginTop: 6 }}>
+              {POWER_BALANCE_CAPTION}
+              {isLoadStep ? ` ${POWER_BALANCE_CAPTION_LOAD_STEP}` : ""}
+            </p>
+          </details>
+        </div>
+        {metrics && (
+          <div className="ic-explain">
+            <EngineeringInterpretation metrics={metrics} voltageReferenceV={vref} />
+          </div>
+        )}
       </div>
 
       {metrics && (
-        <TransientMetricsPanel metrics={metrics} voltageReferenceV={data.thresholds.voltage_reference_v} comfortable />
+        <>
+          <TransientMetricsPanel metrics={metrics} voltageReferenceV={vref} comfortable variant="console" />
+        </>
       )}
-    </div>
-  );
-}
-
-function ChartHelp({ children, testId }: { children: ReactNode; testId: string }) {
-  return (
-    <details data-testid={testId} className="text-[12px] text-secondary">
-      <summary className="cursor-pointer font-mono text-meta uppercase hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary">
-        How to read this chart
-      </summary>
-      <p className="mt-1 max-w-3xl leading-relaxed">{children}</p>
-    </details>
-  );
-}
-
-/**
- * States the one thing that happens in Scenario A in plain, concrete
- * terms before any chart or number -- the "what changed" a first-time
- * reader needs before anything else makes sense. Every figure is a
- * real sample from the fetched run (first/last P_load, the engine's
- * own event marker), never a hardcoded "160 -> 320".
- */
-function EventBanner({
-  initialKw,
-  finalKw,
-  stepTimeS,
-}: {
-  initialKw: number;
-  finalKw: number;
-  stepTimeS: number;
-}) {
-  return (
-    <section className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 border-b border-hairline pb-2">
-      <div className="flex items-baseline gap-3">
-        <span className="font-sans text-[11px] font-semibold uppercase tracking-[0.04em] text-secondary">
-          THE EVENT
-        </span>
-        <span className="font-mono text-[18px] font-semibold tabular-nums text-primary">
-          {initialKw.toFixed(0)} <span className="text-secondary">&rarr;</span> {finalKw.toFixed(0)}{" "}
-          <span className="text-[12px] font-normal text-secondary">kW</span>
-        </span>
-        <span className="font-mono text-[11px] tabular-nums text-secondary">
-          at t = {stepTimeS.toFixed(3)} s
-        </span>
-      </div>
-      <p className="max-w-md text-[12px] leading-snug text-secondary">
-        AI compute demand jumps almost instantly &mdash; far faster than this model&rsquo;s SST
-        (solid-state transformer) response time constant lets delivered power follow.
-      </p>
-    </section>
-  );
-}
-
-function KpiStrip({
-  sample,
-  voltageReferenceV,
-}: {
-  sample: Sample;
-  voltageReferenceV: number;
-}) {
-  const bus = busStatus(sample.v_dc_v, voltageReferenceV);
-  const sst = sstStatus(sample.operating_state);
-  const mismatchW = sample.p_load_w - sample.p_sst_w;
-
-  return (
-    <div className="grid grid-cols-2 gap-x-2 border-y border-hairline sm:grid-cols-4 sm:gap-x-0 sm:divide-x sm:divide-hairline">
-      <KpiReadout
-        label="V_DC"
-        caption="DC bus voltage"
-        value={sample.v_dc_v.toFixed(1)}
-        unit="V"
-        role={bus.role}
-      />
-      <KpiReadout
-        label="P_LOAD"
-        caption="AI demand"
-        value={(sample.p_load_w / 1e3).toFixed(1)}
-        unit="kW"
-        role="neutral"
-      />
-      <KpiReadout
-        label="P_SST"
-        caption="SST delivered power"
-        value={(sample.p_sst_w / 1e3).toFixed(1)}
-        unit="kW"
-        role={sst.role}
-      />
-      <KpiReadout
-        label="ΔP"
-        caption={mismatchW >= 0 ? "power deficit — bus is supplying this" : "power surplus — bus is recharging"}
-        value={(Math.abs(mismatchW) / 1e3).toFixed(1)}
-        unit="kW"
-        role="neutral"
-      />
-    </div>
+    </>
   );
 }

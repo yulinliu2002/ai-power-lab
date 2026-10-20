@@ -26,7 +26,7 @@ export function ScrollRegion({
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const measure = () => setScrollable(el.scrollWidth > el.clientWidth + 1);
+    const measure = () => setScrollable(el.scrollWidth > el.clientWidth + 4);
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(el);

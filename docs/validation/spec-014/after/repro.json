@@ -1,7 +1,7 @@
 [
  {
   "id": "Q1",
-  "observed": "schematic scroller 568/324px, visible hint True, focusable tabindex 0",
+  "observed": "schematic scroller 568/276px, visible hint True, focusable tabindex 0",
   "fixed": true
  },
  {
@@ -11,7 +11,7 @@
  },
  {
   "id": "Q3",
-  "observed": "sweep table 640px in named scroller 'Sensitivity results table' (324px), hint True",
+  "observed": "sweep table 640px in named scroller 'Sensitivity results table' (308px), hint True",
   "fixed": true
  },
  {
@@ -21,7 +21,7 @@
  },
  {
   "id": "Q5",
-  "observed": "Main Power Path stacked at 390px: scrollWidth 312 = clientWidth 312",
+  "observed": "Main Power Path stacked at 390px: scrollWidth 296 = clientWidth 296",
   "fixed": true
  },
  {

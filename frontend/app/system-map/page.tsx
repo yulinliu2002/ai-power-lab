@@ -1,8 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
-import { AreaHeader } from "../components/AreaHeader";
-import { BasisPanel } from "../components/BasisPanel";
 import { InfrastructureMap } from "../components/InfrastructureMap";
 import { PowerFlowSchematic } from "../components/PowerFlowSchematic";
 import { DISCLOSURES } from "../lib/architectureChoicesData";
@@ -31,21 +29,34 @@ export const metadata: Metadata = {
  */
 export default function SystemMapPage() {
   return (
-    <main className="mx-auto flex w-full max-w-[1320px] flex-1 flex-col gap-5 px-4 py-5 sm:px-6">
-      <AreaHeader
-        title="System map"
-        role="Explore system structure, equipment and interfaces"
-        lede="How an AI data center is powered and cooled. This map covers the major electrical and cooling infrastructure categories from the utility grid to the compute rack, and three representative architectures showing where they diverge."
-        next={{ href: "/architecture", label: "Architecture Choices: compare these three architectures" }}
-      />
-
-      <BasisPanel
-        title="Basis and limits"
-        items={[
-          { tag: "Blocks", text: DISCLOSURES.block },
-          { tag: "Simulation", text: DISCLOSURES.sim },
-        ]}
-      />
+    <main className="ic-page flex flex-col gap-8">
+      <header className="ic-head">
+        <div>
+          <p className="ic-eyebrow">Explore system structure, equipment and interfaces</p>
+          <h1 className="ic-h1">System map</h1>
+          <p className="ic-lede">
+            How an AI data center is powered and cooled. This map covers the major electrical and cooling
+            infrastructure categories from the utility grid to the compute rack, and three representative architectures
+            showing where they diverge.
+          </p>
+          <p className="ic-small" style={{ marginTop: 10 }}>
+            Next:{" "}
+            <Link href="/architecture" className="text-primary underline underline-offset-2 hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary">
+              Architecture Choices: compare these three architectures
+            </Link>
+          </p>
+        </div>
+        <ul className="ic-basis" style={{ gridTemplateColumns: "repeat(2, minmax(0, 1fr))", borderTop: 0, borderBottom: 0, padding: 0 }} data-testid="disclosures">
+          <li>
+            <b>Blocks</b>
+            <p>{DISCLOSURES.block}</p>
+          </li>
+          <li>
+            <b>Simulation</b>
+            <p>{DISCLOSURES.sim}</p>
+          </li>
+        </ul>
+      </header>
 
       <InfrastructureMap />
 

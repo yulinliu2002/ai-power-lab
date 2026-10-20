@@ -4,6 +4,8 @@ interface TransientMetricsPanelProps {
   /** Presentation option (SPEC-014): render the engineering-basis prose in
    * the 12px Sans body tier instead of 11px Mono. Default keeps the original. */
   comfortable?: boolean;
+  /** "console": large numerals in the instrument-console composition (SPEC-014 art direction); same labels, values and captions. */
+  variant?: "default" | "console";
   metrics: TransientMetrics;
   voltageReferenceV: number;
 }
@@ -35,7 +37,7 @@ interface TransientMetricsPanelProps {
  * the physics a learner needs to check the causal account above is
  * never hidden behind interaction.
  */
-export function TransientMetricsPanel({ metrics, voltageReferenceV, comfortable = false }: TransientMetricsPanelProps) {
+export function TransientMetricsPanel({ metrics, voltageReferenceV, comfortable = false, variant = "default" }: TransientMetricsPanelProps) {
   const hasDeficit = metrics.peakDeficitKw > 0;
 
   return (
@@ -48,9 +50,10 @@ export function TransientMetricsPanel({ metrics, voltageReferenceV, comfortable 
           How severe was this event, and how fast did the system recover?
         </span>
       </div>
-      <div className="grid grid-cols-2 gap-x-2 border-y border-hairline sm:grid-cols-5 sm:gap-x-0 sm:divide-x sm:divide-hairline">
+      <div className={variant === "console" ? "ic-results five" : "grid grid-cols-2 gap-x-2 border-y border-hairline sm:grid-cols-5 sm:gap-x-0 sm:divide-x sm:divide-hairline"}>
         <MetricTile
           comfortable={comfortable}
+          console={variant === "console"}
           label="VOLTAGE DROP"
           value={metrics.minVdcV.toFixed(1)}
           unit="V"
@@ -58,6 +61,7 @@ export function TransientMetricsPanel({ metrics, voltageReferenceV, comfortable 
         />
         <MetricTile
           comfortable={comfortable}
+          console={variant === "console"}
           label="PEAK DEVIATION"
           value={metrics.maxDeviationV.toFixed(1)}
           unit="V"
@@ -65,6 +69,7 @@ export function TransientMetricsPanel({ metrics, voltageReferenceV, comfortable 
         />
         <MetricTile
           comfortable={comfortable}
+          console={variant === "console"}
           label="POWER MISMATCH"
           value={hasDeficit ? metrics.peakDeficitKw.toFixed(1) : "0.0"}
           unit="kW"
@@ -76,6 +81,7 @@ export function TransientMetricsPanel({ metrics, voltageReferenceV, comfortable 
         />
         <MetricTile
           comfortable={comfortable}
+          console={variant === "console"}
           label="ENERGY DEFICIT"
           value={formatEnergyDeficitKj(metrics)}
           unit="kJ"
@@ -83,6 +89,7 @@ export function TransientMetricsPanel({ metrics, voltageReferenceV, comfortable 
         />
         <MetricTile
           comfortable={comfortable}
+          console={variant === "console"}
           label="RECOVERY TIME"
           value={metrics.recoveryElapsedS === null ? "—" : metrics.recoveryElapsedS.toFixed(2)}
           unit={metrics.recoveryElapsedS === null ? "NOT SETTLED" : "s"}
@@ -124,6 +131,7 @@ export function TransientMetricsPanel({ metrics, voltageReferenceV, comfortable 
 
 function MetricTile({
   comfortable = false,
+  console: isConsole = false,
   label,
   value,
   unit,
@@ -134,7 +142,20 @@ function MetricTile({
   unit: string;
   caption: string;
   comfortable?: boolean;
+  console?: boolean;
 }) {
+  if (isConsole) {
+    return (
+      <div>
+        <div className="n">
+          {value}
+          <small>{unit}</small>
+        </div>
+        <div className="l">{label.charAt(0) + label.slice(1).toLowerCase()}</div>
+        <p className="ic-small">{caption}</p>
+      </div>
+    );
+  }
   return (
     <div className="flex flex-col gap-0.5 px-3 py-1.5">
       <span className="font-sans text-[10.5px] font-semibold uppercase tracking-[0.04em] text-secondary">

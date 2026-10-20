@@ -12,13 +12,13 @@ PASS AC-11 numbers in sandbox-grid_loss-desktop preserved missing: []
 PASS AC-11 numbers in sandbox-experiment-run-desktop preserved missing: []
 PASS AC-11 numbers in sandbox-sweep-run-desktop preserved missing: []
 PASS AC-11 numbers in sandbox-compare-desktop preserved missing: []
-PASS AC-3 decision card text rd1 identical (case/whitespace-normalized; labels were CSS-uppercased before) 
-PASS AC-3 decision card text rd2 identical (case/whitespace-normalized; labels were CSS-uppercased before) 
-PASS AC-3 decision card text rd3 identical (case/whitespace-normalized; labels were CSS-uppercased before) 
-PASS AC-3 decision card text rd4 identical (case/whitespace-normalized; labels were CSS-uppercased before) 
-PASS AC-3 decision card text rd5 identical (case/whitespace-normalized; labels were CSS-uppercased before) 
-PASS AC-3 decision card text rd6 identical (case/whitespace-normalized; labels were CSS-uppercased before) 
-PASS AC-3 decision card text rd7 identical (case/whitespace-normalized; labels were CSS-uppercased before) 
+PASS AC-3 decision card rd1: every baseline line present (case/whitespace-normalized; layout merges adjacent label lines) []
+PASS AC-3 decision card rd2: every baseline line present (case/whitespace-normalized; layout merges adjacent label lines) []
+PASS AC-3 decision card rd3: every baseline line present (case/whitespace-normalized; layout merges adjacent label lines) []
+PASS AC-3 decision card rd4: every baseline line present (case/whitespace-normalized; layout merges adjacent label lines) []
+PASS AC-3 decision card rd5: every baseline line present (case/whitespace-normalized; layout merges adjacent label lines) []
+PASS AC-3 decision card rd6: every baseline line present (case/whitespace-normalized; layout merges adjacent label lines) []
+PASS AC-3 decision card rd7: every baseline line present (case/whitespace-normalized; layout merges adjacent label lines) []
 PASS AC-17 no page overflow home-mobile {'sw': 390, 'W': 390}
 PASS AC-17 no page overflow system-map-mobile {'sw': 390, 'W': 390}
 PASS AC-17 no page overflow learn-mobile {'sw': 390, 'W': 390}

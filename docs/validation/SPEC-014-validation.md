@@ -1,4 +1,4 @@
-# SPEC-014 Validation Record (implementation, in progress)
+# SPEC-014 Validation Record (implementation, in progress; includes the Instrument Console art-direction integration)
 
 **Spec:** `docs/specifications/SPEC-014-product-ux-redesign.md` (v0.5)
 **Synchronized base:** `main` at `f9cc8c4` (contains the SPEC-012 merge, PR #9). Branch `feature/spec-014-ux-redesign`.
@@ -32,6 +32,20 @@ Servers: baseline `f9cc8c4` worktree on :3200, branch on :3100, both against one
 | AC-24 | no `design-lab` path or string in the diff | `git diff --name-only` |
 
 CI (GitHub Actions, first push): Frontend (lint, typecheck, build) and Python (engine, API, parity) passed on both runs.
+
+
+## Instrument Console integration (spec §18) — local results
+
+Composition and styling were integrated into the production components after the Human visual review (2026-10-20); behavior, data modules and testids are unchanged. All earlier suites were re-run against the new composition and pass (`after/*.json`, `after/compare.txt`): API requests/responses identical, baseline numbers and chart geometry preserved, line-level Architecture preservation (layout-aware: headings may move or merge, content may not), five Learn cases, 27-step state matrix, extended keyboard/Tab/axe/390px checks, rail labels vs canonical data, `/learn` regression. New checks in `verify_art.py` (`after/verify_art.json`):
+
+| Condition | Result |
+|---|---|
+| 1 "Tends to favor" conditional | for every requirement the marked columns equal the data's `favored` set (at least one requirement marks several); legend, accessible chip text and decision band carry the conditional wording; no ranking/score/winner/best language outside the negating sentences (desktop and 390px) |
+| 2 live values synchronized | hero V_dc, P_load and P_sst equal the displayed run at the scrubber sample (default, Home, End, after a new Run Experiment, Grid Sag); Reference, Minimum in run (Load Step only) and Final (end of run) are labeled and equal the run's values; no derived minimum for non-Load-Step scenarios |
+| 4 chart scrolling | no scroll hint at 1440px on the Sandbox (Load Step); named, hinted scrollers remain at 390px |
+| 5 System Map topology | desktop: topology starts above 760px, is wider than 1100px, all main-path nodes visible without scrolling in all three views |
+
+Deviations: the Architecture decision board does not repeat the per-column mini power paths (the rail above carries the path); the System Map keeps the compact rail above the topology; the "Tends to favor" bar/chip is white (`text-primary`), not an accent or status color; DESIGN.md gains §23 (composition rules, no new tokens). Screenshots are delivered outside the repository.
 
 ## Codex implementation review (verbatim summary of its output; session 01a15293-753f-7e31-81ab-dabd7a8d2c23)
 

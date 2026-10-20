@@ -224,6 +224,18 @@ The four learning areas must be readable at 390px with no horizontal page scroll
 - Don't animate anything that isn't driven by a real, computable engineering signal.
 - Don't let a new brand/identity color go unchecked against the STATUS palette — a collision (a brand color that reads as "warning" or "good" by coincidence) is a safety-relevant bug in this product, not a cosmetic one.
 
+## 23. Composition and Visual Hierarchy (instrument console)
+
+Added with SPEC-014's art-direction pass. No new tokens, colors or radii: hierarchy comes from scale, surface contrast, composition and space.
+
+- **One focal element per page.** Architecture Choices: the decision board (three architectures in aligned columns). Advanced Sandbox: the live state and principal transient (one large mono value, the hero chart). System Map: the main power-path topology. The focal element sits on a `surface-raised` "stage"; supporting content is text on `canvas` separated by space and a single hairline, not a box.
+- **Surface contrast.** Stage = `surface-raised`; control rails = `surface-inset`; quiet content = no surface. A stage is never nested inside another box, and at most one boxed container is used per region.
+- **Scale levels.** Page title 28-40px (§6); the engineering question or current focus 22-34px; the single live headline value on a page may be a mono numeral up to 84px (never prose or a heading); key metrics 30-38px mono; actions 14-15px; supporting prose 13-14px; evidence and limitations 12px.
+- **Emphasis without new color.** A marked option (for example "Tends to favor") uses the `text-primary` surface (white bar and chip), never an accent or status color. Accent remains "energized / live"; status colors remain status.
+- **Asymmetry over repetition.** Layouts use deliberate unequal columns (a narrow rail plus a wide stage; 7/5 splits) instead of equal repeated cards.
+- **Conditional emphasis stays conditional.** An emphasized option is labeled as a conditional tendency with its exceptions and never reads as a ranking or a winner (SPEC-011).
+- **Live values state what they are.** A large live value is labeled "current" and tied to the displayed run and the time scrubber; minimum, reference and final values are shown separately and labeled.
+
 ---
 
 ## Engineering Visual Semantics

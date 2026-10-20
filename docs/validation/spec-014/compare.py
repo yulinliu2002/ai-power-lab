@@ -43,7 +43,8 @@ for bk, ak in pairs:
 for i in range(1, 8):
     k = f"arch-driver-rd{i}-desktop"
     norm = lambda t: " ".join(t.lower().split())
-    ok(f"AC-3 decision card text rd{i} identical (case/whitespace-normalized; labels were CSS-uppercased before)", norm(B["states"][k]["text"]) == norm(A["states"][k]["text"]))
+    bt = [norm(x) for x in B["states"][k]["text"].split("\n") if norm(x)]; at = norm(A["states"][k]["text"])
+    ok(f"AC-3 decision card rd{i}: every baseline line present (case/whitespace-normalized; layout merges adjacent label lines)", all(x in at for x in bt), [x for x in bt if x not in at][:2])
 
 # AC-17: page overflow at mobile
 for k, v in A["states"].items():

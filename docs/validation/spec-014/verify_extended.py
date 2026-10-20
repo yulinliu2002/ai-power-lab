@@ -44,7 +44,9 @@ with sync_playwright() as p:
        all(x in tk for x in [tl["outcome_label"], tl["outcome_detail"], tl["recovery_label"], tl["coordination"]["result_label"]]))
     eng = pg.inner_text("#stage-observe")
     eng = eng[eng.upper().index("ENGINEERING RESULT"):]
-    tile_min = re.search(r"VOLTAGE DROP\s+([0-9.]+)\s*V", eng, re.I); tile_e = re.search(r"ENERGY DEFICIT\s+([0-9.]+)\s*kJ", eng, re.I); tile_rec = re.search(r"RECOVERY TIME\s+([0-9.]+)\s*s", eng, re.I)
+    tile_min = re.search(r"([0-9.]+)\s*V\s+Voltage drop", eng, re.I) or re.search(r"VOLTAGE DROP\s+([0-9.]+)\s*V", eng, re.I)
+    tile_e = re.search(r"([0-9.]+)\s*kJ\s+Energy deficit", eng, re.I) or re.search(r"ENERGY DEFICIT\s+([0-9.]+)\s*kJ", eng, re.I)
+    tile_rec = re.search(r"([0-9.]+)\s*s\s+Recovery time", eng, re.I) or re.search(r"RECOVERY TIME\s+([0-9.]+)\s*s", eng, re.I)
     mt = re.search(r"Lowest V_dc\s+([0-9.]+) V at t = ([0-9.]+) s", tk); de = re.search(r"Energy deficit\s+([0-9.]+) kJ", tk); rc = re.search(r"Recovery time\s+([0-9.]+) s", tk)
     ok("AC-13 takeaway lowest V_dc, energy deficit and recovery time equal the Engineering Result tiles (parsed from the tiles)",
        all([tile_min, tile_e, tile_rec, mt, de, rc]) and tile_min.group(1) == mt.group(1) and tile_e.group(1) == de.group(1) and tile_rec.group(1) == rc.group(1),

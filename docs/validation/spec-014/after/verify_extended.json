@@ -132,7 +132,7 @@
  {
   "result": "PASS",
   "check": "Tab order: scenario selector < AI load step < DC bus capacitance < SST response time < Run Experiment < study chooser",
-  "detail": "[12, 17, 18, 19, 21, 28]"
+  "detail": "[12, 17, 19, 21, 23, 31]"
  },
  {
   "result": "PASS",

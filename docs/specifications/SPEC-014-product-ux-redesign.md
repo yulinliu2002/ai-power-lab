@@ -624,3 +624,32 @@ container with a visible hint, and chart text never renders below its authored s
 **§7 units (added during implementation, axe color-contrast finding):** the unit suffix of a live value uses `text-secondary` instead of `muted`.
 
 Unchanged: tokens, dark canvas, one accent, four status roles, 4px radius, no gradient or shadow, no animation, Plex families, tabular numerics, the Implementation Contract and Engineering Visual Semantics.
+
+
+## 18. Art-Direction Amendment (Instrument Console)
+
+**Authority.** Human visual review of PR #10 (2026-10-20) found the interface lacked visual hierarchy and art direction; the Human approved the "Instrument Console" direction with five conditions (2026-10-20). This amendment changes composition and styling only; the requirements of §10 and §17 and their acceptance criteria continue to apply and are re-verified.
+
+### 18.1 Scope added
+
+- G1. **Architecture Choices decision board:** requirement list (left) and one board (right) with the three architectures in aligned columns and rows (How it is addressed, What it makes harder, Evidence), the conditional "Tends to favor" marking, then the trade-off band (Because, Unless, evidence).
+- G2. **Advanced Sandbox console:** control rail (Stage 1) beside the observe stage (Stage 2) with a large live V_dc value, labeled current/reference/minimum/final values, the power-flow strip, the hero V_dc chart with its scrubber, the power-balance chart beside the principal results; protection, Stage 3 and Stage 4 below.
+- G3. **System Map topology:** the main power path is the primary visual element; the selected architecture's detail panel sits below it.
+- G4. **DESIGN.md §23** records the composition rules; no tokens are added.
+
+### 18.2 Conditions (Human, 2026-10-20) and how they are met
+
+1. "Tends to favor" stays explicitly conditional, supports multiple architectures, and never implies a ranking or winner: the marked set is the data's `favored` set; a legend states it is a conditional tendency, not a ranking, a score or a winner; accessible chip text and the decision band repeat it. (AC-31)
+2. Large live Sandbox values stay synchronized with the time scrubber and the displayed run; current, minimum, reference and final values are distinguished: the hero value reads the scrubber sample; separate labeled Reference, Minimum in run (Load Step only) and Final (end of run) values. (AC-32)
+3. Every accepted requirement, claim, disclosure, evidence reference and capability is preserved: all existing acceptance checks are re-run against the new composition. (AC-33)
+4. Inherited boxed chrome is reduced and chart scrolling avoided where feasible without changing chart data or interaction: charts have a desktop layout that needs no scrolling (named scrollers remain for narrow viewports). (AC-34)
+5. The same hierarchy applies to the System Map with the topology primary. (AC-35)
+
+### 18.3 Added acceptance criteria
+
+- [ ] **AC-31** Per requirement, the marked architectures equal the data's `favored` set (at least one requirement marks several); conditional wording present; no ranking/score/winner/best language outside the negating sentences. `verify_art.py`
+- [ ] **AC-32** Hero V_dc, P_load and P_sst equal the displayed run at the scrubber sample (default, Home, End, after a new run, Grid Sag); labeled current, reference, minimum (Load Step only) and final values. `verify_art.py`
+- [ ] **AC-33** Every check of §12 and AC-24 to AC-30 passes on the new composition (validation record).
+- [ ] **AC-34** No scroll hint at 1440 px on the Sandbox (Load Step) charts and schematic; named scrollers still present and hinted at 390 px.
+- [ ] **AC-35** System Map desktop: the topology starts above 760px, is wider than 1100px, and every main-path node is visible without horizontal scrolling in all three views; at 390 px the main path stacks.
+- [ ] **AC-36** Human Visual QA of the final desktop and mobile screenshots (Architecture Choices, Sandbox, System Map).
