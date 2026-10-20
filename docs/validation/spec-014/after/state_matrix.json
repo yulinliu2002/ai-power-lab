@@ -22,7 +22,7 @@
  {
   "result": "PASS",
   "check": "scrubber End -> last sample",
-  "detail": "CURRENT \u00b7 AT THE SCRUBBER TIME\n\n800.9V\nDC bus voltage V_dc at t = 0.5999 s\nREFERENCE\n800 V\nMINIMUM IN RUN\n712.5 V at 0.2"
+  "detail": "Current \u00b7 at the scrubber time\n\n800.9V\nDC bus voltage V_dc at t = 0.5999 s\nReference\n800 V\nMinimum in run\n712.5 V at 0.2"
  },
  {
   "result": "PASS",

@@ -176,7 +176,7 @@
  },
  {
   "result": "PASS",
-  "check": "AC-28 architecture evidence-tag text (label + basis + refs) identical multiset subset",
+  "check": "AC-28 architecture evidence-tag texts (label + basis + refs): every baseline text present after (per-cell placement is covered by the per-block checks)",
   "detail": "[]"
  },
  {

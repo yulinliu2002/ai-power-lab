@@ -86,6 +86,11 @@
  },
  {
   "result": "PASS",
+  "check": "mobile rd1: favored chips are visible, exposed to assistive tech and state the condition",
+  "detail": "[{'vis': True, 'hidden': False, 't': 'Tends to favor \u00b7 conditional if this requirement dominates; not a ranking or a winner'}, {'vis': True, 'hidden': False, 't': 'Tends to favor \u00b7 conditional if this requirement dominates; not a ranking or a winner'}]"
+ },
+ {
+  "result": "PASS",
   "check": "mobile rd1: conditional wording present (legend + accessible chip text + decision band)",
   "detail": ""
  },
@@ -93,6 +98,11 @@
   "result": "PASS",
   "check": "mobile rd2: marked columns equal the data's favored set (conditional, not computed)",
   "detail": "(['Conventional AC', 'AC-fed 800 VDC', 'Conceptual MV-to-800 VDC via SST'], ['Conventional AC', 'AC-fed 800 VDC', 'Conceptual MV-to-800 VDC via SST'])"
+ },
+ {
+  "result": "PASS",
+  "check": "mobile rd2: favored chips are visible, exposed to assistive tech and state the condition",
+  "detail": "[{'vis': True, 'hidden': False, 't': 'Tends to favor \u00b7 conditional if this requirement dominates; not a ranking or a winner'}, {'vis': True, 'hidden': False, 't': 'Tends to favor \u00b7 conditional if this requirement dominates; not a ranking or a winner'}, {'vis': True, 'hidden': False, 't': 'Tends to f"
  },
  {
   "result": "PASS",
@@ -106,6 +116,11 @@
  },
  {
   "result": "PASS",
+  "check": "mobile rd3: favored chips are visible, exposed to assistive tech and state the condition",
+  "detail": "[{'vis': True, 'hidden': False, 't': 'Tends to favor \u00b7 conditional if this requirement dominates; not a ranking or a winner'}]"
+ },
+ {
+  "result": "PASS",
   "check": "mobile rd3: conditional wording present (legend + accessible chip text + decision band)",
   "detail": ""
  },
@@ -113,6 +128,11 @@
   "result": "PASS",
   "check": "mobile rd4: marked columns equal the data's favored set (conditional, not computed)",
   "detail": "(['Conventional AC'], ['Conventional AC'])"
+ },
+ {
+  "result": "PASS",
+  "check": "mobile rd4: favored chips are visible, exposed to assistive tech and state the condition",
+  "detail": "[{'vis': True, 'hidden': False, 't': 'Tends to favor \u00b7 conditional if this requirement dominates; not a ranking or a winner'}]"
  },
  {
   "result": "PASS",
@@ -126,6 +146,11 @@
  },
  {
   "result": "PASS",
+  "check": "mobile rd5: favored chips are visible, exposed to assistive tech and state the condition",
+  "detail": "[{'vis': True, 'hidden': False, 't': 'Tends to favor \u00b7 conditional if this requirement dominates; not a ranking or a winner'}]"
+ },
+ {
+  "result": "PASS",
   "check": "mobile rd5: conditional wording present (legend + accessible chip text + decision band)",
   "detail": ""
  },
@@ -136,6 +161,11 @@
  },
  {
   "result": "PASS",
+  "check": "mobile rd6: favored chips are visible, exposed to assistive tech and state the condition",
+  "detail": "[{'vis': True, 'hidden': False, 't': 'Tends to favor \u00b7 conditional if this requirement dominates; not a ranking or a winner'}, {'vis': True, 'hidden': False, 't': 'Tends to favor \u00b7 conditional if this requirement dominates; not a ranking or a winner'}]"
+ },
+ {
+  "result": "PASS",
   "check": "mobile rd6: conditional wording present (legend + accessible chip text + decision band)",
   "detail": ""
  },
@@ -143,6 +173,11 @@
   "result": "PASS",
   "check": "mobile rd7: marked columns equal the data's favored set (conditional, not computed)",
   "detail": "(['Conventional AC'], ['Conventional AC'])"
+ },
+ {
+  "result": "PASS",
+  "check": "mobile rd7: favored chips are visible, exposed to assistive tech and state the condition",
+  "detail": "[{'vis': True, 'hidden': False, 't': 'Tends to favor \u00b7 conditional if this requirement dominates; not a ranking or a winner'}]"
  },
  {
   "result": "PASS",
@@ -161,33 +196,123 @@
  },
  {
   "result": "PASS",
-  "check": "Sandbox default (voltage-minimum sample): hero V_dc, P_load and P_sst equal the displayed run at the scrubber sample 2163",
-  "detail": "('712.5', '712.5', '320.0', '320.6')"
+  "check": "Architecture stage nav (default): #step-requirement moves focus to its heading",
+  "detail": "h-requirement"
  },
  {
   "result": "PASS",
-  "check": "Sandbox scrubber Home: hero V_dc, P_load and P_sst equal the displayed run at the scrubber sample 0",
-  "detail": "('800.0', '800.0', '160.0', '160.0')"
+  "check": "Architecture stage nav (default): #step-compare moves focus to its heading",
+  "detail": "h-compare"
  },
  {
   "result": "PASS",
-  "check": "Sandbox scrubber End: hero V_dc, P_load and P_sst equal the displayed run at the scrubber sample 5999",
-  "detail": "('800.9', '800.9', '320.0', '320.0')"
+  "check": "Architecture stage nav (default): #step-tradeoffs moves focus to its heading",
+  "detail": "h-tradeoffs"
+ },
+ {
+  "result": "PASS",
+  "check": "Architecture stage nav (default): #step-validation moves focus to its heading",
+  "detail": "h-validation"
+ },
+ {
+  "result": "PASS",
+  "check": "Architecture stage nav (default): #references moves focus to its heading",
+  "detail": "h-references"
+ },
+ {
+  "result": "PASS",
+  "check": "Architecture stage nav (default): after scrolling exactly one link has aria-current and its target section exists",
+  "detail": "['#step-requirement']"
+ },
+ {
+  "result": "PASS",
+  "check": "Architecture stage nav (after changing driver): #step-requirement moves focus to its heading",
+  "detail": "h-requirement"
+ },
+ {
+  "result": "PASS",
+  "check": "Architecture stage nav (after changing driver): #step-compare moves focus to its heading",
+  "detail": "h-compare"
+ },
+ {
+  "result": "PASS",
+  "check": "Architecture stage nav (after changing driver): #step-tradeoffs moves focus to its heading",
+  "detail": "h-tradeoffs"
+ },
+ {
+  "result": "PASS",
+  "check": "Architecture stage nav (after changing driver): #step-validation moves focus to its heading",
+  "detail": "h-validation"
+ },
+ {
+  "result": "PASS",
+  "check": "Architecture stage nav (after changing driver): #references moves focus to its heading",
+  "detail": "h-references"
+ },
+ {
+  "result": "PASS",
+  "check": "Architecture stage nav (after changing driver): after scrolling exactly one link has aria-current and its target section exists",
+  "detail": "['#step-requirement']"
+ },
+ {
+  "result": "PASS",
+  "check": "Architecture stage nav (show-all): #step-requirement moves focus to its heading",
+  "detail": "h-requirement"
+ },
+ {
+  "result": "PASS",
+  "check": "Architecture stage nav (show-all): #step-compare moves focus to its heading",
+  "detail": "h-compare"
+ },
+ {
+  "result": "PASS",
+  "check": "Architecture stage nav (show-all): #step-tradeoffs moves focus to its heading",
+  "detail": "h-tradeoffs"
+ },
+ {
+  "result": "PASS",
+  "check": "Architecture stage nav (show-all): #step-validation moves focus to its heading",
+  "detail": "h-validation"
+ },
+ {
+  "result": "PASS",
+  "check": "Architecture stage nav (show-all): #references moves focus to its heading",
+  "detail": "h-references"
+ },
+ {
+  "result": "PASS",
+  "check": "Architecture stage nav (show-all): after scrolling exactly one link has aria-current and its target section exists",
+  "detail": "['#step-requirement']"
+ },
+ {
+  "result": "PASS",
+  "check": "Sandbox default (voltage-minimum sample): hero V_dc, P_load, P_sst and the power gap (each in its own field) equal the displayed run at the scrubber sample 2163",
+  "detail": "('712.5', '712.5', ['320.0', '320.6', '0.6'], '320.0', '320.6', '0.6')"
+ },
+ {
+  "result": "PASS",
+  "check": "Sandbox scrubber Home: hero V_dc, P_load, P_sst and the power gap (each in its own field) equal the displayed run at the scrubber sample 0",
+  "detail": "('800.0', '800.0', ['160.0', '160.0', '0.0'], '160.0', '160.0', '0.0')"
+ },
+ {
+  "result": "PASS",
+  "check": "Sandbox scrubber End: hero V_dc, P_load, P_sst and the power gap (each in its own field) equal the displayed run at the scrubber sample 5999",
+  "detail": "('800.9', '800.9', ['320.0', '320.0', '0.0'], '320.0', '320.0', '0.0')"
  },
  {
   "result": "PASS",
   "check": "Sandbox: current / reference / minimum / final values are distinct and labelled",
-  "detail": "REFERENCE | 800 V | MINIMUM IN RUN | 712.5 V at 0.216 s | FINAL (END OF RUN) | 800.9 V"
+  "detail": "Reference | 800 V | Minimum in run | 712.5 V at 0.216 s | Final (end of run) | 800.9 V"
  },
  {
   "result": "PASS",
-  "check": "Sandbox after Run Experiment (new displayed run): hero V_dc, P_load and P_sst equal the displayed run at the scrubber sample 2217",
-  "detail": "('656.9', '656.9', '380.0', '380.2')"
+  "check": "Sandbox after Run Experiment (new displayed run): hero V_dc, P_load, P_sst and the power gap (each in its own field) equal the displayed run at the scrubber sample 2217",
+  "detail": "('656.9', '656.9', ['380.0', '380.2', '0.2'], '380.0', '380.2', '0.2')"
  },
  {
   "result": "PASS",
-  "check": "Sandbox Grid Sag (fixed preset; no derived minimum shown): hero V_dc, P_load and P_sst equal the displayed run at the scrubber sample 0",
-  "detail": "('800.0', '800.0', '300.0', '300.0')"
+  "check": "Sandbox Grid Sag (fixed preset; no derived minimum shown): hero V_dc, P_load, P_sst and the power gap (each in its own field) equal the displayed run at the scrubber sample 0",
+  "detail": "('800.0', '800.0', ['300.0', '300.0', '0.0'], '300.0', '300.0', '0.0')"
  },
  {
   "result": "PASS",
@@ -202,7 +327,7 @@
  {
   "result": "PASS",
   "check": "System Map desktop: topology starts within the first 760px and is the widest element of the page body",
-  "detail": "[657.234375, 515.984375, 1312]"
+  "detail": "[663.234375, 515.984375, 1312]"
  },
  {
   "result": "PASS",
@@ -211,12 +336,12 @@
  },
  {
   "result": "PASS",
-  "check": "System Map desktop view 2: main path visible without scrolling",
-  "detail": "7"
+  "check": "System Map desktop view 2: all 7 main-path nodes inside the viewport (expected 7, 7, 6 per view), no scroll hint",
+  "detail": "(7, True)"
  },
  {
   "result": "PASS",
-  "check": "System Map desktop view 3: main path visible without scrolling",
-  "detail": "6"
+  "check": "System Map desktop view 3: all 6 main-path nodes inside the viewport (expected 7, 7, 6 per view), no scroll hint",
+  "detail": "(6, True)"
  }
 ]

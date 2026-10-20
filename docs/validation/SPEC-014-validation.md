@@ -98,3 +98,18 @@ CI on the final push, Human Visual QA (AC-22 learner walkthrough), explicit huma
 2. Closure review (01a152a5-3474-7042-8c83-416ed7ea496e): items 3, 4, 5, 7 partial; addressed (12px prose, corrected state matrix, real Tab/keyboard checks, tile-parsed Stage 4 values, aria-current default).
 3. Narrow check (01a152b0-0ff4-7cd3-8d54-212e6a3e4ac4): item 3 still partial (Sandbox causal text, KPI and metric captions, comparison detail, error text) and one script that crashed before writing results; fixed and results regenerated.
 4. Narrow check (01a152b8-3529-7922-a7ee-579194f1dde7): evidence for items 4 and 5 confirmed passing; remaining 11px prose lines (System Map taglines, protection coverage and timeline detail, sweep error) and a `d2` assertion gap fixed in the last commit. **No Codex verdict of APPROVE was obtained**: the last recorded verdict is CHANGES_REQUIRED for those lines, now fixed but not re-reviewed; the Human should treat the implementation review as open until a final read-only check or the Human's own review.
+
+## Codex review of the Instrument Console integration (session 01a157c3-e978-7420-8d97-d81478566032)
+
+First verdict: CHANGES_REQUIRED, 0 blocking, 4 major, 2 minor. Dispositions:
+
+| # | Finding | Disposition |
+|---|---|---|
+| 1 MAJOR | stage nav could not focus the Compare heading and tracking went stale after driver changes | fixed: `#step-compare` contains its heading; `StageNav` re-observes on a key; `verify_art.py` clicks every stage link and checks the focused heading and `aria-current` by default, after a driver change and in show-all |
+| 2 MAJOR | mobile evidence cells lost architecture identity; table semantics; favored chips hidden from assistive tech on mobile | fixed: evidence cells carry the architecture label on mobile, the board is a `table` with row/column headers, mobile favored chips are visible and exposed with the conditional text; checked in `verify_art.py` |
+| 3 MAJOR | art pass reintroduced Mono headings and sub-12px explanatory text | fixed: headings, row labels, labels and captions are Sans (small Mono kept only for tags/units/values); explanatory captions 12px |
+| 4 MAJOR | validation claims not substantiated (mobile a11y, swapped fields, System Map views 2-3, heading focus, "multiset" wording) | fixed: field-by-field P_load/P_sst/ΔP checks, per-view node counts and bounds (7, 7, 6), heading-focus across states, mobile accessibility check, wording corrected |
+| 5 MINOR | selection styling used accent border, permanent white outline, 2px decorative left border | fixed: selection = surface tier plus `hairline-strong`; the keyboard outline is preserved; the detail panel uses a 1px separator; the favored bar is 2px |
+| 6 MINOR | takeaway outcome announced twice; caution separated | fixed: one outcome value, the caution sits directly under it |
+
+All suites re-run after these fixes pass (`after/*.json`).

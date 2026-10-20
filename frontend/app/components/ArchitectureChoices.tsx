@@ -132,7 +132,7 @@ export function ArchitectureChoices() {
         <SignalPathRail architecture={railArch} note="Representative path, not a universal one" />
       </section>
 
-      <StageNav label="Steps on this page" stages={STAGES} />
+      <StageNav label="Steps on this page" stages={STAGES} observeKey={`${driverId}-${showAllDrivers}`} />
 
       <div className="ic-arch">
         <section id="step-requirement" aria-labelledby="h-requirement" className="ic-reqs">
@@ -305,7 +305,7 @@ function Board({ driver: d, first }: { driver: Driver; first: boolean }) {
   const decision = CONDITIONAL_DECISIONS[d.id];
   return (
     <div className="ic-board">
-      <div className="ic-board-head">
+      <div id={first ? "step-compare" : undefined} className="ic-board-head">
         <h2 {...(first ? { id: "h-compare", "data-stage-heading": true, tabIndex: -1 } : {})} className="ic-eyebrow focus:outline-none" style={{ margin: 0 }}>
           2 · Compare architectures
         </h2>
@@ -324,16 +324,17 @@ function Board({ driver: d, first }: { driver: Driver; first: boolean }) {
         </article>
       </div>
 
-      <div id={first ? "step-compare" : undefined} data-testid={`compare-${d.id}`} className="ic-cols">
+      <div data-testid={`compare-${d.id}`} className="ic-cols" role="table" aria-label={`${d.title}: the three architectures compared`}>
         <p className="ic-legend">
           Columns marked <b>Tends to favor</b> are a <b>conditional tendency</b> if this requirement dominates for a
           site, with the exceptions below. They are not a ranking, a score or a winner.
         </p>
-        <div />
+        <div className="ic-row" role="row">
+        <div role="columnheader" aria-label="Aspect" />
         {ARCHITECTURE_ORDER.map((arch) => {
           const fav = decision.favored.includes(arch);
           return (
-            <div key={arch} className="ic-colhead" data-fav={fav}>
+            <div key={arch} className="ic-colhead" data-fav={fav} role="columnheader">
               {fav ? (
                 <span className="ic-favor">
                   Tends to favor<span className="sr-only"> if this requirement dominates; a conditional tendency, not a ranking or a winner</span>
@@ -345,31 +346,38 @@ function Board({ driver: d, first }: { driver: Driver; first: boolean }) {
             </div>
           );
         })}
+        </div>
 
-        <div className="ic-rowlabel">How it is addressed</div>
+        <div className="ic-row" role="row">
+        <div className="ic-rowlabel" role="rowheader">How it is addressed</div>
         {ARCHITECTURE_ORDER.map((arch) => (
-          <div key={arch} className="ic-cell">
+          <div key={arch} className="ic-cell" role="cell">
             {decision.favored.includes(arch) && (
-              <span className="ic-favor ic-mfavor" aria-hidden="true">Tends to favor · conditional</span>
+              <span className="ic-favor ic-mfavor">Tends to favor · conditional<span className="sr-only"> if this requirement dominates; not a ranking or a winner</span></span>
             )}
             <span className="ic-mlabel">{ARCHITECTURE_CHOICE_NAMES[arch]} · how it is addressed</span>
             {CELLS[d.id][arch].how}
           </div>
         ))}
+        </div>
 
-        <div className="ic-rowlabel">What it makes harder</div>
+        <div className="ic-row" role="row">
+        <div className="ic-rowlabel" role="rowheader">What it makes harder</div>
         {ARCHITECTURE_ORDER.map((arch) => (
-          <div key={arch} className="ic-cell" data-kind="harder">
+          <div key={arch} className="ic-cell" data-kind="harder" role="cell">
             <span className="ic-mlabel">{ARCHITECTURE_CHOICE_NAMES[arch]} · what it makes harder</span>
             {CELLS[d.id][arch].harder}
           </div>
         ))}
+        </div>
 
-        <div className="ic-rowlabel">Evidence</div>
+        <div className="ic-row" role="row">
+        <div className="ic-rowlabel" role="rowheader">Evidence</div>
         {ARCHITECTURE_ORDER.map((arch) => {
           const c = CELLS[d.id][arch];
           return (
-            <div key={arch} className="ic-cell" data-kind="evidence">
+            <div key={arch} className="ic-cell" data-kind="evidence" role="cell">
+              <span className="ic-evlabel">{ARCHITECTURE_CHOICE_NAMES[arch]} · evidence</span>
               <EvidenceTag glyph evidence={c.evidence} basis={c.basis} refs={c.refs} />
               {c.evidence === "model-output" && (
                 <Link href="/sandbox" className={`ic-small ${link}`}>
@@ -379,6 +387,7 @@ function Board({ driver: d, first }: { driver: Driver; first: boolean }) {
             </div>
           );
         })}
+        </div>
       </div>
 
       <div id={first ? "step-tradeoffs" : undefined} data-testid={`decision-card-${d.id}`} className="ic-decision">

@@ -102,7 +102,7 @@
  {
   "result": "PASS",
   "check": "AC-16 desktop /architecture: axe no critical/serious violations",
-  "detail": "1 minor/moderate: ['heading-order']"
+  "detail": "2 minor/moderate: ['empty-table-header', 'heading-order']"
  },
  {
   "result": "PASS",
@@ -232,7 +232,7 @@
  {
   "result": "PASS",
   "check": "AC-16 mobile /architecture: axe no critical/serious violations",
-  "detail": "1 minor/moderate: ['heading-order']"
+  "detail": "2 minor/moderate: ['empty-table-header', 'heading-order']"
  },
  {
   "result": "PASS",

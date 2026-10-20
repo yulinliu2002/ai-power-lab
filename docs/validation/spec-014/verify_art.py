@@ -30,9 +30,12 @@ with sync_playwright() as p:
             exp = [NAMES[x] for x in fav[f"rd{i}"]]
             ok(f"{vp} rd{i}: marked columns equal the data's favored set (conditional, not computed)", sorted(marked) == sorted(exp) and len(exp) >= 1, (marked, exp))
             multi += len(exp) >= 2
+            if vp == "mobile":
+                chips = pg.eval_on_selector_all(f"[data-testid='compare-rd{i}'] .ic-mfavor", "els=>els.map(e=>({vis:!!(e.offsetWidth||e.offsetHeight),hidden:!!e.closest('[aria-hidden=true]'),t:e.textContent}))")
+                ok(f"mobile rd{i}: favored chips are visible, exposed to assistive tech and state the condition", len(chips) == len(exp) and all(c["vis"] and not c["hidden"] and "conditional" in c["t"].lower() and "not a ranking" in c["t"].lower() for c in chips), chips)
             ok(f"{vp} rd{i}: conditional wording present (legend + accessible chip text + decision band)",
                "conditional tendency" in pg.inner_text(f"[data-testid='compare-rd{i}'] .ic-legend").lower()
-               and pg.locator(f"[data-testid='compare-rd{i}'] .ic-favor .sr-only").first.inner_text().lower().count("not a ranking") == 1
+               and (vp == "mobile" or pg.locator(f"[data-testid='compare-rd{i}'] .ic-favor .sr-only").first.inner_text().lower().count("not a ranking") == 1)
                and "this tends to favor" in pg.inner_text(f"[data-testid='decision-card-rd{i}']").lower())
         ok(f"{vp}: at least one requirement marks multiple architectures", multi >= 1, multi)
         txt = pg.inner_text("main").lower()
@@ -44,6 +47,20 @@ with sync_playwright() as p:
             txt = txt.replace(ph, "")
         bad = re.findall(r"\b(best|winner|ranking|ranked|score|leader|top choice|optimal)\b", txt)
         ok(f"{vp}: no ranking/score/winner/best language outside the negating sentences", not bad, set(bad))
+    # Architecture stage navigation: every link focuses its heading; aria-current tracks; survives driver change and show-all
+    pg = b.new_context(viewport={"width": 1440, "height": 900}).new_page(); pg.goto(BASE + "/architecture", wait_until="networkidle"); pg.wait_for_timeout(800)
+    HEADS = {"step-requirement": "h-requirement", "step-compare": "h-compare", "step-tradeoffs": "h-tradeoffs", "step-validation": "h-validation", "references": "h-references"}
+    def stage_pass(tag):
+        for sid, hid in HEADS.items():
+            pg.locator(f"nav[aria-label='Steps on this page'] a[href='#{sid}']").click(); pg.wait_for_timeout(250)
+            ok(f"Architecture stage nav {tag}: #{sid} moves focus to its heading", pg.evaluate("()=>document.activeElement.id") == hid, pg.evaluate("()=>document.activeElement.id"))
+        pg.evaluate("window.scrollTo(0,0)"); pg.mouse.move(700, 500); pg.mouse.wheel(0, 1600); pg.wait_for_timeout(500)
+        cur = pg.eval_on_selector_all("nav[aria-label='Steps on this page'] a[aria-current]", "els=>els.map(e=>e.getAttribute('href'))")
+        ok(f"Architecture stage nav {tag}: after scrolling exactly one link has aria-current and its target section exists", len(cur) == 1 and pg.locator(cur[0]).count() == 1, cur)
+    stage_pass("(default)")
+    pg.locator("label:has([data-testid='driver-option-rd4'])").click(); pg.wait_for_timeout(300); stage_pass("(after changing driver)")
+    pg.click("[data-testid='show-all-drivers']"); pg.wait_for_timeout(300); stage_pass("(show-all)")
+
     # Sandbox synchronization
     pg = b.new_context(viewport={"width": 1440, "height": 900}).new_page(); resp = []
     pg.on("response", lambda r: resp.append(r) if "/simulations/" in r.url else None)
@@ -54,7 +71,9 @@ with sync_playwright() as p:
         idx = int(pg.input_value("[data-testid=state-at-time] input[aria-label=Time]"))
         minis = pg.inner_text(".ic-minis")
         exp_v = f"{tv['v_dc_v'][idx]:.1f}"; exp_l = f"{tv['p_load_w'][idx]/1e3:.1f}"; exp_s = f"{tv['p_sst_w'][idx]/1e3:.1f}"
-        ok(f"Sandbox {label}: hero V_dc, P_load and P_sst equal the displayed run at the scrubber sample {idx}", hero() == exp_v and exp_l in minis and exp_s in minis, (hero(), exp_v, exp_l, exp_s))
+        n = pg.eval_on_selector_all(".ic-minis > div .n", "els=>els.map(e=>e.textContent.replace('kW','').trim())")
+        gap = abs(tv["p_load_w"][idx] - tv["p_sst_w"][idx]) / 1e3
+        ok(f"Sandbox {label}: hero V_dc, P_load, P_sst and the power gap (each in its own field) equal the displayed run at the scrubber sample {idx}", hero() == exp_v and n == [exp_l, exp_s, f"{gap:.1f}"], (hero(), exp_v, n, exp_l, exp_s, f"{gap:.1f}"))
     sync("default (voltage-minimum sample)")
     pg.focus("[data-testid=state-at-time] input[aria-label=Time]"); pg.keyboard.press("Home"); pg.wait_for_timeout(200); sync("scrubber Home")
     pg.keyboard.press("End"); pg.wait_for_timeout(200); sync("scrubber End")
@@ -83,7 +102,9 @@ with sync_playwright() as p:
     ok("System Map desktop: every main-path node is visible without horizontal scrolling for the Conventional AC view", inview and nodes == 7 and pg.locator("[data-testid=scroll-hint]").count() == 0, (nodes, inview))
     for i in range(1, 3):
         pg.locator("[role=radiogroup][aria-label='Architecture view'] button").nth(i).click(); pg.wait_for_timeout(300)
-        ok(f"System Map desktop view {i+1}: main path visible without scrolling", pg.locator("[data-testid=scroll-hint]").count() == 0, pg.locator(".ic-topology [data-main=true]").count())
+        cnt = pg.locator(".ic-topology [data-main=true]").count()
+        inv = pg.evaluate("()=>[...document.querySelectorAll('.ic-topology [data-main=true]')].every(e=>{const r=e.getBoundingClientRect();return r.right<=document.documentElement.clientWidth&&r.left>=0})")
+        ok(f"System Map desktop view {i+1}: all {cnt} main-path nodes inside the viewport (expected 7, 7, 6 per view), no scroll hint", cnt == [7, 7, 6][i] and inv and pg.locator("[data-testid=scroll-hint]").count() == 0, (cnt, inv))
     b.close()
 json.dump(res, open(OUT, "w"), indent=1)
 print("FAILS:", sum(1 for r in res if r["result"] == "FAIL"))

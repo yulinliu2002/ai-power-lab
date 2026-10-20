@@ -75,9 +75,8 @@ export function EngineeringTakeaway({
         <section className="flex flex-col gap-2" style={{ borderTop: "1px solid var(--ic-rule)", paddingTop: 20 }}>
           <h3 className="ic-eyebrow" style={{ margin: 0 }}>What the model reports</h3>
           <p className="ic-outcome">{timeline.outcome_label || NOT_AVAILABLE}</p>
+          <p className="ic-small">{OUTCOME_CAUTION}</p>
           <dl className={row}>
-            <dt className="text-secondary">Outcome</dt>
-            <dd className="text-primary">{timeline.outcome_label || NOT_AVAILABLE}</dd>
             <dt className="text-secondary">Detail</dt>
             <dd className="text-secondary">{timeline.outcome_detail || NOT_AVAILABLE}</dd>
             <dt className="text-secondary">Recovery</dt>

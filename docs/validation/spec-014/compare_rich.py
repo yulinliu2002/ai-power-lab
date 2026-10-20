@@ -19,7 +19,7 @@ for g in ["driver", "compare", "boundary", "decision", "validation"]:
         ok(f"AC-4 {g}:{k} every baseline line preserved on the page; long (content) lines preserved inside the same block", not miss and not same_block_miss, (miss[:3], same_block_miss[:3]))
 refs_missing = [x for x in B["arch"]["references"] if x not in A["arch"]["references"] and not x.startswith("references")]
 ok("AC-4 reference list lines preserved", not refs_missing, refs_missing[:3])
-ok("AC-28 architecture evidence-tag text (label + basis + refs) identical multiset subset", all(x in A["arch"]["evidence_tags"] for x in set(B["arch"]["evidence_tags"])), [x for x in set(B["arch"]["evidence_tags"]) if x not in A["arch"]["evidence_tags"]][:2])
+ok("AC-28 architecture evidence-tag texts (label + basis + refs): every baseline text present after (per-cell placement is covered by the per-block checks)", all(x in A["arch"]["evidence_tags"] for x in set(B["arch"]["evidence_tags"])), [x for x in set(B["arch"]["evidence_tags"]) if x not in A["arch"]["evidence_tags"]][:2])
 dis = ["sst is one candidate technology", "blocks in these architectures", "the advanced sandbox simulates only", "requirement drivers are illustrative", "this page does not rank"]
 ok("AC-26 five disclosures present in visible list after", all(any(d in x for x in A["arch"]["disclosures_visible"]) for d in dis), len(A["arch"]["disclosures_visible"]))
 

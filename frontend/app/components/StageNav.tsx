@@ -12,9 +12,12 @@ import { useEffect, useState, type MouseEvent } from "react";
 export function StageNav({
   label,
   stages,
+  observeKey,
 }: {
   label: string;
   stages: ReadonlyArray<{ id: string; label: string; n?: number }>;
+  /** Changes when the stage sections are re-rendered (for example a different selection), so the observer re-attaches. */
+  observeKey?: string;
 }) {
   const [current, setCurrent] = useState<string | null>(stages[0]?.id ?? null);
 
@@ -37,7 +40,7 @@ export function StageNav({
     );
     els.forEach((el) => io.observe(el));
     return () => io.disconnect();
-  }, [stages]);
+  }, [stages, observeKey]);
 
   const go = (e: MouseEvent<HTMLAnchorElement>, id: string) => {
     const section = document.getElementById(id);
