@@ -15,7 +15,7 @@ export function CoverageChecklist({ coverage }: { coverage: CoverageEntry[] }) {
       </span>
       <ul className="flex flex-col gap-1">
         {coverage.map((entry, i) => (
-          <li key={i} className="flex flex-wrap items-baseline gap-x-2 font-mono text-[11px]">
+          <li key={i} className="flex flex-wrap items-baseline gap-x-2 font-sans text-[12px]">
             <span className={entry.modeled ? "text-status-good" : "text-status-critical"}>
               {entry.modeled ? "✓" : "✕"}
             </span>

@@ -54,9 +54,12 @@ with sync_playwright() as p:
         for sid, hid in HEADS.items():
             pg.locator(f"nav[aria-label='Steps on this page'] a[href='#{sid}']").click(); pg.wait_for_timeout(250)
             ok(f"Architecture stage nav {tag}: #{sid} moves focus to its heading", pg.evaluate("()=>document.activeElement.id") == hid, pg.evaluate("()=>document.activeElement.id"))
-        pg.evaluate("window.scrollTo(0,0)"); pg.mouse.move(700, 500); pg.mouse.wheel(0, 1600); pg.wait_for_timeout(500)
-        cur = pg.eval_on_selector_all("nav[aria-label='Steps on this page'] a[aria-current]", "els=>els.map(e=>e.getAttribute('href'))")
-        ok(f"Architecture stage nav {tag}: after scrolling exactly one link has aria-current and its target section exists", len(cur) == 1 and pg.locator(cur[0]).count() == 1, cur)
+        for sid in HEADS:
+            pg.evaluate(f"()=>{{const el=document.getElementById('{sid}');window.scrollTo({{top: window.scrollY + el.getBoundingClientRect().top - 120, behavior: 'instant'}})}}"); pg.wait_for_timeout(500)
+            cur = pg.eval_on_selector_all("nav[aria-label='Steps on this page'] a[aria-current]", "els=>els.map(e=>e.getAttribute('href'))")
+            # the requirement list and the board (step 2) start at the same height by design, so either marks that screen; the order rule picks the earlier
+            expect = ["#step-requirement"] if sid in ("step-requirement", "step-compare") else [f"#{sid}"]
+            ok(f"Architecture stage nav {tag}: with #{sid} scrolled to the top, aria-current is the expected stage ({expect[0]})", cur == expect, cur)
     stage_pass("(default)")
     pg.locator("label:has([data-testid='driver-option-rd4'])").click(); pg.wait_for_timeout(300); stage_pass("(after changing driver)")
     pg.click("[data-testid='show-all-drivers']"); pg.wait_for_timeout(300); stage_pass("(show-all)")

@@ -16,6 +16,16 @@
  },
  {
   "result": "PASS",
+  "check": "desktop /sandbox (Compare study shown): headings are Sans; prose is Sans and >= 12px",
+  "detail": "[]"
+ },
+ {
+  "result": "PASS",
+  "check": "desktop /sandbox (sweep results shown): headings are Sans; prose is Sans and >= 12px",
+  "detail": "[]"
+ },
+ {
+  "result": "PASS",
   "check": "desktop /sandbox: headings are Sans; prose is Sans and >= 12px",
   "detail": "[]"
  },
@@ -32,6 +42,16 @@
  {
   "result": "PASS",
   "check": "mobile /architecture: headings are Sans; prose is Sans and >= 12px",
+  "detail": "[]"
+ },
+ {
+  "result": "PASS",
+  "check": "mobile /sandbox (Compare study shown): headings are Sans; prose is Sans and >= 12px",
+  "detail": "[]"
+ },
+ {
+  "result": "PASS",
+  "check": "mobile /sandbox (sweep results shown): headings are Sans; prose is Sans and >= 12px",
   "detail": "[]"
  },
  {

@@ -221,8 +221,28 @@
  },
  {
   "result": "PASS",
-  "check": "Architecture stage nav (default): after scrolling exactly one link has aria-current and its target section exists",
+  "check": "Architecture stage nav (default): with #step-requirement scrolled to the top, aria-current is the expected stage (#step-requirement)",
   "detail": "['#step-requirement']"
+ },
+ {
+  "result": "PASS",
+  "check": "Architecture stage nav (default): with #step-compare scrolled to the top, aria-current is the expected stage (#step-requirement)",
+  "detail": "['#step-requirement']"
+ },
+ {
+  "result": "PASS",
+  "check": "Architecture stage nav (default): with #step-tradeoffs scrolled to the top, aria-current is the expected stage (#step-tradeoffs)",
+  "detail": "['#step-tradeoffs']"
+ },
+ {
+  "result": "PASS",
+  "check": "Architecture stage nav (default): with #step-validation scrolled to the top, aria-current is the expected stage (#step-validation)",
+  "detail": "['#step-validation']"
+ },
+ {
+  "result": "PASS",
+  "check": "Architecture stage nav (default): with #references scrolled to the top, aria-current is the expected stage (#references)",
+  "detail": "['#references']"
  },
  {
   "result": "PASS",
@@ -251,8 +271,28 @@
  },
  {
   "result": "PASS",
-  "check": "Architecture stage nav (after changing driver): after scrolling exactly one link has aria-current and its target section exists",
+  "check": "Architecture stage nav (after changing driver): with #step-requirement scrolled to the top, aria-current is the expected stage (#step-requirement)",
   "detail": "['#step-requirement']"
+ },
+ {
+  "result": "PASS",
+  "check": "Architecture stage nav (after changing driver): with #step-compare scrolled to the top, aria-current is the expected stage (#step-requirement)",
+  "detail": "['#step-requirement']"
+ },
+ {
+  "result": "PASS",
+  "check": "Architecture stage nav (after changing driver): with #step-tradeoffs scrolled to the top, aria-current is the expected stage (#step-tradeoffs)",
+  "detail": "['#step-tradeoffs']"
+ },
+ {
+  "result": "PASS",
+  "check": "Architecture stage nav (after changing driver): with #step-validation scrolled to the top, aria-current is the expected stage (#step-validation)",
+  "detail": "['#step-validation']"
+ },
+ {
+  "result": "PASS",
+  "check": "Architecture stage nav (after changing driver): with #references scrolled to the top, aria-current is the expected stage (#references)",
+  "detail": "['#references']"
  },
  {
   "result": "PASS",
@@ -281,8 +321,28 @@
  },
  {
   "result": "PASS",
-  "check": "Architecture stage nav (show-all): after scrolling exactly one link has aria-current and its target section exists",
+  "check": "Architecture stage nav (show-all): with #step-requirement scrolled to the top, aria-current is the expected stage (#step-requirement)",
   "detail": "['#step-requirement']"
+ },
+ {
+  "result": "PASS",
+  "check": "Architecture stage nav (show-all): with #step-compare scrolled to the top, aria-current is the expected stage (#step-requirement)",
+  "detail": "['#step-requirement']"
+ },
+ {
+  "result": "PASS",
+  "check": "Architecture stage nav (show-all): with #step-tradeoffs scrolled to the top, aria-current is the expected stage (#step-tradeoffs)",
+  "detail": "['#step-tradeoffs']"
+ },
+ {
+  "result": "PASS",
+  "check": "Architecture stage nav (show-all): with #step-validation scrolled to the top, aria-current is the expected stage (#step-validation)",
+  "detail": "['#step-validation']"
+ },
+ {
+  "result": "PASS",
+  "check": "Architecture stage nav (show-all): with #references scrolled to the top, aria-current is the expected stage (#references)",
+  "detail": "['#references']"
  },
  {
   "result": "PASS",

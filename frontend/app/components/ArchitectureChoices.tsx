@@ -146,6 +146,7 @@ export function ArchitectureChoices() {
 
       <div className="ic-arch">
         <section id="step-requirement" aria-labelledby="h-requirement" className="ic-reqs">
+          <div className="ic-reqs-in">
           <h2 id="h-requirement" data-stage-heading tabIndex={-1} className="ic-eyebrow focus:outline-none" style={{ paddingLeft: 14 }}>
             1 · Identify the requirement
           </h2>
@@ -179,6 +180,7 @@ export function ArchitectureChoices() {
           >
             {showAllDrivers ? "Back to the selected driver" : "Show all seven drivers, comparisons and decisions"}
           </button>
+          </div>
         </section>
 
         <div className="ic-boards">
@@ -232,7 +234,7 @@ export function ArchitectureChoices() {
                 return (
                   <article key={arch}>
                     <h4 className="ic-h4">{ARCHITECTURE_CHOICE_NAMES[arch]}</h4>
-                    <p className="ic-small ic-mono" style={{ marginBottom: 10 }}>
+                    <p className="ic-small" style={{ marginBottom: 10, color: "var(--color-text-primary)" }}>
                       {nodeLabel(item.nodeIds[0])} &rarr; {nodeLabel(item.nodeIds[1])}
                     </p>
                     <Field label="What crosses" body={item.crosses} />

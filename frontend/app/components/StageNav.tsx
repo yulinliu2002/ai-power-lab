@@ -21,25 +21,38 @@ export function StageNav({
 }) {
   const [current, setCurrent] = useState<string | null>(stages[0]?.id ?? null);
 
-  // Track which stage is nearest the top of the viewport so the matching
-  // link can expose aria-current="location".
+  // The current stage is the last one whose top has passed the upper third of the viewport. It is recomputed from the
+  // live DOM on scroll/resize (and when the section content changes), so it cannot go stale after a re-render.
   useEffect(() => {
-    const els = stages.map((s) => document.getElementById(s.id)).filter((e): e is HTMLElement => !!e);
-    if (els.length === 0 || typeof IntersectionObserver === "undefined") return;
-    const visible = new Set<string>();
-    const io = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          if (entry.isIntersecting) visible.add(entry.target.id);
-          else visible.delete(entry.target.id);
-        }
-        const first = stages.find((s) => visible.has(s.id));
-        if (first) setCurrent(first.id);
-      },
-      { rootMargin: "0px 0px -60% 0px" },
-    );
-    els.forEach((el) => io.observe(el));
-    return () => io.disconnect();
+    let raf = 0;
+    const compute = () => {
+      raf = 0;
+      const line = window.innerHeight * 0.33;
+      const tops = stages.map((st) => {
+        const el = document.getElementById(st.id);
+        return { id: st.id, top: el ? el.getBoundingClientRect().top : Infinity };
+      });
+      const passed = tops.filter((t) => t.top <= line);
+      // Stages shown side by side (the requirement list and the board) start at the same height; the earliest of
+      // such a group is the current one, so the order of the steps is respected.
+      let active = stages[0]?.id ?? null;
+      if (passed.length > 0) {
+        const lastTop = passed[passed.length - 1].top;
+        active = (passed.find((t) => t.top >= lastTop - 40) ?? passed[passed.length - 1]).id;
+      }
+      setCurrent(active);
+    };
+    const onScroll = () => {
+      if (!raf) raf = requestAnimationFrame(compute);
+    };
+    compute();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll);
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
+      if (raf) cancelAnimationFrame(raf);
+    };
   }, [stages, observeKey]);
 
   const go = (e: MouseEvent<HTMLAnchorElement>, id: string) => {
