@@ -331,7 +331,7 @@ export function TelemetryChart({
       </svg>
       </ScrollRegion>
       {deficitPolygon && (
-        <span className="flex items-center gap-1.5 font-mono text-[11px] text-secondary">
+        <span className="flex items-center gap-1.5 font-sans text-[12px] text-secondary">
           <span className="inline-block h-2.5 w-2.5" style={{ backgroundColor: SVG_COLOR.accent, opacity: 0.3 }} />
           {deficitFill!.label}
         </span>

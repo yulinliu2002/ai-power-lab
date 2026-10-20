@@ -422,7 +422,7 @@ export default function SandboxPage() {
               2 · Observe &amp; explain
             </h2>
             {readyData && (
-              <div className="ic-small ic-mono" style={{ textAlign: "right" }}>
+              <div className="ic-small" style={{ textAlign: "right" }}>
                 <span data-testid="run-provenance">{provenance}</span>
                 {draftDiffersFromRun && <span data-testid="run-stale"> {STALE_RUN_MARKER}</span>}
               </div>

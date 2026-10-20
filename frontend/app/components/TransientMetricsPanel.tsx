@@ -105,11 +105,11 @@ export function TransientMetricsPanel({ metrics, voltageReferenceV, comfortable 
         <span className="font-sans text-[11px] font-semibold uppercase tracking-[0.04em] text-secondary">
           Engineering basis
         </span>
-        <p className="font-mono text-[10.5px] text-secondary">
+        <p className="font-mono text-[12px] text-secondary">
           dE_dc/dt = P_sst &minus; P_load &nbsp;&nbsp;&middot;&nbsp;&nbsp; E_dc = &#189; C_dc
           V_dc&sup2;
         </p>
-        <p className="font-mono text-[10.5px] text-secondary">
+        <p className="font-mono text-[12px] text-secondary">
           &Delta;E = &int;(P_load &minus; P_sst) dt = &#189; C_dc (V_ref&sup2; &minus;
           V_dc,min&sup2;)
         </p>

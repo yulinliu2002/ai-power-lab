@@ -113,3 +113,7 @@ First verdict: CHANGES_REQUIRED, 0 blocking, 4 major, 2 minor. Dispositions:
 | 6 MINOR | takeaway outcome announced twice; caution separated | fixed: one outcome value, the caution sits directly under it |
 
 All suites re-run after these fixes pass (`after/*.json`).
+
+### Closure check of those fixes (session 01a157d3-... narrow pass; summarized)
+
+Codex's narrow check of the fixes found 1 and 6 resolved and 2, 3, 4, 5 partial. Remaining items addressed afterwards: the later duplicate proto CSS rules that re-applied Mono headings, 11px slider summaries and the mobile accent/`text-primary` border were removed; the architecture comparison drops its table roles below 960px (labeled cards there) instead of leaving a table with hidden headers; explanatory captions (power-balance legend, equations, sweep title, rail note, provenance, node-detail toggle) are 12px Sans (equations stay Mono per DESIGN.md); a new `verify_type.py` checks the rendered typography contract (headings Sans; prose of more than 40 characters Sans and at least 12px; equations exempt) on all four pages at both viewports including show-all, Compare and sweep states. All suites pass after these changes. The pass was not re-reviewed by Codex; the last recorded verdict is CHANGES_REQUIRED, now addressed.

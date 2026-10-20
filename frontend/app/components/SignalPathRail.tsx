@@ -43,7 +43,7 @@ export function SignalPathRail({
     >
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
         <span className="text-[12px] font-semibold text-primary">{name}</span>
-        {note && <span className="font-mono text-meta text-secondary">{note}</span>}
+        {note && <span className="text-[12px] text-secondary">{note}</span>}
       </div>
       <ol className="flex items-center">
         {main.map((n, i) => {

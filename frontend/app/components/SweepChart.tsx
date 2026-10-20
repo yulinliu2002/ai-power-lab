@@ -100,7 +100,7 @@ export function SweepChart({ title, xAxisLabel, yUnit, points, xTickFormat }: Sw
   return (
     <section className="flex flex-col gap-1.5 border border-hairline bg-surface px-3 py-2">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <span className="font-sans text-[11.5px] font-semibold uppercase tracking-[0.04em] text-secondary">
+        <span className="font-sans text-[13px] font-semibold text-primary">
           {title}
         </span>
         <div className="flex items-center gap-3 font-mono text-[10.5px] text-secondary">

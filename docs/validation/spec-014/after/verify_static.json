@@ -192,7 +192,7 @@
  {
   "result": "PASS",
   "check": "AC-25 mobile rail compact, no page overflow",
-  "detail": "height 72px [390, 390]"
+  "detail": "height 75px [390, 390]"
  },
  {
   "result": "PASS",
@@ -232,7 +232,7 @@
  {
   "result": "PASS",
   "check": "AC-16 mobile /architecture: axe no critical/serious violations",
-  "detail": "2 minor/moderate: ['empty-table-header', 'heading-order']"
+  "detail": "1 minor/moderate: ['heading-order']"
  },
  {
   "result": "PASS",

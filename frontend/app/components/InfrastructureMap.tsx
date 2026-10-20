@@ -282,7 +282,7 @@ function DetailPanelContent({
         type="button"
         onClick={() => setExpanded((e) => !e)}
         aria-expanded={expanded}
-        className="flex items-center gap-1.5 self-start font-sans text-[10.5px] font-semibold uppercase tracking-[0.04em] text-secondary hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary"
+        className="flex items-center gap-1.5 self-start font-sans text-[12px] font-semibold text-secondary hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary"
       >
         <span className="font-mono text-[12px] leading-none">{expanded ? "−" : "+"}</span>
         {expanded ? "Show less" : "Why it exists, considerations & alternatives"}

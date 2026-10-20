@@ -1,0 +1,42 @@
+[
+ {
+  "result": "PASS",
+  "check": "desktop /: headings are Sans; prose is Sans and >= 12px",
+  "detail": "[]"
+ },
+ {
+  "result": "PASS",
+  "check": "desktop /system-map: headings are Sans; prose is Sans and >= 12px",
+  "detail": "[]"
+ },
+ {
+  "result": "PASS",
+  "check": "desktop /architecture: headings are Sans; prose is Sans and >= 12px",
+  "detail": "[]"
+ },
+ {
+  "result": "PASS",
+  "check": "desktop /sandbox: headings are Sans; prose is Sans and >= 12px",
+  "detail": "[]"
+ },
+ {
+  "result": "PASS",
+  "check": "mobile /: headings are Sans; prose is Sans and >= 12px",
+  "detail": "[]"
+ },
+ {
+  "result": "PASS",
+  "check": "mobile /system-map: headings are Sans; prose is Sans and >= 12px",
+  "detail": "[]"
+ },
+ {
+  "result": "PASS",
+  "check": "mobile /architecture: headings are Sans; prose is Sans and >= 12px",
+  "detail": "[]"
+ },
+ {
+  "result": "PASS",
+  "check": "mobile /sandbox: headings are Sans; prose is Sans and >= 12px",
+  "detail": "[]"
+ }
+]

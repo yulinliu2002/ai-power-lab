@@ -47,7 +47,7 @@
  {
   "result": "PASS",
   "check": "failed Run: previous run retained, error shown, Run re-enabled",
-  "detail": "response time \u03c4_sst\n40 ms\nWHAT DOES THIS DO?\nRun Experiment\nReset to preset\n\nSlider values not yet run.\n\nFailed to fetch"
+  "detail": "response time \u03c4_sst\n40 ms\nWhat does this do?\nRun Experiment\nReset to preset\n\nSlider values not yet run.\n\nFailed to fetch"
  },
  {
   "result": "PASS",
