@@ -49,7 +49,7 @@ export function ProtectionCoordination({ timeline }: { timeline: ProtectionTimel
             {coordination.result_label}
           </span>
         </div>
-        <p className="font-sans text-[11px] leading-snug text-secondary">
+        <p className="font-sans text-[12px] leading-snug text-secondary">
           {coordination.result_detail}
         </p>
       </div>
@@ -57,7 +57,7 @@ export function ProtectionCoordination({ timeline }: { timeline: ProtectionTimel
       {coordination.separations.length > 0 && (
         <ul className="flex flex-col gap-0.5 border-y border-hairline py-1.5">
           {coordination.separations.map((sep, i) => (
-            <li key={i} className="flex flex-wrap items-baseline gap-x-2 font-mono text-[10.5px]">
+            <li key={i} className="flex flex-wrap items-baseline gap-x-2 font-sans text-[12px]">
               <span className="font-semibold text-primary">{sep.label}</span>
               <span className="text-secondary">{formatSeconds(sep.duration_s)}</span>
             </li>

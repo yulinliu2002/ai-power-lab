@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
+import "./instrument.css";
 
 import { SiteNav } from "./components/SiteNav";
 
@@ -28,7 +29,8 @@ const plexMono = localFont({
 
 export const metadata: Metadata = {
   title: "AI Power Lab",
-  description: "SST / 800 VDC AI Power Infrastructure",
+  description:
+    "A learning-first engineering platform for understanding, evaluating and explaining AI data-center power infrastructure.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

@@ -41,9 +41,9 @@ export function ScenarioSelector({ selected, onSelect, disabled = false }: Scena
             data-testid={`scenario-option-${option.key}`}
             disabled={disabled}
             onClick={() => onSelect(option.key)}
-            className={`rounded border px-2 py-1 font-sans text-[10.5px] font-semibold uppercase tracking-[0.04em] disabled:cursor-not-allowed disabled:opacity-50 ${
+            className={`rounded border px-2 py-1 font-sans text-[12px] font-semibold disabled:cursor-not-allowed disabled:opacity-50 ${
               isSelected
-                ? "border-accent bg-accent text-primary"
+                ? "border-accent bg-accent text-canvas"
                 : "border-hairline bg-surface-raised text-secondary"
             }`}
           >

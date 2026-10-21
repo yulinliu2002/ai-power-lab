@@ -1,0 +1,67 @@
+[
+ {
+  "id": "Q1",
+  "observed": "schematic scroller 568/276px, visible hint True, focusable tabindex 0",
+  "fixed": true
+ },
+ {
+  "id": "Q2",
+  "observed": "chart drawn at 600px wide; 9.5-unit labels render at 9.5px (authored size kept), inside a named scroller",
+  "fixed": true
+ },
+ {
+  "id": "Q3",
+  "observed": "sweep table 640px in named scroller 'Sensitivity results table' (308px), hint True",
+  "fixed": true
+ },
+ {
+  "id": "Q4",
+  "observed": "compare table 2465px in named scroller 'Scenario comparison table', hint True, sticky first column: sticky",
+  "fixed": true
+ },
+ {
+  "id": "Q5",
+  "observed": "Main Power Path stacked at 390px: scrollWidth 296 = clientWidth 296",
+  "fixed": true
+ },
+ {
+  "id": "Q7",
+  "observed": "unit label / first x tick overlap area 0.0px^2",
+  "fixed": true
+ },
+ {
+  "id": "Q8",
+  "observed": "overlapping tick-label pairs: 0",
+  "fixed": true
+ },
+ {
+  "id": "Q9",
+  "observed": "nav height 51px at 390 (two lines)",
+  "fixed": true
+ },
+ {
+  "id": "Q10",
+  "observed": "h1 = 'Advanced Sandbox'",
+  "fixed": true
+ },
+ {
+  "id": "D1",
+  "observed": "executive-level absent",
+  "fixed": true
+ },
+ {
+  "id": "D2/D3/D5",
+  "observed": "no CONTROL CENTER, scope sentence visible, no CLAUDE.md",
+  "fixed": true
+ },
+ {
+  "id": "D4",
+  "observed": "no 'Advanced Sandbox, below'",
+  "fixed": true
+ },
+ {
+  "id": "G2",
+  "observed": "links ['/architecture', '/architecture', '/sandbox']",
+  "fixed": true
+ }
+]

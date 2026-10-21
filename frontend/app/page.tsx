@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { AreaHeader } from "./components/AreaHeader";
+
 export const metadata: Metadata = {
   title: "AI Power Lab",
 };
@@ -20,51 +22,53 @@ export const metadata: Metadata = {
  */
 export default function HomePage() {
   return (
-    <main className="mx-auto flex w-full max-w-[1320px] flex-1 flex-col gap-8 px-6 py-10">
-      <header className="flex flex-col gap-3 border-b border-hairline pb-6">
-        <p className="font-mono text-[10.5px] uppercase tracking-[0.08em] text-secondary">
-          A personal learning platform
-        </p>
-        <h1 className="max-w-3xl text-2xl font-bold leading-tight tracking-tight text-primary sm:text-3xl">
-          Understanding AI data-center power infrastructure, from the grid to the rack.
-        </h1>
-        <p className="max-w-2xl text-[13.5px] leading-relaxed text-secondary">
-          AI Power Lab is built from public engineering and industry sources to develop a
-          systems-architecture and executive-level understanding of how AI data centers are
-          actually powered &mdash; the equipment, the architecture trade-offs, how the chain
-          behaves under real events, and what is happening in the industry around it.
-        </p>
+    <main className="mx-auto flex w-full max-w-[1320px] flex-1 flex-col gap-8 px-4 py-8 sm:px-6 sm:py-10">
+      <AreaHeader
+        title="Understanding AI data-center power infrastructure, from the grid to the rack."
+        role="AI Power Lab: learn, evaluate, explain"
+        lede="AI Power Lab is built from public engineering and industry sources to develop systems-level reasoning and architecture judgment about how AI data centers are actually powered — the equipment, the architecture trade-offs, how the chain behaves under real events, and what is happening in the industry around it."
+      >
         <div className="flex flex-wrap gap-3 pt-1">
           <Link
             href="/system-map"
-            className="border border-accent bg-accent px-4 py-2 font-mono text-[11.5px] font-semibold uppercase tracking-[0.04em] text-canvas hover:opacity-90"
+            className="border border-accent bg-accent px-4 py-2 font-mono text-[12px] font-semibold uppercase tracking-[0.04em] text-canvas hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary"
           >
             Start with the System Map &rarr;
           </Link>
           <Link
             href="/sandbox"
-            className="border border-hairline px-4 py-2 font-mono text-[11.5px] font-semibold uppercase tracking-[0.04em] text-secondary hover:border-primary hover:text-primary"
+            className="border border-hairline px-4 py-2 font-mono text-[12px] font-semibold uppercase tracking-[0.04em] text-secondary hover:border-primary hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary"
           >
             Open the Advanced Sandbox
           </Link>
         </div>
-      </header>
+      </AreaHeader>
 
       <section className="flex flex-col gap-3">
-        <h2 className="font-sans text-[13px] font-semibold uppercase tracking-[0.04em] text-secondary">
-          Four learning areas
-        </h2>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          {LEARNING_AREAS.map((area) => (
-            <LearningAreaCard key={area.title} {...area} />
+        <h2 className="text-heading text-primary">Four learning areas, in a suggested order</h2>
+        <ol className="grid list-none grid-cols-1 gap-3 sm:grid-cols-2">
+          {LEARNING_AREAS.map((area, i) => (
+            <li key={area.title} className="flex">
+              <LearningAreaCard order={i + 1} {...area} />
+            </li>
           ))}
-        </div>
+        </ol>
+        <p className="max-w-3xl text-body text-secondary">
+          Each area has a different job: the map shows structure, Architecture Choices evaluates
+          alternatives against requirements, Learn by Example explains cause and effect step by
+          step, and Industry &amp; Career connects the knowledge to real-world industry. The{" "}
+          <Link
+            href="/sandbox"
+            className="text-primary underline underline-offset-2 hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary"
+          >
+            Advanced Sandbox
+          </Link>{" "}
+          is a supporting tool for free quantitative experiments, not a fifth area of equal standing.
+        </p>
       </section>
 
       <section className="flex flex-col gap-2 border-t border-hairline pt-6">
-        <h2 className="font-sans text-[13px] font-semibold uppercase tracking-[0.04em] text-secondary">
-          What this is, and isn&rsquo;t
-        </h2>
+        <h2 className="text-heading text-primary">What this is, and isn&rsquo;t</h2>
         <p className="max-w-3xl text-[12.5px] leading-relaxed text-secondary">
           This project uses only public engineering principles, standards, and industry
           sources &mdash; textbooks, published papers, datasheets, and public company/standards
@@ -131,21 +135,20 @@ const LEARNING_AREAS: ReadonlyArray<LearningArea> = [
   },
 ];
 
-function LearningAreaCard({ title, question, description, href, status }: LearningArea) {
+function LearningAreaCard({ title, question, description, href, status, order }: LearningArea & { order: number }) {
   const body = (
     <>
       <div className="flex items-center justify-between gap-2">
-        <h3 className="text-[14px] font-semibold text-primary">{title}</h3>
-        <span
-          className={`font-mono text-[9.5px] uppercase tracking-[0.06em] ${
-            status === "live" ? "text-status-good" : "text-secondary"
-          }`}
-        >
+        <h3 className="text-[14px] font-semibold text-primary">
+          <span className="mr-2 font-mono text-meta text-secondary">{order}</span>
+          {title}
+        </h3>
+        <span className="font-mono text-meta uppercase text-secondary">
           {status === "live" ? "available" : "planned"}
         </span>
       </div>
-      <p className="mt-1 text-[12px] italic leading-snug text-secondary">{question}</p>
-      <p className="mt-1.5 text-[12px] leading-relaxed text-secondary">{description}</p>
+      <p className="mt-1 text-[13px] italic leading-snug text-secondary">{question}</p>
+      <p className="mt-1.5 text-[13px] leading-relaxed text-secondary">{description}</p>
     </>
   );
 
@@ -153,7 +156,7 @@ function LearningAreaCard({ title, question, description, href, status }: Learni
     return (
       <Link
         href={href}
-        className="flex flex-col border border-hairline bg-surface px-4 py-3 hover:border-primary"
+        className="flex w-full flex-col border border-hairline bg-surface px-4 py-3 hover:border-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary"
       >
         {body}
       </Link>
@@ -161,7 +164,7 @@ function LearningAreaCard({ title, question, description, href, status }: Learni
   }
 
   return (
-    <div className="flex flex-col border border-hairline bg-surface-raised px-4 py-3 opacity-80">
+    <div className="flex w-full flex-col border border-hairline bg-surface-raised px-4 py-3">
       {body}
     </div>
   );

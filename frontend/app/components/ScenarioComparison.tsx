@@ -1,7 +1,9 @@
+import { OUTCOME_CAUTION } from "../lib/sandboxTakeawayData";
 import { formatSeconds } from "../lib/formatSeconds";
 import type { ScenarioComparisonEntry } from "../lib/simulationApi";
 import { type StatusRole } from "../lib/statusRoles";
 import { CoverageChecklist } from "./ProtectionCoverageChecklist";
+import { ScrollRegion } from "./ScrollRegion";
 import { SCENARIO_OPTIONS } from "./ScenarioSelector";
 
 const SCENARIO_LABEL: Record<ScenarioComparisonEntry["scenario"], string> = Object.fromEntries(
@@ -135,20 +137,23 @@ export function ScenarioComparison({ entries }: { entries: ScenarioComparisonEnt
         SCENARIO COMPARISON
       </span>
 
-      <p className="font-sans text-[10px] leading-snug text-muted">
+      <p className="font-sans text-[12px] leading-snug text-secondary">
         V1 models only sustained thermal overtemperature protection. It has no DC-bus
         undervoltage/overvoltage protection. Thresholds and outcomes shown here are illustrative,
-        educational model results (see <code>CLAUDE.md</code>) &mdash; not a claim about how a real
-        SST and its surrounding protection system would necessarily behave. Three scenarios may show
-        the identical DC-link energy excursion because all three saturate at the same numerical
-        energy floor; this metric does not quantify how long unmet demand continued afterward.
+        educational model results &mdash; not a claim about how a real SST and its surrounding
+        protection system would necessarily behave. Three scenarios may show the identical DC-link
+        energy excursion because all three saturate at the same numerical energy floor; this metric
+        does not quantify how long unmet demand continued afterward.
+      </p>
+      <p data-testid="outcome-caution" className="font-sans text-[12px] leading-snug text-secondary">
+        {OUTCOME_CAUTION}
       </p>
 
-      <div className="overflow-x-auto border border-hairline">
+      <ScrollRegion label="Scenario comparison table" className="border border-hairline">
         <table className="w-full min-w-[1080px] border-collapse font-mono text-[10.5px]">
           <thead>
             <tr className="border-b border-hairline bg-surface-raised">
-              <Th label="Scenario" />
+              <Th label="Scenario" sticky />
               <Th label="Outcome" />
               <Th label="Recovery" />
               <Th label="Coordination" />
@@ -168,16 +173,18 @@ export function ScenarioComparison({ entries }: { entries: ScenarioComparisonEnt
             ))}
           </tbody>
         </table>
-      </div>
+      </ScrollRegion>
 
       <CoverageChecklist coverage={entries[0]?.protection_timeline.coverage ?? []} />
     </section>
   );
 }
 
-function Th({ label }: { label: string }) {
+function Th({ label, sticky = false }: { label: string; sticky?: boolean }) {
   return (
-    <th className="whitespace-nowrap px-2 py-1.5 text-left font-sans text-[10px] font-semibold uppercase tracking-[0.04em] text-muted">
+    <th className={`whitespace-nowrap px-2 py-1.5 text-left font-sans text-[11px] font-semibold uppercase tracking-[0.04em] text-secondary ${
+      sticky ? "sticky left-0 z-10 bg-surface-raised" : ""
+    }`}>
       {label}
     </th>
   );
@@ -195,7 +202,7 @@ function Row({
 
   return (
     <tr className="border-b border-hairline last:border-b-0" data-testid={`comparison-row-${entry.scenario}`}>
-      <td className="whitespace-nowrap px-2 py-1.5 font-semibold text-primary">
+      <td className="sticky left-0 z-10 whitespace-nowrap bg-surface px-2 py-1.5 font-semibold text-primary">
         {SCENARIO_LABEL[entry.scenario]}
       </td>
       <td className="whitespace-nowrap px-2 py-1.5">
@@ -241,7 +248,7 @@ function Row({
       </td>
       <td className="px-2 py-1.5 text-secondary">
         <span className="font-semibold text-primary">{entry.stress_profile.dominant_stress_label}</span>
-        <span className="block text-[10px] text-muted">{entry.stress_profile.dominant_stress_detail}</span>
+        <span className="block font-sans text-[12px] text-secondary">{entry.stress_profile.dominant_stress_detail}</span>
       </td>
     </tr>
   );

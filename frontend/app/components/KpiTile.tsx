@@ -33,16 +33,16 @@ interface KpiReadoutProps {
 export function KpiReadout({ label, caption, value, unit, role }: KpiReadoutProps) {
   return (
     <div className="flex flex-col justify-center gap-0.5 px-3 py-1.5">
-      <span className="flex items-center gap-1.5 font-mono text-[10px] font-semibold uppercase tracking-[0.04em] text-muted">
+      <span className="flex items-center gap-1.5 font-mono text-[11px] font-semibold uppercase tracking-[0.04em] text-secondary">
         <span className={`h-[5px] w-[5px] shrink-0 rounded-full ${DOT_BY_ROLE[role]}`} />
         {label}
       </span>
       <span className="font-mono text-[18px] font-semibold leading-none tabular-nums text-primary">
         {value}
-        <span className="ml-1 text-[10.5px] font-normal text-muted">{unit}</span>
+        <span className="ml-1 text-[10.5px] font-normal text-secondary">{unit}</span>
       </span>
       {caption && (
-        <span className="font-sans text-[9.5px] leading-tight text-muted">{caption}</span>
+        <span className="font-sans text-[12px] leading-tight text-secondary">{caption}</span>
       )}
     </div>
   );

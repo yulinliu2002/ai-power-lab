@@ -10,17 +10,17 @@ import type { CoverageEntry } from "../lib/simulationApi";
 export function CoverageChecklist({ coverage }: { coverage: CoverageEntry[] }) {
   return (
     <div className="flex flex-col gap-1">
-      <span className="font-sans text-[10.5px] font-semibold uppercase tracking-[0.04em] text-muted">
+      <span className="font-sans text-[11px] font-semibold uppercase tracking-[0.04em] text-secondary">
         Protection Coverage (V1 model)
       </span>
       <ul className="flex flex-col gap-1">
         {coverage.map((entry, i) => (
-          <li key={i} className="flex flex-wrap items-baseline gap-x-2 font-mono text-[10.5px]">
+          <li key={i} className="flex flex-wrap items-baseline gap-x-2 font-sans text-[12px]">
             <span className={entry.modeled ? "text-status-good" : "text-status-critical"}>
               {entry.modeled ? "✓" : "✕"}
             </span>
             <span className="font-semibold text-primary">{entry.function}</span>
-            <span className="text-muted">{entry.detail}</span>
+            <span className="font-sans text-[12px] text-secondary">{entry.detail}</span>
           </li>
         ))}
       </ul>

@@ -1,0 +1,137 @@
+[
+ {
+  "result": "PASS",
+  "check": "mount: exactly one Load Step fetch",
+  "detail": "{'load': 1, 'scen': 0, 'cmp': 0}"
+ },
+ {
+  "result": "PASS",
+  "check": "mount: scrubber at voltage-minimum default index (not 0)",
+  "detail": "2163"
+ },
+ {
+  "result": "PASS",
+  "check": "provenance: preset defaults",
+  "detail": ""
+ },
+ {
+  "result": "PASS",
+  "check": "scrubber Home -> t = 0",
+  "detail": ""
+ },
+ {
+  "result": "PASS",
+  "check": "scrubber End -> last sample",
+  "detail": "Current \u00b7 at the scrubber time\n\n800.9V\nDC bus voltage V_dc at t = 0.5999 s\nReference\n800 V\nMinimum in run\n712.5 V at 0.2"
+ },
+ {
+  "result": "PASS",
+  "check": "no unrun marker before edit",
+  "detail": ""
+ },
+ {
+  "result": "PASS",
+  "check": "slider edit -> 'Slider values not yet run.' and run-stale",
+  "detail": ""
+ },
+ {
+  "result": "PASS",
+  "check": "run: provenance shows experiment values; markers cleared",
+  "detail": "Showing Load Step with experiment values: AI load step to 320 kW, C_dc = 0.040 F, \u03c4_sst = 20 ms."
+ },
+ {
+  "result": "PASS",
+  "check": "run: scrubber returns to default index",
+  "detail": ""
+ },
+ {
+  "result": "PASS",
+  "check": "failed Run: previous run retained, error shown, Run re-enabled",
+  "detail": "response time \u03c4_sst\n40 ms\nWhat does this do?\nRun Experiment\nReset to preset\n\nSlider values not yet run.\n\nFailed to fetch"
+ },
+ {
+  "result": "PASS",
+  "check": "failed Reset: previous run retained",
+  "detail": ""
+ },
+ {
+  "result": "PASS",
+  "check": "Reset: draft reset and baseline fetched -> preset defaults",
+  "detail": ""
+ },
+ {
+  "result": "PASS",
+  "check": "sweep result shown",
+  "detail": ""
+ },
+ {
+  "result": "PASS",
+  "check": "sweep stale marker after slider change",
+  "detail": ""
+ },
+ {
+  "result": "PASS",
+  "check": "scenario change to B-E with sweep chosen: disabled-study notice, no auto study",
+  "detail": "{'load': 11, 'scen': 1, 'cmp': 0}"
+ },
+ {
+  "result": "PASS",
+  "check": "B-E: fixed-preset note and no sliders",
+  "detail": ""
+ },
+ {
+  "result": "PASS",
+  "check": "B-E takeaway has no derived numbers (no energy deficit row)",
+  "detail": ""
+ },
+ {
+  "result": "PASS",
+  "check": "return to Load Step fetches preset run; draft kept and marked not yet run",
+  "detail": ""
+ },
+ {
+  "result": "PASS",
+  "check": "rapid switching: last request wins",
+  "detail": "Showing Sustained High Load (fixed preset)."
+ },
+ {
+  "result": "PASS",
+  "check": "compare entry 1 fetches once",
+  "detail": "{'load': 13, 'scen': 4, 'cmp': 1}"
+ },
+ {
+  "result": "PASS",
+  "check": "compare re-entry fetches again (2nd entry), failure shown in Stage 3 only",
+  "detail": "{'load': 13, 'scen': 4, 'cmp': 2}"
+ },
+ {
+  "result": "PASS",
+  "check": "compare retry recovers",
+  "detail": "{'load': 13, 'scen': 4, 'cmp': 3}"
+ },
+ {
+  "result": "PASS",
+  "check": "compare keeps single-run view on screen and scenario selector enabled",
+  "detail": ""
+ },
+ {
+  "result": "PASS",
+  "check": "compare outcome caution present",
+  "detail": ""
+ },
+ {
+  "result": "PASS",
+  "check": "stage nav moves focus to target heading",
+  "detail": ""
+ },
+ {
+  "result": "PASS",
+  "check": "all five scenarios selectable",
+  "detail": ""
+ },
+ {
+  "result": "PASS",
+  "check": "single-run outcome caution present",
+  "detail": ""
+ }
+]

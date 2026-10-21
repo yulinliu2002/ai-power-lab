@@ -2,6 +2,7 @@ import { useId } from "react";
 
 import type { Sample } from "../lib/simulationApi";
 import { gridStatus, sstStatus } from "../lib/statusRoles";
+import { ScrollRegion } from "./ScrollRegion";
 import { SVG_COLOR } from "../lib/theme";
 
 interface PowerFlowSchematicProps {
@@ -156,11 +157,9 @@ export function PowerFlowSchematic({ live }: PowerFlowSchematicProps) {
       <span className="font-sans text-[11.5px] font-semibold uppercase tracking-[0.04em] text-secondary">
         POWER FLOW
       </span>
-      <div
-        role="region"
-        aria-label="Power flow diagram; scroll horizontally to view all stages"
-        tabIndex={0}
-        className="mx-auto w-full min-w-0 overflow-x-auto focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary"
+      <ScrollRegion
+        label="Power flow diagram; scroll horizontally to view all stages"
+        className="mx-auto w-full"
         style={{ maxWidth: VIEW_W }}
       >
         <svg
@@ -313,7 +312,7 @@ export function PowerFlowSchematic({ live }: PowerFlowSchematicProps) {
             </text>
           )}
         </svg>
-      </div>
+      </ScrollRegion>
     </section>
   );
 }

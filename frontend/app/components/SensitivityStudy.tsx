@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import {
   roleLabel,
@@ -9,11 +9,15 @@ import {
   type SweepResult,
 } from "../lib/sensitivitySweep";
 import type { ExperimentParams } from "./ExperimentPanel";
+import { ScrollRegion } from "./ScrollRegion";
 import { SweepChart } from "./SweepChart";
 
 interface SensitivityStudyProps {
   /** The learner's current draft; read only at the moment RUN is clicked. */
   draft: ExperimentParams;
+  /** Presentation option (SPEC-014 Stage 3): render the study directly,
+   * without its own collapsed toggle. Default keeps the original behavior. */
+  embedded?: boolean;
 }
 
 const PARAMETER_LABEL: Record<SweepParameter, string> = {
@@ -49,13 +53,28 @@ function formatTick(parameter: SweepParameter, value: number): string {
  * draft. Every point is an ordinary single-run request; this component
  * owns its own results and never touches the single-run view.
  */
-export function SensitivityStudy({ draft }: SensitivityStudyProps) {
-  const [open, setOpen] = useState(false);
+export function SensitivityStudy({ draft, embedded = false }: SensitivityStudyProps) {
+  const [open, setOpen] = useState(embedded);
   const [parameter, setParameter] = useState<SweepParameter>("capacitance");
   const [result, setResult] = useState<SweepResult | null>(null);
   const [isRunning, setIsRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const requestId = useRef(0);
+
+  // Discard any in-flight sweep when the study unmounts (for example when
+  // the scenario changes away from Load Step).
+  useEffect(() => {
+    const ref = requestId;
+    return () => {
+      ref.current += 1;
+    };
+  }, []);
+
+  const isStale =
+    result !== null &&
+    (result.draft.finalFraction !== draft.finalFraction ||
+      result.draft.capacitanceF !== draft.capacitanceF ||
+      result.draft.timeConstantS !== draft.timeConstantS);
 
   // Choosing the other parameter replaces (here: clears) the displayed
   // sweep -- only one sweep is ever shown.
@@ -89,17 +108,19 @@ export function SensitivityStudy({ draft }: SensitivityStudyProps) {
 
   return (
     <div className="flex flex-col gap-1.5 border-t border-hairline pt-2">
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        className="flex items-center gap-1.5 self-start font-sans text-[10.5px] font-semibold uppercase tracking-[0.04em] text-muted"
-      >
-        <span className="font-mono text-[12px] leading-none">{open ? "−" : "+"}</span>
-        Sensitivity Study
-      </button>
+      {!embedded && (
+        <button
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          className="flex items-center gap-1.5 self-start font-sans text-[11px] font-semibold uppercase tracking-[0.04em] text-secondary"
+        >
+          <span className="font-mono text-[12px] leading-none">{open ? "−" : "+"}</span>
+          Sensitivity Study
+        </button>
+      )}
       {open && (
         <section className="flex flex-col gap-2 border border-hairline bg-surface px-4 py-2">
-          <span className="font-sans text-[11.5px] font-semibold uppercase tracking-[0.04em] text-muted">
+          <span className="font-sans text-[11.5px] font-semibold uppercase tracking-[0.04em] text-secondary">
             SENSITIVITY STUDY
           </span>
           <p className="font-sans text-[12px] leading-snug text-secondary">
@@ -107,7 +128,7 @@ export function SensitivityStudy({ draft }: SensitivityStudyProps) {
             parameter&rsquo;s full slider range (plus your current value), holding every other
             setting at the current experiment values. The DC link must supply the energy deficit
             ΔE = ∫(P_load − P_sst) dt; C_dc sets how far V_dc moves per joule, and τ_sst sets how
-            long the mismatch stays open.
+            long the mismatch stays open.{embedded && " The sweep uses the parameter values currently set in Configure & run, including values you have not run yet."}
           </p>
           <div className="flex flex-wrap items-center gap-2">
             {(Object.keys(PARAMETER_LABEL) as SweepParameter[]).map((p) => (
@@ -130,14 +151,19 @@ export function SensitivityStudy({ draft }: SensitivityStudyProps) {
               type="button"
               onClick={run}
               disabled={isRunning}
-              className="ml-auto rounded border border-accent bg-accent px-3 py-1.5 font-sans text-[11px] font-semibold uppercase tracking-[0.04em] text-primary disabled:cursor-not-allowed disabled:opacity-50"
+              className="ml-auto rounded border border-accent bg-accent px-3 py-1.5 font-sans text-[12px] font-semibold text-canvas disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isRunning ? "Running…" : "Run Sweep"}
             </button>
           </div>
-          {error && <span className="font-mono text-[10px] text-status-critical">{error}</span>}
+          {error && <span className="font-sans text-[12px] text-status-critical">{error}</span>}
+          {result && isStale && (
+            <span data-testid="sweep-stale" className="font-mono text-[11px] text-secondary">
+              Values changed since this sweep.
+            </span>
+          )}
           {result && <SweepResults result={result} />}
-          <p className="font-mono text-[9px] leading-snug text-muted">
+          <p className="font-sans text-[12px] leading-relaxed text-secondary">
             Toy-model disclaimer: all values here are outputs of this repository&rsquo;s simplified,
             average-value, lumped-parameter educational model (no switching dynamics, constant
             efficiency, single-capacitance bus, no cabling impedance). They are illustrative only
@@ -173,15 +199,15 @@ function SweepResults({ result }: { result: SweepResult }) {
           isCurrent: p.isCurrent,
         }))}
       />
-      <span className="font-mono text-[10px] text-muted">
+      <span className="font-mono text-[11px] text-secondary">
         Held fixed: {fixedNote}, final load = {(result.draft.finalFraction * 100).toFixed(0)}% of
         rated.
       </span>
-      <div className="overflow-x-auto">
-        <table className="w-full border-collapse font-mono text-[10.5px] tabular-nums text-secondary">
+      <ScrollRegion label="Sensitivity results table">
+        <table className="w-full min-w-[640px] border-collapse font-mono text-[10.5px] tabular-nums text-secondary">
           <thead>
-            <tr className="border-b border-hairline text-left font-sans text-[9.5px] uppercase tracking-[0.04em] text-muted">
-              <th className="py-1 pr-3 font-semibold">Point</th>
+            <tr className="border-b border-hairline text-left font-sans text-[11px] uppercase tracking-[0.04em] text-secondary">
+              <th className="sticky left-0 z-10 bg-surface py-1 pr-3 font-semibold">Point</th>
               <th className="py-1 pr-3 font-semibold">{PARAMETER_LABEL[parameter]}</th>
               <th className="py-1 pr-3 font-semibold">Min V_dc [V]</th>
               <th className="py-1 pr-3 font-semibold">Max dev [V]</th>
@@ -196,7 +222,7 @@ function SweepResults({ result }: { result: SweepResult }) {
                 key={p.value}
                 className={`border-b border-hairline ${p.isCurrent ? "bg-surface-raised text-primary" : ""}`}
               >
-                <td className="py-1 pr-3">{roleLabel(p)}</td>
+                <td className="sticky left-0 z-10 bg-surface py-1 pr-3">{roleLabel(p)}</td>
                 <td className="py-1 pr-3">{formatValue(parameter, p.value)}</td>
                 <td className="py-1 pr-3">{p.metrics.minVdcV.toFixed(1)}</td>
                 <td className="py-1 pr-3">{p.metrics.maxDeviationV.toFixed(1)}</td>
@@ -211,7 +237,7 @@ function SweepResults({ result }: { result: SweepResult }) {
             ))}
           </tbody>
         </table>
-      </div>
+      </ScrollRegion>
     </div>
   );
 }

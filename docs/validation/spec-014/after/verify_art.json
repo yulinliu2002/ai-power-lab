@@ -1,0 +1,407 @@
+[
+ {
+  "result": "PASS",
+  "check": "desktop rd1: marked columns equal the data's favored set (conditional, not computed)",
+  "detail": "(['AC-fed 800 VDC', 'Conceptual MV-to-800 VDC via SST'], ['AC-fed 800 VDC', 'Conceptual MV-to-800 VDC via SST'])"
+ },
+ {
+  "result": "PASS",
+  "check": "desktop rd1: conditional wording present (legend + accessible chip text + decision band)",
+  "detail": ""
+ },
+ {
+  "result": "PASS",
+  "check": "desktop rd2: marked columns equal the data's favored set (conditional, not computed)",
+  "detail": "(['Conventional AC', 'AC-fed 800 VDC', 'Conceptual MV-to-800 VDC via SST'], ['Conventional AC', 'AC-fed 800 VDC', 'Conceptual MV-to-800 VDC via SST'])"
+ },
+ {
+  "result": "PASS",
+  "check": "desktop rd2: conditional wording present (legend + accessible chip text + decision band)",
+  "detail": ""
+ },
+ {
+  "result": "PASS",
+  "check": "desktop rd3: marked columns equal the data's favored set (conditional, not computed)",
+  "detail": "(['Conventional AC'], ['Conventional AC'])"
+ },
+ {
+  "result": "PASS",
+  "check": "desktop rd3: conditional wording present (legend + accessible chip text + decision band)",
+  "detail": ""
+ },
+ {
+  "result": "PASS",
+  "check": "desktop rd4: marked columns equal the data's favored set (conditional, not computed)",
+  "detail": "(['Conventional AC'], ['Conventional AC'])"
+ },
+ {
+  "result": "PASS",
+  "check": "desktop rd4: conditional wording present (legend + accessible chip text + decision band)",
+  "detail": ""
+ },
+ {
+  "result": "PASS",
+  "check": "desktop rd5: marked columns equal the data's favored set (conditional, not computed)",
+  "detail": "(['AC-fed 800 VDC'], ['AC-fed 800 VDC'])"
+ },
+ {
+  "result": "PASS",
+  "check": "desktop rd5: conditional wording present (legend + accessible chip text + decision band)",
+  "detail": ""
+ },
+ {
+  "result": "PASS",
+  "check": "desktop rd6: marked columns equal the data's favored set (conditional, not computed)",
+  "detail": "(['AC-fed 800 VDC', 'Conceptual MV-to-800 VDC via SST'], ['AC-fed 800 VDC', 'Conceptual MV-to-800 VDC via SST'])"
+ },
+ {
+  "result": "PASS",
+  "check": "desktop rd6: conditional wording present (legend + accessible chip text + decision band)",
+  "detail": ""
+ },
+ {
+  "result": "PASS",
+  "check": "desktop rd7: marked columns equal the data's favored set (conditional, not computed)",
+  "detail": "(['Conventional AC'], ['Conventional AC'])"
+ },
+ {
+  "result": "PASS",
+  "check": "desktop rd7: conditional wording present (legend + accessible chip text + decision band)",
+  "detail": ""
+ },
+ {
+  "result": "PASS",
+  "check": "desktop: at least one requirement marks multiple architectures",
+  "detail": "3"
+ },
+ {
+  "result": "PASS",
+  "check": "desktop: no ranking/score/winner/best language outside the negating sentences",
+  "detail": "set()"
+ },
+ {
+  "result": "PASS",
+  "check": "mobile rd1: marked columns equal the data's favored set (conditional, not computed)",
+  "detail": "(['AC-fed 800 VDC', 'Conceptual MV-to-800 VDC via SST'], ['AC-fed 800 VDC', 'Conceptual MV-to-800 VDC via SST'])"
+ },
+ {
+  "result": "PASS",
+  "check": "mobile rd1: favored chips are visible, exposed to assistive tech and state the condition",
+  "detail": "[{'vis': True, 'hidden': False, 't': 'Tends to favor \u00b7 conditional if this requirement dominates; not a ranking or a winner'}, {'vis': True, 'hidden': False, 't': 'Tends to favor \u00b7 conditional if this requirement dominates; not a ranking or a winner'}]"
+ },
+ {
+  "result": "PASS",
+  "check": "mobile rd1: conditional wording present (legend + accessible chip text + decision band)",
+  "detail": ""
+ },
+ {
+  "result": "PASS",
+  "check": "mobile rd2: marked columns equal the data's favored set (conditional, not computed)",
+  "detail": "(['Conventional AC', 'AC-fed 800 VDC', 'Conceptual MV-to-800 VDC via SST'], ['Conventional AC', 'AC-fed 800 VDC', 'Conceptual MV-to-800 VDC via SST'])"
+ },
+ {
+  "result": "PASS",
+  "check": "mobile rd2: favored chips are visible, exposed to assistive tech and state the condition",
+  "detail": "[{'vis': True, 'hidden': False, 't': 'Tends to favor \u00b7 conditional if this requirement dominates; not a ranking or a winner'}, {'vis': True, 'hidden': False, 't': 'Tends to favor \u00b7 conditional if this requirement dominates; not a ranking or a winner'}, {'vis': True, 'hidden': False, 't': 'Tends to f"
+ },
+ {
+  "result": "PASS",
+  "check": "mobile rd2: conditional wording present (legend + accessible chip text + decision band)",
+  "detail": ""
+ },
+ {
+  "result": "PASS",
+  "check": "mobile rd3: marked columns equal the data's favored set (conditional, not computed)",
+  "detail": "(['Conventional AC'], ['Conventional AC'])"
+ },
+ {
+  "result": "PASS",
+  "check": "mobile rd3: favored chips are visible, exposed to assistive tech and state the condition",
+  "detail": "[{'vis': True, 'hidden': False, 't': 'Tends to favor \u00b7 conditional if this requirement dominates; not a ranking or a winner'}]"
+ },
+ {
+  "result": "PASS",
+  "check": "mobile rd3: conditional wording present (legend + accessible chip text + decision band)",
+  "detail": ""
+ },
+ {
+  "result": "PASS",
+  "check": "mobile rd4: marked columns equal the data's favored set (conditional, not computed)",
+  "detail": "(['Conventional AC'], ['Conventional AC'])"
+ },
+ {
+  "result": "PASS",
+  "check": "mobile rd4: favored chips are visible, exposed to assistive tech and state the condition",
+  "detail": "[{'vis': True, 'hidden': False, 't': 'Tends to favor \u00b7 conditional if this requirement dominates; not a ranking or a winner'}]"
+ },
+ {
+  "result": "PASS",
+  "check": "mobile rd4: conditional wording present (legend + accessible chip text + decision band)",
+  "detail": ""
+ },
+ {
+  "result": "PASS",
+  "check": "mobile rd5: marked columns equal the data's favored set (conditional, not computed)",
+  "detail": "(['AC-fed 800 VDC'], ['AC-fed 800 VDC'])"
+ },
+ {
+  "result": "PASS",
+  "check": "mobile rd5: favored chips are visible, exposed to assistive tech and state the condition",
+  "detail": "[{'vis': True, 'hidden': False, 't': 'Tends to favor \u00b7 conditional if this requirement dominates; not a ranking or a winner'}]"
+ },
+ {
+  "result": "PASS",
+  "check": "mobile rd5: conditional wording present (legend + accessible chip text + decision band)",
+  "detail": ""
+ },
+ {
+  "result": "PASS",
+  "check": "mobile rd6: marked columns equal the data's favored set (conditional, not computed)",
+  "detail": "(['AC-fed 800 VDC', 'Conceptual MV-to-800 VDC via SST'], ['AC-fed 800 VDC', 'Conceptual MV-to-800 VDC via SST'])"
+ },
+ {
+  "result": "PASS",
+  "check": "mobile rd6: favored chips are visible, exposed to assistive tech and state the condition",
+  "detail": "[{'vis': True, 'hidden': False, 't': 'Tends to favor \u00b7 conditional if this requirement dominates; not a ranking or a winner'}, {'vis': True, 'hidden': False, 't': 'Tends to favor \u00b7 conditional if this requirement dominates; not a ranking or a winner'}]"
+ },
+ {
+  "result": "PASS",
+  "check": "mobile rd6: conditional wording present (legend + accessible chip text + decision band)",
+  "detail": ""
+ },
+ {
+  "result": "PASS",
+  "check": "mobile rd7: marked columns equal the data's favored set (conditional, not computed)",
+  "detail": "(['Conventional AC'], ['Conventional AC'])"
+ },
+ {
+  "result": "PASS",
+  "check": "mobile rd7: favored chips are visible, exposed to assistive tech and state the condition",
+  "detail": "[{'vis': True, 'hidden': False, 't': 'Tends to favor \u00b7 conditional if this requirement dominates; not a ranking or a winner'}]"
+ },
+ {
+  "result": "PASS",
+  "check": "mobile rd7: conditional wording present (legend + accessible chip text + decision band)",
+  "detail": ""
+ },
+ {
+  "result": "PASS",
+  "check": "mobile: at least one requirement marks multiple architectures",
+  "detail": "3"
+ },
+ {
+  "result": "PASS",
+  "check": "mobile: no ranking/score/winner/best language outside the negating sentences",
+  "detail": "set()"
+ },
+ {
+  "result": "PASS",
+  "check": "Architecture stage nav (default): #step-requirement moves focus to its heading",
+  "detail": "h-requirement"
+ },
+ {
+  "result": "PASS",
+  "check": "Architecture stage nav (default): #step-compare moves focus to its heading",
+  "detail": "h-compare"
+ },
+ {
+  "result": "PASS",
+  "check": "Architecture stage nav (default): #step-tradeoffs moves focus to its heading",
+  "detail": "h-tradeoffs"
+ },
+ {
+  "result": "PASS",
+  "check": "Architecture stage nav (default): #step-validation moves focus to its heading",
+  "detail": "h-validation"
+ },
+ {
+  "result": "PASS",
+  "check": "Architecture stage nav (default): #references moves focus to its heading",
+  "detail": "h-references"
+ },
+ {
+  "result": "PASS",
+  "check": "Architecture stage nav (default): with #step-requirement scrolled to the top, aria-current is the expected stage (#step-requirement)",
+  "detail": "['#step-requirement']"
+ },
+ {
+  "result": "PASS",
+  "check": "Architecture stage nav (default): with #step-compare scrolled to the top, aria-current is the expected stage (#step-requirement)",
+  "detail": "['#step-requirement']"
+ },
+ {
+  "result": "PASS",
+  "check": "Architecture stage nav (default): with #step-tradeoffs scrolled to the top, aria-current is the expected stage (#step-tradeoffs)",
+  "detail": "['#step-tradeoffs']"
+ },
+ {
+  "result": "PASS",
+  "check": "Architecture stage nav (default): with #step-validation scrolled to the top, aria-current is the expected stage (#step-validation)",
+  "detail": "['#step-validation']"
+ },
+ {
+  "result": "PASS",
+  "check": "Architecture stage nav (default): with #references scrolled to the top, aria-current is the expected stage (#references)",
+  "detail": "['#references']"
+ },
+ {
+  "result": "PASS",
+  "check": "Architecture stage nav (after changing driver): #step-requirement moves focus to its heading",
+  "detail": "h-requirement"
+ },
+ {
+  "result": "PASS",
+  "check": "Architecture stage nav (after changing driver): #step-compare moves focus to its heading",
+  "detail": "h-compare"
+ },
+ {
+  "result": "PASS",
+  "check": "Architecture stage nav (after changing driver): #step-tradeoffs moves focus to its heading",
+  "detail": "h-tradeoffs"
+ },
+ {
+  "result": "PASS",
+  "check": "Architecture stage nav (after changing driver): #step-validation moves focus to its heading",
+  "detail": "h-validation"
+ },
+ {
+  "result": "PASS",
+  "check": "Architecture stage nav (after changing driver): #references moves focus to its heading",
+  "detail": "h-references"
+ },
+ {
+  "result": "PASS",
+  "check": "Architecture stage nav (after changing driver): with #step-requirement scrolled to the top, aria-current is the expected stage (#step-requirement)",
+  "detail": "['#step-requirement']"
+ },
+ {
+  "result": "PASS",
+  "check": "Architecture stage nav (after changing driver): with #step-compare scrolled to the top, aria-current is the expected stage (#step-requirement)",
+  "detail": "['#step-requirement']"
+ },
+ {
+  "result": "PASS",
+  "check": "Architecture stage nav (after changing driver): with #step-tradeoffs scrolled to the top, aria-current is the expected stage (#step-tradeoffs)",
+  "detail": "['#step-tradeoffs']"
+ },
+ {
+  "result": "PASS",
+  "check": "Architecture stage nav (after changing driver): with #step-validation scrolled to the top, aria-current is the expected stage (#step-validation)",
+  "detail": "['#step-validation']"
+ },
+ {
+  "result": "PASS",
+  "check": "Architecture stage nav (after changing driver): with #references scrolled to the top, aria-current is the expected stage (#references)",
+  "detail": "['#references']"
+ },
+ {
+  "result": "PASS",
+  "check": "Architecture stage nav (show-all): #step-requirement moves focus to its heading",
+  "detail": "h-requirement"
+ },
+ {
+  "result": "PASS",
+  "check": "Architecture stage nav (show-all): #step-compare moves focus to its heading",
+  "detail": "h-compare"
+ },
+ {
+  "result": "PASS",
+  "check": "Architecture stage nav (show-all): #step-tradeoffs moves focus to its heading",
+  "detail": "h-tradeoffs"
+ },
+ {
+  "result": "PASS",
+  "check": "Architecture stage nav (show-all): #step-validation moves focus to its heading",
+  "detail": "h-validation"
+ },
+ {
+  "result": "PASS",
+  "check": "Architecture stage nav (show-all): #references moves focus to its heading",
+  "detail": "h-references"
+ },
+ {
+  "result": "PASS",
+  "check": "Architecture stage nav (show-all): with #step-requirement scrolled to the top, aria-current is the expected stage (#step-requirement)",
+  "detail": "['#step-requirement']"
+ },
+ {
+  "result": "PASS",
+  "check": "Architecture stage nav (show-all): with #step-compare scrolled to the top, aria-current is the expected stage (#step-requirement)",
+  "detail": "['#step-requirement']"
+ },
+ {
+  "result": "PASS",
+  "check": "Architecture stage nav (show-all): with #step-tradeoffs scrolled to the top, aria-current is the expected stage (#step-tradeoffs)",
+  "detail": "['#step-tradeoffs']"
+ },
+ {
+  "result": "PASS",
+  "check": "Architecture stage nav (show-all): with #step-validation scrolled to the top, aria-current is the expected stage (#step-validation)",
+  "detail": "['#step-validation']"
+ },
+ {
+  "result": "PASS",
+  "check": "Architecture stage nav (show-all): with #references scrolled to the top, aria-current is the expected stage (#references)",
+  "detail": "['#references']"
+ },
+ {
+  "result": "PASS",
+  "check": "Sandbox default (voltage-minimum sample): hero V_dc, P_load, P_sst and the power gap (each in its own field) equal the displayed run at the scrubber sample 2163",
+  "detail": "('712.5', '712.5', ['320.0', '320.6', '0.6'], '320.0', '320.6', '0.6')"
+ },
+ {
+  "result": "PASS",
+  "check": "Sandbox scrubber Home: hero V_dc, P_load, P_sst and the power gap (each in its own field) equal the displayed run at the scrubber sample 0",
+  "detail": "('800.0', '800.0', ['160.0', '160.0', '0.0'], '160.0', '160.0', '0.0')"
+ },
+ {
+  "result": "PASS",
+  "check": "Sandbox scrubber End: hero V_dc, P_load, P_sst and the power gap (each in its own field) equal the displayed run at the scrubber sample 5999",
+  "detail": "('800.9', '800.9', ['320.0', '320.0', '0.0'], '320.0', '320.0', '0.0')"
+ },
+ {
+  "result": "PASS",
+  "check": "Sandbox: current / reference / minimum / final values are distinct and labelled",
+  "detail": "Reference | 800 V | Minimum in run | 712.5 V at 0.216 s | Final (end of run) | 800.9 V"
+ },
+ {
+  "result": "PASS",
+  "check": "Sandbox after Run Experiment (new displayed run): hero V_dc, P_load, P_sst and the power gap (each in its own field) equal the displayed run at the scrubber sample 2217",
+  "detail": "('656.9', '656.9', ['380.0', '380.2', '0.2'], '380.0', '380.2', '0.2')"
+ },
+ {
+  "result": "PASS",
+  "check": "Sandbox Grid Sag (fixed preset; no derived minimum shown): hero V_dc, P_load, P_sst and the power gap (each in its own field) equal the displayed run at the scrubber sample 0",
+  "detail": "('800.0', '800.0', ['300.0', '300.0', '0.0'], '300.0', '300.0', '0.0')"
+ },
+ {
+  "result": "PASS",
+  "check": "Grid Sag: no derived 'Minimum in run' value is shown for non-Load-Step scenarios",
+  "detail": ""
+ },
+ {
+  "result": "PASS",
+  "check": "Sandbox desktop: no chart or schematic needs horizontal scrolling at 1440px (no scroll hints)",
+  "detail": "0"
+ },
+ {
+  "result": "PASS",
+  "check": "System Map desktop: topology starts within the first 760px and is the widest element of the page body",
+  "detail": "[663.234375, 515.984375, 1312]"
+ },
+ {
+  "result": "PASS",
+  "check": "System Map desktop: every main-path node is visible without horizontal scrolling for the Conventional AC view",
+  "detail": "(7, True)"
+ },
+ {
+  "result": "PASS",
+  "check": "System Map desktop view 2: all 7 main-path nodes inside the viewport (expected 7, 7, 6 per view), no scroll hint",
+  "detail": "(7, True)"
+ },
+ {
+  "result": "PASS",
+  "check": "System Map desktop view 3: all 6 main-path nodes inside the viewport (expected 7, 7, 6 per view), no scroll hint",
+  "detail": "(6, True)"
+ }
+]

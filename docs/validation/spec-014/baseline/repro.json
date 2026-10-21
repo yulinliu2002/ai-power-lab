@@ -1,0 +1,104 @@
+[
+ {
+  "id": "Q1",
+  "expected (review wording)": "Power Flow schematic clipped, no scroll affordance",
+  "observed": "scrollWidth 568 in 308px container; scroll text on page: False",
+  "reproduced": true
+ },
+ {
+  "id": "Q2",
+  "expected (review wording)": "Transient charts unreadable (scaled to ~316px)",
+  "observed": "chart width 316px; 9.5-unit labels render at 5.0px",
+  "reproduced": true
+ },
+ {
+  "id": "Q3",
+  "expected (review wording)": "Sensitivity chart/table cramped, headers truncated",
+  "observed": "table scrollWidth 370 in 308px",
+  "reproduced": true
+ },
+ {
+  "id": "Q4",
+  "expected (review wording)": "Compare table shows 2 columns, no hint",
+  "observed": "table 2350px in 340px, named scroller: False",
+  "reproduced": true
+ },
+ {
+  "id": "Q5",
+  "expected (review wording)": "Main Power Path 1090px strip in ~304px container",
+  "observed": "scrollWidth 1090 in 304px",
+  "reproduced": true
+ },
+ {
+  "id": "Q6",
+  "expected (review wording)": "Main Power Path arrows missing/uneven in views 1 and 3",
+  "observed": "lanes with wrong arrow count: []",
+  "reproduced": false
+ },
+ {
+  "id": "Q7",
+  "expected (review wording)": "x-axis 0.000s label overprinted at chart origin",
+  "observed": "unit label 'V' overlaps first tick '0.000s' by 5.8px",
+  "reproduced": true
+ },
+ {
+  "id": "Q8",
+  "expected (review wording)": "sweep x labels 0.020/0.024 crowd",
+  "observed": "overlapping tick pairs: 1 (['0.005', '0.020', '0.024', '0.042', '0.061', '0.080'])",
+  "reproduced": true
+ },
+ {
+  "id": "Q9",
+  "expected (review wording)": "top nav wraps to 3 lines (~95px) at 390px",
+  "observed": "nav height 95px",
+  "reproduced": true
+ },
+ {
+  "id": "Q10",
+  "expected (review wording)": "/sandbox heading duplicates site name",
+  "observed": "h1 = 'AI POWER LAB'",
+  "reproduced": true
+ },
+ {
+  "id": "D1",
+  "expected (review wording)": "'executive-level' on home",
+  "observed": true,
+  "reproduced": true
+ },
+ {
+  "id": "D2",
+  "expected (review wording)": "'CONTROL CENTER' heading on /sandbox",
+  "observed": true,
+  "reproduced": true
+ },
+ {
+  "id": "D3",
+  "expected (review wording)": "no scope statement above the fold on /sandbox",
+  "observed": true,
+  "reproduced": true
+ },
+ {
+  "id": "D5",
+  "expected (review wording)": "CLAUDE.md in learner text",
+  "observed": true,
+  "reproduced": true
+ },
+ {
+  "id": "D4",
+  "expected (review wording)": "'See the Advanced Sandbox, below' while the Sandbox is a link",
+  "observed": true,
+  "reproduced": true
+ },
+ {
+  "id": "G2",
+  "expected (review wording)": "System Map ends with Sandbox CTA, no pointer to /architecture",
+  "observed": "['/sandbox']",
+  "reproduced": true
+ },
+ {
+  "id": "G1",
+  "expected (review wording)": "System Map claims unlabeled (no evidence tags)",
+  "observed": "evidence tags on page: 0",
+  "reproduced": true
+ }
+]

@@ -26,9 +26,11 @@ Given a stated set of power-delivery requirement drivers, how do three architect
 
 1. New route `/architecture`. The existing nav entry becomes a live link; the home-page card changes from `planned` to `live`. Other areas stay `planned`.
 2. Five sections, in order: **Requirement drivers**, **Architectures by driver**, **Interfaces**, **If this driver dominates**, **Validation needs**.
+   *Amended by SPEC-014 (2026-10-19): the content is unchanged, but it is presented as four steps with progressive disclosure (Identify the requirement, Compare architectures, Understand trade-offs, Define validation needs); the "if this driver dominates" content is the Step 3 decision card for the Step 1 driver, and "show all" controls render every driver, comparison, decision and boundary. The mandatory disclosures (R2) stay visible on initial load.*
 3. Static typed content in a new `frontend/app/lib/architectureChoicesData.ts`, keyed by the existing `ArchitectureId` values (`conventional-ac`, `ac-to-800vdc`, `mv-to-800vdc`, **preserved unchanged**). Interfaces reference existing System Map node ids.
 4. Display names, used on `/architecture` and applied to the System Map's `name` fields so both pages agree: **Conventional AC**, **AC-fed 800 VDC**, **Conceptual MV-to-800 VDC via SST**. Ids do not change.
 5. One lightweight client component: a single-select control for "which driver dominates", revealing that driver's conditional-decision card. In-page anchor navigation and native disclosure (`<details>`) are also permitted. No other interactivity.
+   *Amended by SPEC-014 (2026-10-19): interactivity is extended to native radio choosers for the requirement driver, the power-path architecture and the interface boundary, native "show all" toggles, and in-page stage navigation. No scores, ranking or fetches are added.*
 6. Evidence label on every content item, using Blueprint §5.1 categories.
 
 ### Requirement drivers (all **illustrative teaching assumptions**)

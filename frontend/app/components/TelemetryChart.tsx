@@ -1,4 +1,5 @@
 import { SVG_COLOR } from "../lib/theme";
+import { ScrollRegion } from "./ScrollRegion";
 
 export interface ChartSeries {
   label: string;
@@ -141,7 +142,7 @@ export function TelemetryChart({
   return (
     <section className="flex flex-col gap-1.5 border border-hairline bg-surface px-3 py-2">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <span className="font-sans text-[11.5px] font-semibold uppercase tracking-[0.04em] text-muted">
+        <span className="font-sans text-[13px] font-semibold text-primary">
           {title}
         </span>
         <div className="flex gap-3">
@@ -157,7 +158,8 @@ export function TelemetryChart({
         </div>
       </div>
 
-      <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ minWidth: 280 }}>
+      <ScrollRegion label={`${title} chart`}>
+      <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ minWidth: W }}>
         {yTicks.map((v) => (
           <g key={v}>
             <line
@@ -181,8 +183,9 @@ export function TelemetryChart({
           </g>
         ))}
         <text
-          x={MARGIN.left}
-          y={H - 4}
+          x={MARGIN.left - 6}
+          y={9}
+          textAnchor="end"
           fontFamily="var(--font-mono)"
           fontSize={9.5}
           fill={SVG_COLOR.textSecondary}
@@ -326,8 +329,9 @@ export function TelemetryChart({
           />
         )}
       </svg>
+      </ScrollRegion>
       {deficitPolygon && (
-        <span className="flex items-center gap-1.5 font-mono text-[9.5px] text-secondary">
+        <span className="flex items-center gap-1.5 font-sans text-[12px] text-secondary">
           <span className="inline-block h-2.5 w-2.5" style={{ backgroundColor: SVG_COLOR.accent, opacity: 0.3 }} />
           {deficitFill!.label}
         </span>

@@ -1,6 +1,11 @@
 import { formatEnergyDeficitKj, type TransientMetrics } from "../lib/transientMetrics";
 
 interface TransientMetricsPanelProps {
+  /** Presentation option (SPEC-014): render the engineering-basis prose in
+   * the 12px Sans body tier instead of 11px Mono. Default keeps the original. */
+  comfortable?: boolean;
+  /** "console": large numerals in the instrument-console composition (SPEC-014 art direction); same labels, values and captions. */
+  variant?: "default" | "console";
   metrics: TransientMetrics;
   voltageReferenceV: number;
 }
@@ -32,7 +37,7 @@ interface TransientMetricsPanelProps {
  * the physics a learner needs to check the causal account above is
  * never hidden behind interaction.
  */
-export function TransientMetricsPanel({ metrics, voltageReferenceV }: TransientMetricsPanelProps) {
+export function TransientMetricsPanel({ metrics, voltageReferenceV, comfortable = false, variant = "default" }: TransientMetricsPanelProps) {
   const hasDeficit = metrics.peakDeficitKw > 0;
 
   return (
@@ -41,24 +46,30 @@ export function TransientMetricsPanel({ metrics, voltageReferenceV }: TransientM
         <span className="font-sans text-[12px] font-bold uppercase tracking-[0.04em] text-secondary">
           ENGINEERING RESULT
         </span>
-        <span className="font-sans text-[10.5px] text-secondary">
+        <span className="font-sans text-[12px] text-secondary">
           How severe was this event, and how fast did the system recover?
         </span>
       </div>
-      <div className="grid grid-cols-2 gap-x-2 border-y border-hairline sm:grid-cols-5 sm:gap-x-0 sm:divide-x sm:divide-hairline">
+      <div className={variant === "console" ? "ic-results five" : "grid grid-cols-2 gap-x-2 border-y border-hairline sm:grid-cols-5 sm:gap-x-0 sm:divide-x sm:divide-hairline"}>
         <MetricTile
+          comfortable={comfortable}
+          console={variant === "console"}
           label="VOLTAGE DROP"
           value={metrics.minVdcV.toFixed(1)}
           unit="V"
           caption={`lowest V_dc, at t = ${metrics.minVdcTimeS.toFixed(3)} s`}
         />
         <MetricTile
+          comfortable={comfortable}
+          console={variant === "console"}
           label="PEAK DEVIATION"
           value={metrics.maxDeviationV.toFixed(1)}
           unit="V"
           caption={`${metrics.maxDeviationPercent.toFixed(1)}% ${metrics.maxDeviationIsAbove ? "above" : "below"} the ${voltageReferenceV.toFixed(0)} V reference, at t = ${metrics.maxDeviationTimeS.toFixed(3)} s`}
         />
         <MetricTile
+          comfortable={comfortable}
+          console={variant === "console"}
           label="POWER MISMATCH"
           value={hasDeficit ? metrics.peakDeficitKw.toFixed(1) : "0.0"}
           unit="kW"
@@ -69,12 +80,16 @@ export function TransientMetricsPanel({ metrics, voltageReferenceV }: TransientM
           }
         />
         <MetricTile
+          comfortable={comfortable}
+          console={variant === "console"}
           label="ENERGY DEFICIT"
           value={formatEnergyDeficitKj(metrics)}
           unit="kJ"
           caption="drawn from the DC link, event to V_dc minimum (accumulated, not instantaneous)"
         />
         <MetricTile
+          comfortable={comfortable}
+          console={variant === "console"}
           label="RECOVERY TIME"
           value={metrics.recoveryElapsedS === null ? "—" : metrics.recoveryElapsedS.toFixed(2)}
           unit={metrics.recoveryElapsedS === null ? "NOT SETTLED" : "s"}
@@ -87,18 +102,18 @@ export function TransientMetricsPanel({ metrics, voltageReferenceV }: TransientM
       </div>
 
       <div className="flex flex-col gap-0.5 border-t border-hairline pt-1.5">
-        <span className="font-sans text-[9.5px] font-semibold uppercase tracking-[0.04em] text-muted">
+        <span className="font-sans text-[11px] font-semibold uppercase tracking-[0.04em] text-secondary">
           Engineering basis
         </span>
-        <p className="font-mono text-[10.5px] text-secondary">
+        <p className="font-mono text-[12px] text-secondary">
           dE_dc/dt = P_sst &minus; P_load &nbsp;&nbsp;&middot;&nbsp;&nbsp; E_dc = &#189; C_dc
           V_dc&sup2;
         </p>
-        <p className="font-mono text-[10.5px] text-secondary">
+        <p className="font-mono text-[12px] text-secondary">
           &Delta;E = &int;(P_load &minus; P_sst) dt = &#189; C_dc (V_ref&sup2; &minus;
           V_dc,min&sup2;)
         </p>
-        <p className="font-mono text-[9px] leading-snug text-muted">
+        <p className={comfortable ? "font-sans text-[12px] leading-relaxed text-secondary" : "font-mono text-[11px] leading-snug text-secondary"}>
           Simplified, average-value system-level model: the SST response time is a tunable
           modeling assumption, not a real hardware bandwidth limit, and the lumped DC-link
           capacitor is the only energy path modeled &mdash; no calibration to any commercial SST
@@ -115,6 +130,8 @@ export function TransientMetricsPanel({ metrics, voltageReferenceV }: TransientM
 }
 
 function MetricTile({
+  comfortable = false,
+  console: isConsole = false,
   label,
   value,
   unit,
@@ -124,17 +141,31 @@ function MetricTile({
   value: string;
   unit: string;
   caption: string;
+  comfortable?: boolean;
+  console?: boolean;
 }) {
+  if (isConsole) {
+    return (
+      <div>
+        <div className="n">
+          {value}
+          <small>{unit}</small>
+        </div>
+        <div className="l">{label.charAt(0) + label.slice(1).toLowerCase()}</div>
+        <p className="ic-small">{caption}</p>
+      </div>
+    );
+  }
   return (
     <div className="flex flex-col gap-0.5 px-3 py-1.5">
-      <span className="font-sans text-[10.5px] font-semibold uppercase tracking-[0.04em] text-muted">
+      <span className="font-sans text-[10.5px] font-semibold uppercase tracking-[0.04em] text-secondary">
         {label}
       </span>
       <span className="font-mono text-[16px] font-semibold leading-none tabular-nums text-primary">
         {value}
-        <span className="ml-1 text-[11px] font-normal text-muted">{unit}</span>
+        <span className="ml-1 text-[11px] font-normal text-secondary">{unit}</span>
       </span>
-      <span className="font-mono text-[9.5px] leading-snug text-secondary">{caption}</span>
+      <span className={comfortable ? "font-sans text-[12px] leading-snug text-secondary" : "font-mono text-[11px] leading-snug text-secondary"}>{caption}</span>
     </div>
   );
 }
