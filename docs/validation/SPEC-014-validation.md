@@ -2,7 +2,7 @@
 
 **Spec:** `docs/specifications/SPEC-014-product-ux-redesign.md` (v0.5)
 **Synchronized base:** `main` at `f9cc8c4` (contains the SPEC-012 merge, PR #9). Branch `feature/spec-014-ux-redesign`.
-**Status:** Local verification complete and strengthened after the first Codex implementation review; closure review, Human Visual QA and merge approval pending. CI passed on the first push (reported separately below). This record separates local results from CI and from review.
+**Status:** Local verification complete. Human Visual QA approved by the Human Engineering Lead (2026-10-21) for System Map, Architecture Choices and Advanced Sandbox. Final Codex closure review: APPROVE (see below). CI is reported separately and was green on the final head. Merge approval is pending (explicit Human approval required). This record separates local results from CI and from review.
 
 ## Local results (scripts and results in `docs/validation/spec-014/`)
 
@@ -121,3 +121,10 @@ Codex's narrow check of the fixes found 1 and 6 resolved and 2, 3, 4, 5 partial.
 ### Final fixes after the narrow check (Codex session 01a157de-deb4-7440-b112-1d2390d0d97a)
 
 That check resolved findings 2 and 5 and left two validation gaps. Addressed: `verify_type.py` no longer exempts headings, checks the visible text of every block-level prose element (so prose split by inline markup is covered) and evaluates the Compare table and the sweep results separately; `verify_art.py` now scrolls each stage to the top and asserts the expected `aria-current` stage (the requirement list and the board start at the same height by design, so the earlier of the two wins) in the default view, after a driver change and in show-all. The stricter tests found two real defects, both fixed: (1) activating "Identify the requirement" from far down the page scrolled to the wrong place because the sticky requirement list was the scroll target (the sticky behavior now lives on an inner wrapper); (2) the current-stage tracking now recomputes from the live DOM on scroll instead of observing elements that can be replaced. The same stricter typography test also moved protection and coverage list text, the interface node path, the power-balance legend and the engineering equations to 12px Sans (equations stay Mono). All suites pass after these changes. **No Codex APPROVE was obtained at any round**; the last recorded Codex verdict (CHANGES_REQUIRED) concerned the two validation gaps above, which are fixed but not re-reviewed.
+
+## Final gates (2026-10-21)
+
+- **Human Visual QA:** approved for all three pages by the Human Engineering Lead.
+- **Final Codex closure review** (read-only, `codex exec`, session 01a15c5a-943c-70a3-acc2-e611081a978a) on head `6af0b0e2b12de4752e366747ce573967e91a3435`: **APPROVE**, no blocking or major findings; one minor (this record was stale about CI and Visual QA and described the superseded IntersectionObserver tracking), fixed by this update. Verbatim output is attached to the PR thread. Acceptance coverage per Codex: every non-human criterion has recorded passing evidence plus static verification; AC-22 (learner walkthrough) remains a human criterion.
+- **CI** (GitHub Actions) was green on `6af0b0e`: Frontend (lint, typecheck, build) and Python (engine, API, parity), both runs. The commit that carries this update changes documentation only; its CI result is reported in the PR thread.
+- The current-stage tracking in `StageNav.tsx` recomputes the current stage from the live DOM on scroll and resize (not an IntersectionObserver); earlier lines in this record describing the observer are superseded.
