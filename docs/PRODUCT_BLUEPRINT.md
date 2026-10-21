@@ -160,7 +160,7 @@ Verified against the repository state named in the header.
 | System Map: 10 infrastructure categories × 3 architectures, plus the simulated slice | Implemented | `/system-map` |
 | Advanced Sandbox: five scenarios, telemetry, protection timeline/coordination, scenario comparison, sensitivity study | Implemented | `/sandbox` |
 | Validated simulation engine (grid → SST → 800 VDC bus → AI load; PI control, thermal, protection) | Implemented, preserved | `src/`, `scenarios/`, `backend/` |
-| Industry knowledge base (sourced, verified/sample flagged) | Data and Streamlit page only; **no Next.js route or API** | `data/industry/`, `dashboard/pages/industry.py` |
+| Industry knowledge base (sourced, verified/sample flagged) | Next.js route `/industry` exists (SPEC-013: five sourced claim sheets, standards status, career map; frontend-only, no API). The `data/industry/` YAML and Streamlit page remain the Streamlit-era record and are not read by the route | `frontend/app/industry/`, `data/industry/`, `dashboard/pages/industry.py` |
 | Learn content (4 levels, YAML) | Streamlit only | `content/learn/` |
 | Architecture Choices as a dedicated area | Implemented as V1: qualitative, frontend-only (SPEC-011) | `/architecture` |
 | Learn by Example as guided explanations | **Not implemented** (scenarios exist only inside the Sandbox) | — |
