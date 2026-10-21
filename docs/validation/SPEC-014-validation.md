@@ -2,7 +2,7 @@
 
 **Spec:** `docs/specifications/SPEC-014-product-ux-redesign.md` (v0.5)
 **Synchronized base:** `main` at `f9cc8c4` (contains the SPEC-012 merge, PR #9). Branch `feature/spec-014-ux-redesign`.
-**Status:** Local verification complete. Human Visual QA approved by the Human Engineering Lead (2026-10-21) for System Map, Architecture Choices and Advanced Sandbox. Final Codex closure review: APPROVE (see below). CI is reported separately and was green on the final head. Merge approval is pending (explicit Human approval required). This record separates local results from CI and from review.
+**Status:** Local verification complete. Human Visual QA approved by the Human Engineering Lead (2026-10-21) for System Map, Architecture Choices and Advanced Sandbox. Final Codex closure review: APPROVE (see below). CI is reported separately and was green on the final head. PR #10 was merged (see the closure section at the end). This record separates local results from CI and from review.
 
 ## Local results (scripts and results in `docs/validation/spec-014/`)
 
@@ -128,3 +128,9 @@ That check resolved findings 2 and 5 and left two validation gaps. Addressed: `v
 - **Final Codex closure review** (read-only, `codex exec`, session 01a15c5a-943c-70a3-acc2-e611081a978a) on head `6af0b0e2b12de4752e366747ce573967e91a3435`: **APPROVE**, no blocking or major findings; one minor (this record was stale about CI and Visual QA and described the superseded IntersectionObserver tracking), fixed by this update. Verbatim output is attached to the PR thread. Acceptance coverage per Codex: every non-human criterion has recorded passing evidence plus static verification; AC-22 (learner walkthrough) remains a human criterion.
 - **CI** (GitHub Actions) was green on `6af0b0e`: Frontend (lint, typecheck, build) and Python (engine, API, parity), both runs. The commit that carries this update changes documentation only; its CI result is reported in the PR thread.
 - The current-stage tracking in `StageNav.tsx` recomputes the current stage from the live DOM on scroll and resize (not an IntersectionObserver); earlier lines in this record describing the observer are superseded.
+
+## Closure (2026-10-21)
+
+- **Merged:** PR #10 was merged through GitHub by the Human Engineering Lead; merge commit `f2c46ae49cfa3682d9c9e488ec03b636c4b5101c` on `main`, PR head `28524e5d1d1abaad764c267a47be8c274d807008` (verified: the head is an ancestor of `main`).
+- **Human sign-off, recorded as given:** the Human Engineering Lead stated (2026-10-21) "I confirm my Human Acceptance sign-off for SPEC-014, including AC-22. Human Visual QA is also approved," and authorized the merge at `28524e5`. The sign-off was given without recorded walkthrough observations; none are recorded here, and AC-22 is accepted by that statement, not by an observation log kept by the implementer.
+- **Status:** SPEC-014 complete. Deferred by design: System Map evidence labels (R33, split to SPEC-015); future design polish is non-blocking and goes through separate, scoped changes.
