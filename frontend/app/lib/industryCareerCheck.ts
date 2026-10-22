@@ -12,6 +12,7 @@ import { join } from "node:path";
 
 import { REFERENCES } from "./architectureChoicesData";
 import {
+  ASSERTION_AUDIT,
   BACKGROUND_STANDARDS,
   CAREER_ROWS,
   CHARTER_LADDER,
@@ -112,16 +113,28 @@ const vocabSrc = words(rendered).replace(/label:\s*"[^"]*"/g, "").replace(/<Link
 const vocabHit = vocab.exec(vocabSrc);
 check("AC-16 vocabulary", !vocabHit, vocabHit ? vocabHit[0] : "");
 
+const APPROVED_EXCEPTIONS = ["White paper section 4.2", "White paper section 6.3.3"];
+const exceptionClaims = CLAIM_SHEETS.flatMap((x) => x.claims).filter((c) => c.audit === "paraphrase-checked");
+check("AC-19 exactly the two approved exceptions", exceptionClaims.length === 2 &&
+  APPROVED_EXCEPTIONS.every((e) => exceptionClaims.some((c) => c.locator.startsWith(e))));
 // AC-19: every claim has a locator; spans <= 25 words; supported claims have a span.
 for (const s of CLAIM_SHEETS) {
   for (const c of s.claims) {
-    // A claim without a span passes only if it is an explicitly recorded exception (the two OCP white-paper
-    // claims, whose 2026-10-21 fetch failed); any other missing span fails.
-    const exception = s.sourceId === "OCPWP" && c.audit === "paraphrase-checked";
+    // A claim without a span passes only if it is one of the two approved white-paper exceptions
+    // (spec section 16 item 4), identified by locator; any other missing span fails.
+    const exception = s.sourceId === "OCPWP" && c.audit === "paraphrase-checked" && APPROVED_EXCEPTIONS.some((e) => c.locator.startsWith(e));
     const ok = c.locator.trim().length > 0 && (!c.span || c.span.split(/\s+/).length <= 25) &&
       (exception || (c.audit === "supported" && !!c.span));
     check(`AC-19 ${s.id}: ${c.text.slice(0, 48)}`, ok);
   }
+}
+
+// AC-19: assertions outside `claims` are audited too.
+for (const a of ASSERTION_AUDIT) {
+  const ok = CLAIM_SHEETS.some((x) => x.id === a.sheetId) && a.locator.trim().length > 0 &&
+    (a.audit === "supported" ? !!a.span && a.span.split(/\s+/).length <= 25 :
+      a.audit === "absence-observed" ? !!a.checked : a.audit === "registry-citation");
+  check(`AC-19 assertion ${a.sheetId}: ${a.assertion.slice(0, 40)}`, ok);
 }
 
 // AC-20: SST disclosures present on the page (imported fixed wording) plus a page-level statement.
@@ -161,6 +174,14 @@ if (process.argv.includes("--audit")) {
       console.log(`| ${n} | ${s.sourceId} | ${esc(c.text)} | ${esc(c.locator)} | ${c.span ? `"${esc(c.span)}"` : "none for this page"} | ${c.audit} |`);
     }
   }
+}
+
+if (process.argv.includes("--audit")) {
+  console.log("\n| # | Sheet | Assertion | Locator | Verbatim span or check | Status |\n|---|---|---|---|---|---|");
+  ASSERTION_AUDIT.forEach((a, i) => {
+    const esc = (t: string) => t.replace(/\|/g, "\\|");
+    console.log(`| A${i + 1} | ${a.sheetId} | ${esc(a.assertion)} | ${esc(a.locator)} | ${a.span ? `"${esc(a.span)}"` : esc(a.checked ?? "none for this page")} | ${a.audit} |`);
+  });
 }
 
 console.log(failures === 0 ? "\nALL CHECKS PASSED" : `\n${failures} CHECK(S) FAILED`);

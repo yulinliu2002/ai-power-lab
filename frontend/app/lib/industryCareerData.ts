@@ -398,6 +398,40 @@ export const CLAIM_SHEETS: readonly ClaimSheetData[] = [
   },
 ];
 
+/**
+ * Factual assertions made outside `claims` (in `answers`, `doesNotTell`, bases and
+ * detail notes). Each is audited like a claim (SPEC-013 AC-19).
+ * `supported`: verbatim span extracted 2026-10-21.
+ * `absence-observed`: a negative statement; `span` is empty and `checked` says what was looked for.
+ * `registry-citation`: taken from the shared registry citation (SPEC-011 audit), no span for this page.
+ */
+export interface SourceAssertion {
+  sheetId: string;
+  assertion: string;
+  locator: string;
+  span?: string;
+  checked?: string;
+  audit: "supported" | "absence-observed" | "registry-citation";
+}
+
+export const ASSERTION_AUDIT: readonly SourceAssertion[] = [
+  { sheetId: "nvidia", assertion: "The post is dated 11 August 2026.", locator: "Article byline", span: "August 11, 2026", audit: "supported" },
+  { sheetId: "nvidia", assertion: "The article gives no efficiency percentage or measured benefit for 800 VDC.", locator: "Whole article", checked: "Searched the fetched article text for an efficiency percentage or measured 800 VDC benefit; none found.", audit: "absence-observed" },
+  { sheetId: "nvidia", assertion: "\"Fewer\" stages is not counted.", locator: "Article body, paragraph beginning \"800 VDC simplifies that path\"", checked: "The passage states \"fewer conversion stages\" without a number of stages.", audit: "absence-observed" },
+  { sheetId: "ocp-blog", assertion: "The post is signed by two NVIDIA Data Center Engineering authors.", locator: "Post byline", span: "Posted by Jason Adrian and Mike Tu, NVIDIA Data Center Engineering", audit: "supported" },
+  { sheetId: "ocp-blog", assertion: "The post was posted 11 August 2026 and later modified (2026-09-24).", locator: "Post header and page metadata", span: "Date of Post August 11, 2026", audit: "supported" },
+  { sheetId: "ocp-blog", assertion: "The audited passages name two options but do not compare them on efficiency or cost.", locator: "Section \"A Flexible Path Forward for Every Data Center\"", checked: "Bounded to the passages audited here; no efficiency or cost comparison found in them.", audit: "absence-observed" },
+  { sheetId: "ocp-whitepaper", assertion: "The white paper is version 1.0, first release, dated 30 March 2026.", locator: "Registry citation for OCPWP (SPEC-011 audit)", audit: "registry-citation" },
+  { sheetId: "ocp-sst", assertion: "The specification is Rev 0.3.0, effective 22 June 2026.", locator: "Cover page", span: "Specification Effective 6/22/2026", audit: "supported" },
+  { sheetId: "ocp-sst", assertion: "The listed authors are Google, Microsoft and NVIDIA.", locator: "Cover page", span: "Author: Google, Microsoft, Nvidia", audit: "supported" },
+  { sheetId: "ocp-sst", assertion: "Grounding detail is left to later revisions.", locator: "Section 5.4, page 15", span: "Details will be provided in later revisions of the specification.", audit: "supported" },
+  { sheetId: "eaton", assertion: "The page's certification line concerns electric vehicle charging.", locator: "Certifications table", span: "certified by UL or equivalent NRTL for electric vehicle charging", audit: "supported" },
+  { sheetId: "eaton", assertion: "The page's output rows describe passenger-vehicle charging connections.", locator: "Specifications table: DC output / DC charger circuit types", span: "Passenger vehicle configuration CCS or NACS (200-900V)", audit: "supported" },
+  { sheetId: "eaton", assertion: "The footer says specifications are subject to change without notice.", locator: "Page footer", span: "Due to continuing improvements, specifications are subject to change without notice.", audit: "supported" },
+  { sheetId: "eaton", assertion: "The page shows no publication date.", locator: "Page metadata and body", checked: "Publish-date metadata empty; only a 2026 copyright footer found.", audit: "absence-observed" },
+  { sheetId: "eaton", assertion: "The efficiency row gives no load level, temperature or test method.", locator: "Specifications table: Converter efficiency", checked: "Row reads \">97% @ 800 VDC output\" with no further conditions.", audit: "absence-observed" },
+];
+
 // ---------------------------------------------------------------------------
 // Standards and specifications
 // ---------------------------------------------------------------------------

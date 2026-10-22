@@ -2,7 +2,7 @@
 
 **Spec:** `docs/specifications/SPEC-013-industry-career-v1.md` (v0.3, adopted 2026-10-21)
 **Baseline:** `main` at `f2c46ae49cfa3682d9c9e488ec03b636c4b5101c` (merge of PR #10, SPEC-014).
-**Status:** Local verification complete. **Independent Codex implementation review recorded in §6** (REQUEST CHANGES, no blockers; AC-13 recorded, its findings are addressed or listed there). **AC-17 Human Product Review: awaiting.** CI is reported separately on the PR.
+**Status:** Local verification complete. Two independent Codex reviews are recorded in §6 (first: REQUEST CHANGES; closure: REQUEST CHANGES, no blockers, addressed in §6). **AC-17 Human Product Review: awaiting.** CI is reported separately on the PR.
 
 ## 1. Deviations and approved amendments
 
@@ -24,7 +24,7 @@ Items 1, 3 and 4 below were deviations in the first draft of this record and wer
 | `npm run typecheck` | pass |
 | `npm run lint` | pass |
 | `npm run build` | pass; `/industry` prerendered static |
-| Content script (60 checks after the review round: AC-2..AC-5, AC-7..AC-9, AC-14, AC-16, AC-19..AC-22, AC-25, R1, R10, R19, R20) | `ALL CHECKS PASSED` |
+| Content script (see the count below, after both review rounds: AC-2..AC-5, AC-7..AC-9, AC-14, AC-16, AC-19..AC-22, AC-25, R1, R10, R19, R20) | `ALL CHECKS PASSED` |
 | Python suite `pytest -q` | 190 passed (no Python change in this diff) |
 | AC-18 `/architecture` unchanged | Scope as amended (spec §16): `architectureChoicesData.ts`, `ArchitectureChoices.tsx`, `EvidenceTag.tsx` and its styles have no diff against `main`, so the page body and References list are unchanged. The shared nav changes on every page ("(planned)" removed from Industry & Career), so literal whole-page text identity cannot hold. No production-text before/after comparison was taken. |
 | AC-23 viewport (real Chromium, Playwright) | 360 px: scrollWidth 360 = clientWidth 360; 1280 px: 1280 = 1280. Page gutters 24 px (the shared `.ic-page` value; AC-23 as amended requires at least 16 px) |
@@ -60,6 +60,26 @@ Auditor: implementer (not independent). `supported` = a verbatim span was extrac
 | 16 | EATON | Eaton says the system is designed to support high-voltage DC systems, including emerging 800 VDC. | FAQ | "designed to support high-voltage DC systems, including emerging 800 VDC" | supported |
 | 17 | EATON | Eaton lists the unit as having a hermetically sealed power section with liquid cooling. | Specifications table: Style | "Outdoor with hermetically sealed power section and liquid cooling" | supported |
 
+**Assertions outside `claims`** (answers, "does not tell you", bases and notes), audited the same way. `absence-observed` rows are negative statements: the column states what was looked for.
+
+| # | Sheet | Assertion | Locator | Verbatim span or check | Status |
+|---|---|---|---|---|---|
+| A1 | nvidia | The post is dated 11 August 2026. | Article byline | "August 11, 2026" | supported |
+| A2 | nvidia | The article gives no efficiency percentage or measured benefit for 800 VDC. | Whole article | Searched the fetched article text for an efficiency percentage or measured 800 VDC benefit; none found. | absence-observed |
+| A3 | nvidia | "Fewer" stages is not counted. | Article body, paragraph beginning "800 VDC simplifies that path" | The passage states "fewer conversion stages" without a number of stages. | absence-observed |
+| A4 | ocp-blog | The post is signed by two NVIDIA Data Center Engineering authors. | Post byline | "Posted by Jason Adrian and Mike Tu, NVIDIA Data Center Engineering" | supported |
+| A5 | ocp-blog | The post was posted 11 August 2026 and later modified (2026-09-24). | Post header and page metadata | "Date of Post August 11, 2026" | supported |
+| A6 | ocp-blog | The audited passages name two options but do not compare them on efficiency or cost. | Section "A Flexible Path Forward for Every Data Center" | Bounded to the passages audited here; no efficiency or cost comparison found in them. | absence-observed |
+| A7 | ocp-whitepaper | The white paper is version 1.0, first release, dated 30 March 2026. | Registry citation for OCPWP (SPEC-011 audit) | none for this page | registry-citation |
+| A8 | ocp-sst | The specification is Rev 0.3.0, effective 22 June 2026. | Cover page | "Specification Effective 6/22/2026" | supported |
+| A9 | ocp-sst | The listed authors are Google, Microsoft and NVIDIA. | Cover page | "Author: Google, Microsoft, Nvidia" | supported |
+| A10 | ocp-sst | Grounding detail is left to later revisions. | Section 5.4, page 15 | "Details will be provided in later revisions of the specification." | supported |
+| A11 | eaton | The page's certification line concerns electric vehicle charging. | Certifications table | "certified by UL or equivalent NRTL for electric vehicle charging" | supported |
+| A12 | eaton | The page's output rows describe passenger-vehicle charging connections. | Specifications table: DC output / DC charger circuit types | "Passenger vehicle configuration CCS or NACS (200-900V)" | supported |
+| A13 | eaton | The footer says specifications are subject to change without notice. | Page footer | "Due to continuing improvements, specifications are subject to change without notice." | supported |
+| A14 | eaton | The page shows no publication date. | Page metadata and body | Publish-date metadata empty; only a 2026 copyright footer found. | absence-observed |
+| A15 | eaton | The efficiency row gives no load level, temperature or test method. | Specifications table: Converter efficiency | Row reads ">97% @ 800 VDC output" with no further conditions. | absence-observed |
+
 Negative statements on the sheets ("does not tell you"), with their basis: NVIDIA gives no efficiency figure and no stage count (fetch report, and SPEC-011 audit); Eaton's efficiency row gives no load, temperature or method, its certification line concerns electric vehicle charging, no date and a "subject to change" footer (fetch report of the specification and certification tables); OCP SST TBD items (§4.3, §5.2.1(c), §5.4, fetch report). The OCP-post "does not compare the options" statement is limited to "the passages audited here".
 
 ## 4. Items observed in the sources
@@ -75,7 +95,7 @@ Negative statements on the sheets ("does not tell you"), with their basis: NVIDI
 | AC-13 Codex implementation review | Recorded in §6; findings resolved by the 2026-10-22 amendments; a focused closure review is pending |
 | AC-17 Human Product Review (side-by-side screenshots) | **Open**, Human Product Lead only |
 | AC-18 | Met by unchanged inputs; no before/after text diff taken (see §2) |
-| AC-19 | Met except the verbatim-span requirement for the two OCP white-paper claims (deviation 2); the check now fails any other claim without a span |
+| AC-19 | Met, with the approved exception (spec §16 item 4) for exactly two OCP white-paper claims, which have locators but no verbatim span. Claims and non-claim assertions are audited in §3, and the check fails any other claim without a span, and fails if the exception set is not exactly those two |
 | Everything else | Met locally, per §2 |
 
 ## 6. Independent Codex review (AC-13)
@@ -90,4 +110,14 @@ Codex CLI 0.162.1, read-only, session `01a1612b-4083-7291-8aa5-cfeb48d392ef`, on
 | 4 | Minor | Gutters 24 px, AC-23 says 16 px | Resolved by approved amendment: 16 px is the minimum, 24 px approved |
 | 5 | Nit | SiteNav file comment changed beyond the `/industry` entry | Resolved by approved amendment: the corrected comment is kept |
 
-Factual assertions outside `claims`, with their basis: OCP post byline (two NVIDIA Data Center Engineering authors; post header as returned by the 2026-10-21 fetch); OCP post posted 2026-08-11 and modified 2026-09-24 (page metadata, same fetch); Eaton certification line concerns electric vehicle charging, the output rows describe charging ports, no publication date, and a "subject to change without notice" footer (Eaton specifications and certification tables, FAQ and footer, 2026-10-21 fetch; Codex confirmed the figures against the live page); OCP SST authors Google, Microsoft, NVIDIA and effective date 6/22/2026 (cover page); white paper v1.0 dated 30 March 2026 (registry citation, confirmed by the SPEC-013 design review).
+
+### Closure review (head `b27db45`)
+
+Codex CLI, read-only, session `01a1613c-b622-7b10-b601-f7dd237fb5a1`. Verdict: **REQUEST CHANGES**, no blockers. Resolved: Eaton contract, gutters, SiteNav comment and AC-18 scope. Verbatim output is held on the Lead's Mac (`SPEC-013-codex-closure-review.md` equivalent: `SPEC-013-codex-closure-review.txt`, 187 KB); not committed.
+
+| Severity | Finding | Disposition |
+|---|---|---|
+| Major | AC-19 audit still incomplete: assertions outside `claims` had prose only, and the status overstated compliance | Added a structured `ASSERTION_AUDIT` (15 rows: verbatim spans, or an explicit "absence observed" check, or a registry citation), validated by the content script and listed in §3. Status corrected |
+| Minor | The span exception covered any `paraphrase-checked` OCP white-paper claim; a third unapproved claim passed | The check now identifies the exception by locator and fails unless exactly the two approved claims are exceptions |
+
+A re-run of the closure review was not requested: the Lead asked for one focused closure review, not a further cycle.
