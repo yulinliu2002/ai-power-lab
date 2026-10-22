@@ -95,7 +95,11 @@ with sync_playwright() as p:
     td_text_open = pg.locator('[data-testid="technical-details"]').inner_text()
     td.locator("summary").click()
     rec("L14 Discover: three cause-chain steps (<=60 words), technical explanation collapsed by default and holds the interpretation and engineering result", cc.count() == 3 and words <= 60 and "WHY THIS HAPPENED" not in td_text_closed.upper() and "WHY THIS HAPPENED" in td_text_open.upper() and "ENGINEERING RESULT" in td_text_open.upper(), f"words={words}")
-    rec("L12 expected outcome and reasoning appear only after commit, in Discover", pg.locator('[data-testid="prediction-expected"]').count() == 1)
+    exp_txt = norm(pg.locator('[data-testid="prediction-expected"]').inner_text()); ver_txt = norm(pg.locator('[data-testid="prediction-verdict"]').inner_text())
+    rec("L12 expected-outcome text and the committed option's reasoning appear in Discover after commit", norm(reveal) in exp_txt and norm(reasonings[1]) in ver_txt, "falls-recovers")
+    # the technical section sits before the charts, so the reused text "the Power Balance chart below" is true
+    order_ok = pg.evaluate("()=>{const d=document.querySelector('[data-testid=\"technical-details\"]'),c=document.querySelector('[data-testid=\"observe-live\"] svg');return !!(d.compareDocumentPosition(c)&Node.DOCUMENT_POSITION_FOLLOWING)}")
+    rec("L14 technical explanation precedes the charts (its 'chart below' wording stays true)", order_ok)
     sl = pg.locator('[data-testid="cursor-slider"]')
     t0, t1 = T["time_s"][0], T["time_s"][-1]
     exp_x = lambda t: 44 + (t - t0) / (t1 - t0) * (600 - 44 - 12)   # TelemetryChart: W=600, MARGIN.left=44, MARGIN.right=12
@@ -127,7 +131,7 @@ with sync_playwright() as p:
 
     # L5
     step(pg, "explain")
-    g = norm = re.sub(r"\s+", " ", pg.locator('[data-testid="grounding-panel"]').inner_text())
+    g = re.sub(r"\s+", " ", pg.locator('[data-testid="grounding-panel"]').inner_text())
     shortfall = max((T["p_load_w"][i] - T["p_sst_w"][i]) for i in range(ei, n)) / 1e3
     tgt_i = max((i for i in range(ei, n) if T["v_dc_v"][i] < vref), key=lambda i: T["p_target_w"][i] - T["p_load_w"][i])
     tgt = (T["p_target_w"][tgt_i] - T["p_load_w"][tgt_i]) / 1e3
@@ -157,6 +161,16 @@ with sync_playwright() as p:
     rec("L7 lesson prose: no digits, no ranking terms", not any(re.search(r"\d", t) for t in texts) and not any(BANNED.search(t) for t in texts), str([t[:40] for t in texts if re.search(r"\d", t) or BANNED.search(t)]))
     pg.reload(wait_until="networkidle"); pg.wait_for_timeout(800)
     rec("L6 no stored state: reload returns to an uncommitted Predict", pg.locator('[data-testid="commit-prediction"]').is_disabled() and pg.locator('[data-testid="prediction-falls-recovers"]').is_checked() is False)
+
+    # L12 for every option: committed option's reasoning and the expected outcome show in Discover
+    opts = ["rises", "falls-recovers", "flat", "falls-stays"]; opt_ok = True
+    for k_, oid in enumerate(opts):
+        pg.reload(wait_until="networkidle"); pg.wait_for_timeout(600)
+        pg.locator(f'label:has([data-testid="prediction-{oid}"])').click(); pg.locator('[data-testid="commit-prediction"]').click()
+        pg.get_by_role("button", name=re.compile("Check it against")).click(); pg.wait_for_timeout(1500)
+        v_ = norm(pg.locator('[data-testid="prediction-verdict"]').inner_text()); e_ = norm(pg.locator('[data-testid="prediction-expected"]').inner_text())
+        opt_ok &= norm(reasonings[k_]) in v_ and norm(reveal) in e_ and v_.startswith("Match." if oid == expected_obs else "Not a match.")
+    rec("L12 each of the four options: its own reasoning, the verdict (Match only for the observed outcome) and the expected outcome appear after commit", opt_ok)
 
     # L11 skip path: focus moves to the Discover heading, content is revealed
     pg.reload(wait_until="networkidle"); pg.wait_for_timeout(800); step(pg, "discover")

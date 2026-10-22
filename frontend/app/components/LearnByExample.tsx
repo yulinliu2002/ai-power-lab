@@ -561,6 +561,17 @@ function RunView({ c, data, prediction }: { c: Case; data: ScenarioRunResponse; 
       )}
       {metrics && <CauseChainCard />}
       {metrics && (
+        <details className="border border-hairline bg-surface px-4 py-3" data-testid="technical-details">
+          <summary className="cursor-pointer font-sans text-[13px] font-semibold text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary">
+            Detailed technical explanation and engineering result
+          </summary>
+          <div className="flex flex-col gap-3 pt-3">
+            <EngineeringInterpretation metrics={metrics} voltageReferenceV={vRef} />
+            <TransientMetricsPanel metrics={metrics} voltageReferenceV={vRef} />
+          </div>
+        </details>
+      )}
+      {metrics && (
         <CursorPanel
           index={cursorIndex}
           last={timeS.length - 1}
@@ -612,17 +623,6 @@ function RunView({ c, data, prediction }: { c: Case; data: ScenarioRunResponse; 
         />
       </div>
       <ProtectionTimeline timeline={data.protection_timeline} />
-      {metrics && (
-        <details className="border border-hairline bg-surface px-4 py-3" data-testid="technical-details">
-          <summary className="cursor-pointer font-sans text-[13px] font-semibold text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary">
-            Detailed technical explanation and engineering result
-          </summary>
-          <div className="flex flex-col gap-3 pt-3">
-            <EngineeringInterpretation metrics={metrics} voltageReferenceV={vRef} />
-            <TransientMetricsPanel metrics={metrics} voltageReferenceV={vRef} />
-          </div>
-        </details>
-      )}
       {c.busCollapseCase && (
         <p className="max-w-3xl text-[11.5px] leading-relaxed text-secondary">{LEARN_DISCLOSURES.d2}</p>
       )}
