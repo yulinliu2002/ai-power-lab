@@ -68,17 +68,18 @@ Auditor: implementer (not independent). `supported` = a verbatim span was extrac
 | A2 | nvidia | The article gives no efficiency percentage or measured benefit for 800 VDC. | Whole article | Searched the fetched article text for an efficiency percentage or measured 800 VDC benefit; none found. | absence-observed |
 | A3 | nvidia | "Fewer" stages is not counted. | Article body, paragraph beginning "800 VDC simplifies that path" | The passage states "fewer conversion stages" without a number of stages. | absence-observed |
 | A4 | ocp-blog | The post is signed by two NVIDIA Data Center Engineering authors. | Post byline | "Posted by Jason Adrian and Mike Tu, NVIDIA Data Center Engineering" | supported |
-| A5 | ocp-blog | The post was posted 11 August 2026 and later modified (2026-09-24). | Post header and page metadata | "Date of Post August 11, 2026" | supported |
-| A6 | ocp-blog | The audited passages name two options but do not compare them on efficiency or cost. | Section "A Flexible Path Forward for Every Data Center" | Bounded to the passages audited here; no efficiency or cost comparison found in them. | absence-observed |
-| A7 | ocp-whitepaper | The white paper is version 1.0, first release, dated 30 March 2026. | Registry citation for OCPWP (SPEC-011 audit) | none for this page | registry-citation |
-| A8 | ocp-sst | The specification is Rev 0.3.0, effective 22 June 2026. | Cover page | "Specification Effective 6/22/2026" | supported |
-| A9 | ocp-sst | The listed authors are Google, Microsoft and NVIDIA. | Cover page | "Author: Google, Microsoft, Nvidia" | supported |
-| A10 | ocp-sst | Grounding detail is left to later revisions. | Section 5.4, page 15 | "Details will be provided in later revisions of the specification." | supported |
-| A11 | eaton | The page's certification line concerns electric vehicle charging. | Certifications table | "certified by UL or equivalent NRTL for electric vehicle charging" | supported |
-| A12 | eaton | The page's output rows describe passenger-vehicle charging connections. | Specifications table: DC output / DC charger circuit types | "Passenger vehicle configuration CCS or NACS (200-900V)" | supported |
-| A13 | eaton | The footer says specifications are subject to change without notice. | Page footer | "Due to continuing improvements, specifications are subject to change without notice." | supported |
-| A14 | eaton | The page shows no publication date. | Page metadata and body | Publish-date metadata empty; only a 2026 copyright footer found. | absence-observed |
-| A15 | eaton | The efficiency row gives no load level, temperature or test method. | Specifications table: Converter efficiency | Row reads ">97% @ 800 VDC output" with no further conditions. | absence-observed |
+| A5 | ocp-blog | The post was posted on 11 August 2026. | Post header | "Date of Post August 11, 2026" | supported |
+| A6 | ocp-blog | The page metadata gives a later modified date of 2026-09-24. | Page metadata: modified time | "2026-09-24" | supported |
+| A7 | ocp-blog | The audited passages name two options but do not compare them on efficiency or cost. | Section "A Flexible Path Forward for Every Data Center" | Bounded to the passages audited here; no efficiency or cost comparison found in them. | absence-observed |
+| A8 | ocp-whitepaper | The white paper is version 1.0, first release, dated 30 March 2026. | Registry citation for OCPWP (SPEC-011 audit) | none for this page | registry-citation |
+| A9 | ocp-sst | The specification is Rev 0.3.0, effective 22 June 2026. | Cover page | "Specification Effective 6/22/2026" | supported |
+| A10 | ocp-sst | The listed authors are Google, Microsoft and NVIDIA. | Cover page | "Author: Google, Microsoft, Nvidia" | supported |
+| A11 | ocp-sst | Grounding detail is left to later revisions. | Section 5.4, page 15 | "Details will be provided in later revisions of the specification." | supported |
+| A12 | eaton | The page's certification line concerns electric vehicle charging. | Certifications table | "certified by UL or equivalent NRTL for electric vehicle charging" | supported |
+| A13 | eaton | The page's output rows describe passenger-vehicle charging connections. | Specifications table: DC output / DC charger circuit types | "Passenger vehicle configuration CCS or NACS (200-900V)" | supported |
+| A14 | eaton | The footer says specifications are subject to change without notice. | Page footer | "Due to continuing improvements, specifications are subject to change without notice." | supported |
+| A15 | eaton | The page shows no publication date. | Page metadata and body | Publish-date metadata empty; only a 2026 copyright footer found. | absence-observed |
+| A16 | eaton | The efficiency row gives no load level, temperature or test method. | Specifications table: Converter efficiency | Row reads ">97% @ 800 VDC output" with no further conditions. | absence-observed |
 
 Negative statements on the sheets ("does not tell you"), with their basis: NVIDIA gives no efficiency figure and no stage count (fetch report, and SPEC-011 audit); Eaton's efficiency row gives no load, temperature or method, its certification line concerns electric vehicle charging, no date and a "subject to change" footer (fetch report of the specification and certification tables); OCP SST TBD items (§4.3, §5.2.1(c), §5.4, fetch report). The OCP-post "does not compare the options" statement is limited to "the passages audited here".
 
@@ -117,7 +118,7 @@ Codex CLI, read-only, session `01a1613c-b622-7b10-b601-f7dd237fb5a1`. Verdict: *
 
 | Severity | Finding | Disposition |
 |---|---|---|
-| Major | AC-19 audit still incomplete: assertions outside `claims` had prose only, and the status overstated compliance | Added a structured `ASSERTION_AUDIT` (15 rows: verbatim spans, or an explicit "absence observed" check, or a registry citation), validated by the content script and listed in §3. Status corrected |
+| Major | AC-19 audit still incomplete: assertions outside `claims` had prose only, and the status overstated compliance | Added a structured `ASSERTION_AUDIT` (16 rows: verbatim spans, or an explicit "absence observed" check, or a registry citation), validated by the content script and listed in §3. Status corrected |
 | Minor | The span exception covered any `paraphrase-checked` OCP white-paper claim; a third unapproved claim passed | The check now identifies the exception by locator and fails unless exactly the two approved claims are exceptions |
 
 A re-run of the closure review was not requested: the Lead asked for one focused closure review, not a further cycle.
@@ -129,3 +130,7 @@ Reviewer: the Human Engineering Lead, on the desktop (1280 px) and mobile (360 p
 Two non-blocking UX improvements are recorded as future work and are **not** implemented in this PR (SPEC-013 design scope is not reopened):
 1. Improve Career Map discoverability and prominence.
 2. Reduce repetitive card density and long-scroll reading friction on mobile.
+
+### Minimal disposition (diff `b27db45..14fa343`)
+
+Codex CLI, read-only, session `01a16164-adad-71c2-a9c5-c8666c10ff29`. Verdict: **not APPROVE**; one remaining defect: the modification date `2026-09-24` was marked supported with a span containing only the publication date (`ASSERTION_AUDIT`, and the matching row in §3). Codex gave no verdict on the two-claim exception. Resolution: the row is split into the post-date row (span `Date of Post August 11, 2026`) and a separate modified-date row (span `2026-09-24`, locator page metadata, modified time); the §3 table is regenerated from the script. Verbatim output is held on the Lead's Mac (`SPEC-013-codex-disposition.txt`); not committed. The fix has not yet been re-reviewed by Codex.
