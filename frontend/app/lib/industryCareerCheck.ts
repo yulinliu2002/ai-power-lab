@@ -61,9 +61,9 @@ for (const s of CLAIM_SHEETS) {
 check("AC-3 READ_LOG has all five", INDUSTRY_REF_ORDER.every((id) => /^\d{4}-\d{2}-\d{2}$/.test(READ_LOG[id]?.readDate ?? "")));
 
 // R17 variant: the shared registry is untouched.
-// Deviation 1 in the validation record: Eaton is page-local so /architecture is unchanged. This asserts the
-// implemented design, not R17 compliance; R17 as written is open pending a Lead decision.
-check("DEVIATION-1 EATON is page-local (R17 as written not met)", !("EATON" in REFERENCES) && INDUSTRY_REFERENCES.EATON.id === "EATON");
+// Amended R17 (spec section 16): Eaton is page-local so /architecture is unchanged. This asserts the
+// approved contract.
+check("R17 (amended) EATON is page-local", !("EATON" in REFERENCES) && INDUSTRY_REFERENCES.EATON.id === "EATON");
 
 // AC-4
 const sst = CLAIM_SHEETS.find((s) => s.sourceId === "OCPSST")!;

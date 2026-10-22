@@ -1,6 +1,6 @@
 # SPEC-013 — Industry & Career V1
 
-**Status:** Adopted for implementation on `main` at `f2c46ae` (merge of PR #10) on the Human Engineering Lead's instruction of 2026-10-21 ("Proceed with SPEC-013 Industry & Career implementation"). Text below is draft v0.3 unchanged, apart from this status line. Codex reviewed v0.1 (CHANGES_REQUIRED); **v0.3 was not re-reviewed**; implementation deviations from v0.3 are recorded in `docs/validation/SPEC-013-validation.md`. Open questions Q1-Q4 (§13) were not answered explicitly; the implementation followed the spec's own recommendations (Q1 keep ecosystem cards, Q2 documented script and no new dependency, Q3 name the Charter ladder as a labelled activity description, Q4 five-source seed).
+**Status:** Adopted for implementation on `main` at `f2c46ae` (merge of PR #10) on the Human Engineering Lead's instruction of 2026-10-21 ("Proceed with SPEC-013 Industry & Career implementation"). Text below is draft v0.3 as amended on 2026-10-22 by the Human Engineering Lead's product decisions on PR #12 (marked **[Amended 2026-10-22]**: Eaton page-local, 24 px gutters, SiteNav comment, OCP white-paper evidence exception); all other text is v0.3 unchanged. Codex reviewed v0.1 (CHANGES_REQUIRED); **v0.3 was not re-reviewed**; the implementation was independently reviewed by Codex (REQUEST CHANGES, no blockers; resolutions recorded) and its former deviations are now approved amendments, recorded in `docs/validation/SPEC-013-validation.md`. Open questions Q1-Q4 (§13) were not answered explicitly; the implementation followed the spec's own recommendations (Q1 keep ecosystem cards, Q2 documented script and no new dependency, Q3 name the Charter ladder as a labelled activity description, Q4 five-source seed).
 **Project:** AI Power Lab
 **System:** `frontend/app/` (new `/industry` route and a typed content module). No change to `src/`, `backend/`, `config/`, `scenarios/`, `content/`, `data/`, `dashboard/` or `tests/`.
 **Version:** 0.3
@@ -43,10 +43,10 @@ Each of the five sources has **exactly one featured claim sheet** (§4.2.1). Oth
 | `OCP` | OCP blog, Powering the Next Era of AI | consortium-document | Existing `REFERENCES.OCP`. |
 | `OCPWP` | OCP LVDC power distribution white paper v1.0 (30 Mar 2026) | consortium-document | Existing `REFERENCES.OCPWP`; sections previously read are the only ones that may be cited. |
 | `OCPSST` | OCP SST Specification Rev 0.3.0 (22 Jun 2026; first draft) | consortium-document | Existing `REFERENCES.OCPSST`. |
-| `EATON` | Eaton medium-voltage SST catalog page | vendor-statement | New entry. **[RE-READ]**: it was not re-read in the SPEC-011 audit. Allowed figures are enumerated in §4.4. |
+| `EATON` | Eaton medium-voltage SST catalog page | vendor-statement | **[Amended 2026-10-22]** Page-local entry (`INDUSTRY_REFERENCES.EATON` in `industryCareerData.ts`), not in the shared `REFERENCES`. **[RE-READ]** done 2026-10-21. Allowed figures are enumerated in §4.4. |
 
 **Reference contract (single, binding).**
-1. `architectureChoicesData.ts` receives **one additive change**: `"EATON"` is added to the `ReferenceId` union and one `REFERENCES.EATON` entry is added (kind `vendor-statement`, `inspection` text stating what was read, `citation`, `url`). No existing entry, type or export is edited or removed. The `/architecture` page must render unchanged (AC-18).
+1. **[Amended 2026-10-22]** `architectureChoicesData.ts` is **not modified**. Because `/architecture` renders every `REFERENCES` entry, adding Eaton there would change that page. Eaton is instead a page-local entry, `INDUSTRY_REFERENCES.EATON` in `industryCareerData.ts` (kind `vendor-statement`, `inspection` text stating what was read, `citation`, `url`), alongside the four registry sources the page also lists. The Eaton claim sheet shows its label and basis without a shared-registry "Refs" link; its citation, URL, page date and read date are in the sheet details and the page's References section. `/architecture` must render unchanged (AC-18).
 2. `EvidenceTag` is **not modified**. It links to `#references`; `/industry` provides its own `<section id="references">` listing every reference the page cites (as `/architecture` does), so the existing anchor resolves on this page.
 3. **Read dates are a separate field, held in the industry module, not in `REFERENCES`.** `industryCareerData.ts` exports `READ_LOG: Record<IndustryRefId, { readDate: string; pageDate?: string }>`, where `readDate` is the date the implementer re-read the live source for *this* page and `pageDate` is the date printed on the source, if any. `verifiedDate` in `REFERENCES` (the 2026-10-04 YAML verification date) is neither reused nor edited. A missing `READ_LOG` entry is a test failure.
 4. The page's References section shows, per reference: citation, kind, URL, `readDate`, and `pageDate` when present.
@@ -130,12 +130,12 @@ No engineering model. Reasoning content in a typed TypeScript module, following 
 - **R8** Career Map has one row per Charter §4 priority (10 rows). Each row links to an in-app exercise point or says "not yet exercised"; any link target must exist on the baseline at implementation time.
 - **R9** No ranking, adoption forecast, market, salary or hiring statement anywhere on the page.
 - **R10** `SiteNav.tsx`: only the `/industry` entry changes (remove `disabled`). Home page `page.tsx`: only the Industry & Career card changes, to live with `href: "/industry"`, **and its copy is replaced** because the current text promises developments "tracked over time", which V1 does not provide. Proposed copy (subject to Lead edit): question *"How do I judge what the industry is claiming?"*; description *"Read public 800 VDC and solid-state-transformer claims the way an engineer would: what each one says, how strong the evidence is, and which systems-engineering competency it exercises."* No other nav or home change.
-- **R11** Layout and tokens follow `DESIGN.md`; usable at phone width (16 px gutters, no horizontal page scroll).
+- **R11** Layout and tokens follow `DESIGN.md`; usable at phone width (**[Amended 2026-10-22]** side gutters of at least 16 px; the shared `.ic-page` value of 24 px is approved; no horizontal page scroll).
 - **R13** (E1) No chart, KPI tile, telemetry, simulation, or protection/audit component is imported or rendered on `/industry`; reused components are limited to `EvidenceTag` and design tokens.
 - **R14** (E2) Each of the five claim sheets offers the "What would you ask?" interaction from a fixed question list, client-side only, no persistence, no numeric or free-text input.
 - **R15** (E3) The claim sentence, kind/label strip, evidence label, prompt and competency link are visible by default; quotation, dates, citation/URL and "does not tell you" text sit behind a disclosure and remain reachable by keyboard and screen reader.
 - **R16** (E4) Each claim sheet links to its Career Map competency row; Career Map is a compact competency list.
-- **R17** (reference contract, §4.1) Only the additive `EATON` registry change is made; `EvidenceTag` is unchanged; `READ_LOG` exists with an entry for each of the five sources.
+- **R17** (reference contract, §4.1) **[Amended 2026-10-22]** The shared `REFERENCES` registry, `ReferenceId`, `EvidenceTag` and `ArchitectureChoices` are unchanged; Eaton is page-local (`INDUSTRY_REFERENCES.EATON`); `READ_LOG` exists with an entry for each of the five sources.
 - **R18** (claim audit, §4.5) Every claim on a claim sheet has a passage locator and appears in the PR's claim-to-passage audit table.
 - **R19** (Eaton, §4.4) Only the enumerated Eaton figures appear; efficiency conditions are stated as unspecified unless the live page states them.
 - **R20** (E7) No diagram, matrix or comparison table of architectures on the page.
@@ -145,23 +145,23 @@ No engineering model. Reasoning content in a typed TypeScript module, following 
 
 - [ ] AC-1 `/industry` exists and renders all three sections and the questions lists.
 - [ ] AC-2 Claim sheets equal the five in §4.1, one each; no sixth source; no `sample` content rendered; no source rendered as a second card in another section.
-- [ ] AC-3 Every item has one label; every `public-fact`/`emerging` item resolves to a `REFERENCES` entry with URL and to a `READ_LOG` entry with `readDate` (checked by script over the module). This checks provenance only; support is checked by AC-19.
+- [ ] AC-3 Every item has one label; every `public-fact`/`emerging` item resolves to a reference entry with URL (the shared `REFERENCES` entry, or the page-local `INDUSTRY_REFERENCES.EATON` for Eaton **[Amended 2026-10-22]**) and to a `READ_LOG` entry with `readDate` (checked by script over the module). This checks provenance only; support is checked by AC-19.
 - [ ] AC-4 OCP SST is `emerging` and the word "draft" appears in its card.
 - [ ] AC-5 Eaton card has attribution, conditions, non-calibration note, and no Sandbox numeric comparison.
 - [ ] AC-6 NVIDIA page date and read date shown; discrepancy noted in the PR as resolved.
 - [ ] AC-7 Every source card has a non-empty "does not tell you" field.
 - [ ] AC-8 Career Map has exactly 10 rows matching Charter §4; every link target exists on the baseline.
 - [ ] AC-9 A text scan of the module and page finds none of: ranking/"leader"/"market share"/"salary"/"hiring"/"forecast" wording.
-- [ ] AC-10 Diff touches only these paths: `frontend/app/industry/`; `frontend/app/lib/industryCareerData.ts` (and any check script); `frontend/app/lib/architectureChoicesData.ts` **only** for the additive `EATON` change in §4.1; `frontend/app/components/SiteNav.tsx` (`/industry` entry only); `frontend/app/page.tsx` (Industry & Career card only); `docs/PRODUCT_BLUEPRINT.md` §7 row; `docs/specifications/SPEC-013-industry-career-v1.md` (the adopted spec); `docs/validation/SPEC-013-validation.md` (evidence record, including the claim audit table). No other path, nothing under `src/`, `backend/`, `scenarios/`, `config/`, `content/`, `data/`, `dashboard/`, `tests/`, and no change to `EvidenceTag.tsx` or any existing `REFERENCES` entry.
+- [ ] AC-10 Diff touches only these paths: `frontend/app/industry/`; `frontend/app/lib/industryCareerData.ts` (and any check script); **[Amended 2026-10-22]** no change to `frontend/app/lib/architectureChoicesData.ts`; `frontend/app/components/SiteNav.tsx` (the `/industry` entry and the file-level comment describing the navigation state); `frontend/app/page.tsx` (Industry & Career card only); `docs/PRODUCT_BLUEPRINT.md` §7 row; `docs/specifications/SPEC-013-industry-career-v1.md` (the adopted spec); `docs/validation/SPEC-013-validation.md` (evidence record, including the claim audit table). No other path, nothing under `src/`, `backend/`, `scenarios/`, `config/`, `content/`, `data/`, `dashboard/`, `tests/`, and no change to `EvidenceTag.tsx` or any existing `REFERENCES` entry.
 - [ ] AC-11 `npm run typecheck`, `npm run lint`, `npm run build` pass; the existing Python suite is unaffected.
 - [ ] AC-12 Desktop and mobile screenshots show no overflow and legible evidence tags.
 - [ ] AC-13 Independent Codex review of the implementation recorded with its real output.
-- [ ] AC-18 `/architecture` is unchanged: its production-build text content is identical before and after, and `npm run typecheck` passes with the widened `ReferenceId`.
+- [ ] AC-18 `/architecture` is unchanged **[Amended 2026-10-22]**: `architectureChoicesData.ts`, `ArchitectureChoices.tsx`, `EvidenceTag.tsx` and their styles have no diff against the baseline, so the page body and References list are unchanged. The shared navigation (`SiteNav`) changes on every page by design (R10: "(planned)" removed from Industry & Career), so whole-page text identity is not required; `npm run typecheck` passes.
 - [ ] AC-19 The claim-to-passage audit table (§4.5) is in `docs/validation/SPEC-013-validation.md`, covers 100% of claim-sheet claims, and no claim lacks a locator.
 - [ ] AC-20 **SST disclosures:** the page states, in visible text, that an SST is not required for an 800 VDC bus and is one candidate for the MV-to-DC stage, and that "SST" in a diagram or label elsewhere is a functional abstraction (Blueprint §5.2 rules 1–2). Verified by a content check for both statements.
 - [ ] AC-21 **Standards inventory:** the background-standards list equals exactly {NFPA 70, IEC 60364, IEEE 1547, UL 1741, IEC 62477-1, IEEE 493, IEEE 1584}, each flagged "not opened", each topic sentence either backed by a locator in an already-read source or labelled `assumption`.
 - [ ] AC-22 **Ladder:** the Career Map ladder text contains the four Charter §2.2 steps verbatim, including "Systems Architecture / Technical Leadership".
-- [ ] AC-23 **Viewport:** at 360 px and 1280 px widths, `document.documentElement.scrollWidth <= clientWidth` and 16 px side gutters are present, measured in a real browser.
+- [ ] AC-23 **Viewport:** at 360 px and 1280 px widths, `document.documentElement.scrollWidth <= clientWidth` and side gutters of at least 16 px are present **[Amended 2026-10-22]**, measured in a real browser.
 - [ ] AC-24 **Accessibility:** disclosures are native `<details>/<summary>` or buttons with `aria-expanded`; all interactive elements are reachable by Tab with visible focus; the "What would you ask?" control is keyboard-operable; headings have no skipped levels; no information is conveyed by colour alone. Verified by a keyboard-only pass recorded in the validation file, plus an automated accessibility check only if one is available without adding a dependency.
 - [ ] AC-25 **Home copy:** the Industry & Career home card no longer contains "tracked over time" or any claim of continuous updates.
 - [ ] AC-14 Import scan of `frontend/app/industry/` shows none of `TelemetryChart`, `KpiTile`, `ScenarioComparison`, `SensitivityStudy`, `ProtectionTimeline`, `ProtectionCoordination`, `TransientMetricsPanel`, `SweepChart`, or any simulation API client.
@@ -179,7 +179,7 @@ No engineering model. Reasoning content in a typed TypeScript module, following 
 | AC-1, AC-12 | Browser run of `/industry` at desktop and phone width, with real screenshots | runtime |
 | AC-2, AC-4–AC-6 | Implementer re-reads each live source and records read dates; reviewer spot-checks quotations against the source | source-to-claim audit (as in SPEC-011) |
 | AC-13 | Codex CLI review on the Mac; actual output preserved | independent review |
-| AC-18 | build `/architecture` before/after and diff extracted text; `tsc` | regression |
+| AC-18 | `git diff` shows no change to the four `/architecture` inputs; `tsc` (a production-text before/after comparison is optional) | regression |
 | AC-19 | audit table in validation file; Codex spot-check | source-to-claim audit |
 | AC-20–AC-22, AC-25 | content checks in the same script as AC-3/7/8/9 | content invariant |
 | AC-23, AC-24 | real-browser measurement and keyboard pass, screenshots at 360 and 1280 px | runtime |
@@ -201,7 +201,7 @@ CI is authoritative integration evidence and is reported separately from local v
 ## 12. Dependencies and Sequencing
 
 - No technical dependency on SPEC-012 or SPEC-014. Separate branch and PR.
-- **Ownership.** SPEC-013 owns: the `/industry` nav entry, the Industry & Career home card copy, `REFERENCES.EATON`, and `industryCareerData.ts`. SPEC-012 owns the `/learn` nav entry and the Learn by Example home card. **Nobody in this set owns `EvidenceTag.tsx` or existing `REFERENCES` entries**; if SPEC-014 (or any PR) changes them, the later-merging PR adapts. Each PR edits only its own nav/home entries.
+- **Ownership.** SPEC-013 owns: the `/industry` nav entry, the Industry & Career home card copy, `INDUSTRY_REFERENCES.EATON` (page-local, **[Amended 2026-10-22]**), and `industryCareerData.ts`. SPEC-012 owns the `/learn` nav entry and the Learn by Example home card. **Nobody in this set owns `EvidenceTag.tsx` or existing `REFERENCES` entries**; if SPEC-014 (or any PR) changes them, the later-merging PR adapts. Each PR edits only its own nav/home entries.
 - **Merge order is not fixed.** The PR that merges second must (a) merge `main` into its branch (no rewriting published history), (b) resolve nav/home conflicts keeping both sides' entries, (c) re-run typecheck, lint, build and the content script, (d) re-check R8 link targets (a `/learn` link appears only once `/learn` exists on `main`), and (e) re-confirm AC-18 if `architectureChoicesData.ts` changed upstream.
 - SPEC-014 is gated on the SPEC-012 merge and does not gate this spec.
 - Phase A deletion manifest does not touch the files in AC-10.
@@ -239,3 +239,10 @@ Summarized from the coordinator's relay of the Codex output, not from the Codex 
 | MINOR: Eaton figures not enumerated; efficiency conditions; certification extrapolation | §4.4, R19. |
 | MINOR: ladder missing "Technical Leadership" | §4.2.3, AC-22. |
 | MINOR: template Project/Version fields | Header carries `Project` and `Version` 0.3 in template order. |
+
+## 16. Amendments of 2026-10-22 (Human Engineering Lead, PR #12)
+
+1. **Eaton page-local.** §4.1 item 1, R17, AC-3, AC-10 and AC-18 amended as marked above. Rationale: the shared registry feeds `/architecture`, so the additive registry entry would change that page. The citation, read date, evidence basis and source links are preserved on this page.
+2. **Gutters.** 16 px is the minimum, not an exact value; 24 px is approved (R11, AC-23).
+3. **SiteNav comment.** The corrected file-level comment is kept; documentation reflects the implemented navigation state (AC-10).
+4. **OCP white-paper evidence exception (AC-19, §4.5).** The two white-paper claims have section locators but no verbatim span for this page (the 2026-10-21 fetch failed). They are an explicit, recorded exception, marked `paraphrase-checked`, and were confirmed against the source by the independent Codex review. Any other claim without a verbatim span fails the content check.
