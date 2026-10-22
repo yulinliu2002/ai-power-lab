@@ -2,7 +2,7 @@
 
 **Spec:** `docs/specifications/SPEC-013-industry-career-v1.md` (v0.3, adopted 2026-10-21)
 **Baseline:** `main` at `f2c46ae49cfa3682d9c9e488ec03b636c4b5101c` (merge of PR #10, SPEC-014).
-**Status:** Local verification complete. Two independent Codex reviews are recorded in §6 (first: REQUEST CHANGES; closure: REQUEST CHANGES, no blockers, addressed in §6). **AC-17 Human Product Review: ACCEPT for V1 (2026-10-22, §7).** CI is reported separately on the PR.
+**Status:** Local verification complete. Independent Codex reviews are recorded in §6 (first and closure: REQUEST CHANGES, no blockers; final diff-only disposition: APPROVE). **AC-17 Human Product Review: ACCEPT for V1 (2026-10-22, §7).** CI is reported separately on the PR.
 
 ## 1. Deviations and approved amendments
 
@@ -133,4 +133,8 @@ Two non-blocking UX improvements are recorded as future work and are **not** imp
 
 ### Minimal disposition (diff `b27db45..14fa343`)
 
-Codex CLI, read-only, session `01a16164-adad-71c2-a9c5-c8666c10ff29`. Verdict: **not APPROVE**; one remaining defect: the modification date `2026-09-24` was marked supported with a span containing only the publication date (`ASSERTION_AUDIT`, and the matching row in §3). Codex gave no verdict on the two-claim exception. Resolution: the row is split into the post-date row (span `Date of Post August 11, 2026`) and a separate modified-date row (span `2026-09-24`, locator page metadata, modified time); the §3 table is regenerated from the script. Verbatim output is held on the Lead's Mac (`SPEC-013-codex-disposition.txt`); not committed. The fix has not yet been re-reviewed by Codex.
+Codex CLI, read-only, session `01a16164-adad-71c2-a9c5-c8666c10ff29`. Verdict: **not APPROVE**; one remaining defect: the modification date `2026-09-24` was marked supported with a span containing only the publication date (`ASSERTION_AUDIT`, and the matching row in §3). Codex gave no verdict on the two-claim exception. Resolution: the row is split into the post-date row (span `Date of Post August 11, 2026`) and a separate modified-date row (span `2026-09-24`, locator page metadata, modified time); the §3 table is regenerated from the script. Verbatim output is held on the Lead's Mac (`SPEC-013-codex-disposition.txt`); not committed.
+
+### Second minimal disposition (diff `14fa343..4773a42`)
+
+Codex CLI, read-only, session `01a16165-c617-75a1-8b0e-a8356922db7f`. Verdict, verbatim: **APPROVE**. Codex's closing text before the verdict: "The modified-date span is now present in both audit rows. Finding (1) is resolved by `ASSERTION_AUDIT`, its check, and the validation record. Finding (2) is resolved: the check requires exactly the two approved OCP white-paper exceptions, identified by their section locators, and rejects a third exception." Verbatim output is held on the Lead's Mac (`SPEC-013-codex-disposition2.txt`); not committed. Scope was that diff only, not a full re-review.
