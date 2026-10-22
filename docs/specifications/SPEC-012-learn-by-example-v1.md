@@ -300,6 +300,18 @@ Authorized by decision D-A (design-lab INTEGRATION_PLAN §4, approved by the Hum
 - A1-R5. The static-scan boundary (R6) is unchanged: the seven `data-static-prose` nodes per case, now distributed across steps; the AC-4 scan is run over the union of the steps.
 - A1-AC. Verified by `docs/validation/spec-012-a1/verify_learn_steps.py` (see the validation record, "Amendment A1").
 
+## 15b. Amendment A2: Load Step interactive lesson (milestone M1)
+
+Scope: the `load_step` case only; the other four cases are unchanged. Requested by the Human Engineering Lead (milestone M1). No change to `src/`, `backend/`, API contracts, physics, thresholds or the R16 claims. Stacked on A1.
+
+- A2-R1 **Predict.** The learner picks one of four qualitative outcomes and commits. Committing locks the pick; nothing is scored or stored (reload resets). The expected-outcome reveal for this case appears only after commit (the native details reveal remains for the other four cases).
+- A2-R2 **Discover.** Discover is gated until a prediction is committed or the learner chooses "Look without predicting". This is the one exception to A1-R2 (no gating) and it is explicit and reversible. After commit the page compares the pick with the live run; the observed class is derived only from `computeTransientMetrics` fields (minimum below reference, recovery time, direction of the largest deviation), with no new threshold.
+- A2-R3 **Interactive trace.** One time cursor (slider, arrow keys in coarse steps, Shift+Arrow one sample, jump buttons to the step, the minimum and the settled time) drives the cursor line on both existing charts and a readout of V_dc, P_load, P_sst and P_sst - P_load read from the returned samples. Annotations: the load-step and settled event markers, the existing minimum marker and reference line, and a phase note chosen only by the sign of P_sst - P_load (and the recovery time), tied to dE/dt = P_sst - P_load. The cursor only selects an already-returned sample.
+- A2-R4 **Explain.** The existing four-step cause chain is unchanged; a "measured in this run" panel shows its counterparts from the same response: demand before and after the step, the largest shortfall, the energy given up (E = 1/2 C V^2, from `computeTransientMetrics`), the minimum voltage, how far the PI power target rose above demand while below reference, and the recovery time. This allows two read-only presentation calculations beyond `computeTransientMetrics` (largest value of target minus demand while below reference; sample reads), recorded here as the bounded exception to the "no computation beyond `computeTransientMetrics`" rule.
+- A2-R5 **Apply.** One engineering-judgment question on limitations, requirements and validation evidence, with per-option feedback and exactly one defensible answer (accept the run as a mechanism and ask for measurements of the real converter, storage and controller). Followed by the existing decision link and validation reasoning (R7 evidence kinds). No scoring, ranking or stored state.
+- A2-R6 Authored prose follows R6 (no digits) and AC-5 (no ranking terms); the model numbers are live.
+- A2-Limits. The lesson teaches one mechanism of one averaged, illustrative model. It does not validate any architecture, and the controller is modeled with perfect load measurement and no switching behavior (src/controller.py).
+
 ## 14. Dependencies and Sequencing
 
 1. **PR #8 is merged at `4e6af36`** (provides `EvidenceTag`, label types, `DriverId`, `DISCLOSURES`, `REFERENCES`, nav pattern). `4e6af36` is the AC-12 baseline. Implementation does not start before this spec is approved.

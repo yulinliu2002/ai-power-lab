@@ -22,12 +22,28 @@ import {
   type ScenarioRunResponse,
   type LoadStepResponse,
 } from "../lib/simulationApi";
+import {
+  groundingFor,
+  indexAtOrAfter,
+  observedOutcome,
+  phaseAt,
+  readoutAt,
+  type PredictionId,
+} from "../lib/loadStepLesson";
 import { SVG_COLOR } from "../lib/theme";
 import { computeTransientMetrics, formatEnergyDeficitKj } from "../lib/transientMetrics";
 import { CaseSelector } from "./CaseSelector";
 import { EngineeringInterpretation } from "./EngineeringInterpretation";
 import { EvidenceTag } from "./EvidenceTag";
 import { LEARN_STEPS, LearnStepper, type LearnStepId } from "./LearnStepper";
+import {
+  ApplyQuestionPanel,
+  CursorPanel,
+  DiscoverGate,
+  GroundingPanel,
+  PredictPicker,
+  PredictionComparison,
+} from "./LoadStepLesson";
 import { ProtectionCoordination } from "./ProtectionCoordination";
 import { ProtectionTimeline } from "./ProtectionTimeline";
 import { TelemetryChart } from "./TelemetryChart";
@@ -164,6 +180,15 @@ function CaseView({
       : null;
 
   const [step, setStep] = useState<LearnStepId>("predict");
+  // Load Step lesson only (SPEC-012 A2): the learner's pick, whether it is committed, and an explicit opt-out.
+  const isLesson = selected === "load_step";
+  const [pick, setPick] = useState<PredictionId | null>(null);
+  const [committed, setCommitted] = useState(false);
+  const [skipped, setSkipped] = useState(false);
+  const lessonMetrics = useMemo(
+    () => (isLesson && run.status === "ready" ? computeTransientMetrics(run.data as LoadStepResponse) : null),
+    [isLesson, run],
+  );
   const stepHeading = useRef<HTMLHeadingElement>(null);
   const userMoved = useRef(false);
   useEffect(() => {
@@ -213,22 +238,43 @@ function CaseView({
             <Section title="Predict" testId="part-predict">
               <StaticProse>
                 <p className="max-w-3xl text-[14px] leading-relaxed text-primary">{c.predict.question}</p>
-                <details className="max-w-3xl">
-                  <summary className="cursor-pointer font-sans text-[12px] font-semibold uppercase tracking-[0.04em] text-secondary hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary">
-                    Show the expected outcome
-                  </summary>
-                  <p className="pt-1.5 text-[12.5px] leading-relaxed text-secondary">{c.predict.reveal}</p>
-                </details>
+                {isLesson ? (
+                  committed && (
+                    <p className="max-w-3xl text-[12.5px] leading-relaxed text-secondary" data-testid="predict-reveal">
+                      {c.predict.reveal}
+                    </p>
+                  )
+                ) : (
+                  <details className="max-w-3xl">
+                    <summary className="cursor-pointer font-sans text-[12px] font-semibold uppercase tracking-[0.04em] text-secondary hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary">
+                      Show the expected outcome
+                    </summary>
+                    <p className="pt-1.5 text-[12.5px] leading-relaxed text-secondary">{c.predict.reveal}</p>
+                  </details>
+                )}
                 <EvidenceTag evidence={c.predict.evidence} basis={c.predict.basis} refs={c.predict.refs} />
               </StaticProse>
+              {isLesson && (
+                <PredictPicker
+                  choice={pick}
+                  committed={committed}
+                  onChoose={setPick}
+                  onCommit={() => setCommitted(true)}
+                  onOpenDiscover={() => go("discover")}
+                />
+              )}
             </Section>
           </>
         )}
 
-        {step === "discover" && (
+        {step === "discover" && isLesson && !committed && !skipped && (
+          <DiscoverGate onGoPredict={() => go("predict")} onSkip={() => setSkipped(true)} />
+        )}
+
+        {step === "discover" && !(isLesson && !committed && !skipped) && (
           <>
             <Section title="Observe (live model output)" testId="part-observe">
-              <ObserveBlock c={c} run={run} entry={entry} comparison={comparison} />
+              <ObserveBlock c={c} run={run} entry={entry} comparison={comparison} comparisonPrediction={committed ? pick : null} />
             </Section>
 
             <Section title="Modeled outcome" testId="part-modeled">
@@ -272,6 +318,12 @@ function CaseView({
                 </p>
                 <EvidenceTag evidence={c.explain.evidence} basis={c.explain.basis} refs={c.explain.refs} />
               </StaticProse>
+              {isLesson && run.status === "ready" && lessonMetrics && (
+                <GroundingPanel g={groundingFor(run.data as LoadStepResponse, lessonMetrics)} />
+              )}
+              {isLesson && run.status === "error" && (
+                <RemoteMessage what="The measured cause chain" message={run.message} />
+              )}
             </Section>
 
             <Section title="Limits of this model" testId="part-limits">
@@ -294,6 +346,11 @@ function CaseView({
 
         {step === "apply" && (
           <>
+            {isLesson && (
+              <Section title="Apply: engineering judgment" testId="part-apply-question">
+                <ApplyQuestionPanel />
+              </Section>
+            )}
             <Section title="Real-world behavior this engine does not represent" testId="part-not-modeled">
               <div
                 data-testid="panel-not-modeled"
@@ -439,11 +496,14 @@ function ObserveBlock({
   run,
   entry,
   comparison,
+  comparisonPrediction,
 }: {
   c: Case;
   run: Remote<ScenarioRunResponse>;
   entry: ScenarioComparisonEntry | null;
   comparison: Remote<ScenarioComparisonEntry[]>;
+  /** Load Step lesson: the committed prediction to compare with the run, else null. */
+  comparisonPrediction: PredictionId | null;
 }) {
   return (
     <div className={CONTRAST_WRAP} data-testid="observe-live">
@@ -452,7 +512,7 @@ function ObserveBlock({
       </p>
       {run.status === "loading" && <Loading what="the model run" />}
       {run.status === "error" && <RemoteMessage what="The model run" message={run.message} />}
-      {run.status === "ready" && <RunView c={c} data={run.data} />}
+      {run.status === "ready" && <RunView c={c} data={run.data} prediction={comparisonPrediction} />}
 
       <div data-testid="stress-block" className="flex flex-col gap-1 border border-hairline bg-surface px-3 py-2">
         <span className="font-sans text-[10.5px] font-semibold uppercase tracking-[0.04em] text-secondary">
@@ -473,27 +533,51 @@ function ObserveBlock({
   );
 }
 
-function RunView({ c, data }: { c: Case; data: ScenarioRunResponse }) {
+function RunView({ c, data, prediction }: { c: Case; data: ScenarioRunResponse; prediction: PredictionId | null }) {
   const isLoadStep = data.scenario === "load_step";
   const metrics = useMemo(
     () => (isLoadStep ? computeTransientMetrics(data as LoadStepResponse) : null),
     [data, isLoadStep],
   );
   const timeS = data.timeseries.time_s;
-  const eventMarkers = data.events.map((e) => ({ time: e.time_s, label: e.label }));
   const vRef = data.thresholds.voltage_reference_v;
+  // Load Step lesson (SPEC-012 A2): one time cursor shared by both charts. It only selects an already-returned sample.
+  const [cursor, setCursor] = useState<number | null>(null);
+  const eventIndex = metrics ? indexAtOrAfter(timeS, metrics.eventTimeS) : 0;
+  const cursorIndex = cursor ?? eventIndex;
+  const cursorTimeS = metrics ? timeS[cursorIndex] : undefined;
+  const eventMarkers = [
+    ...data.events.map((e) => ({ time: e.time_s, label: e.label })),
+    ...(metrics && metrics.recoveryTimeS !== null ? [{ time: metrics.recoveryTimeS, label: "settled" }] : []),
+  ];
 
   return (
     <div className="flex flex-col gap-3">
       {/* The interpretation's prose points at the Power Balance chart "below",
           so it sits above the charts (SPEC-012 R5). */}
+      {metrics && prediction && <PredictionComparison choice={prediction} observed={observedOutcome(metrics, vRef)} />}
       {metrics && <EngineeringInterpretation metrics={metrics} voltageReferenceV={vRef} />}
+      {metrics && (
+        <CursorPanel
+          index={cursorIndex}
+          last={timeS.length - 1}
+          onIndex={setCursor}
+          readout={readoutAt(data as LoadStepResponse, cursorIndex)}
+          phase={phaseAt(data as LoadStepResponse, metrics, cursorIndex)}
+          jumps={[
+            { label: "step", index: eventIndex },
+            { label: "minimum", index: indexAtOrAfter(timeS, metrics.minVdcTimeS) },
+            ...(metrics.recoveryTimeS !== null ? [{ label: "settled", index: indexAtOrAfter(timeS, metrics.recoveryTimeS) }] : []),
+          ]}
+        />
+      )}
       <div className="grid grid-cols-1 gap-2 lg:grid-cols-2">
         <TelemetryChart
           title="DC Bus Voltage — V_dc(t)"
           timeS={timeS}
           series={[{ label: "V_dc", values: data.timeseries.v_dc_v, color: SVG_COLOR.accent }]}
           yUnit="V"
+          currentTimeS={cursorTimeS}
           referenceLines={[{ value: vRef, label: `V_ref = ${vRef.toFixed(0)} V` }]}
           eventMarkers={eventMarkers}
           markerPoint={
@@ -510,6 +594,7 @@ function RunView({ c, data }: { c: Case; data: ScenarioRunResponse }) {
             { label: "P_load", values: data.timeseries.p_load_w.map((w) => w / 1e3), color: SVG_COLOR.neutral, dashed: true },
           ]}
           yUnit="kW"
+          currentTimeS={cursorTimeS}
           eventMarkers={eventMarkers}
           deficitFill={
             metrics

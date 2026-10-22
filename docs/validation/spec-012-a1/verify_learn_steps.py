@@ -42,6 +42,9 @@ def truth(i):
 
 def step(pg, s):
     pg.locator(f'[data-testid="step-tab-{s}"]').click(); pg.wait_for_timeout(150)
+    # Load Step lesson (amendment A2) gates Discover until a prediction is committed or skipped explicitly.
+    if s == "discover" and pg.locator('[data-testid="look-without-predicting"]').count():
+        pg.locator('[data-testid="look-without-predicting"]').click(); pg.wait_for_timeout(150)
 
 def pick(pg, i):
     pg.locator(f'label:has([data-testid="case-option-{i}"])').click()
