@@ -190,6 +190,13 @@ function CaseView({
     () => (isLesson && run.status === "ready" ? computeTransientMetrics(run.data as LoadStepResponse) : null),
     [isLesson, run],
   );
+  const lessonObserved = useMemo(
+    () =>
+      lessonMetrics && run.status === "ready"
+        ? observedOutcome(lessonMetrics, (run.data as LoadStepResponse).thresholds.voltage_reference_v)
+        : null,
+    [lessonMetrics, run],
+  );
   const stepHeading = useRef<HTMLHeadingElement>(null);
   const userMoved = useRef(false);
   useEffect(() => {
@@ -256,6 +263,7 @@ function CaseView({
                 <PredictPicker
                   choice={pick}
                   committed={committed}
+                  observed={lessonObserved}
                   onChoose={setPick}
                   onCommit={() => setCommitted(true)}
                   onOpenDiscover={() => go("discover")}

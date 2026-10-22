@@ -149,7 +149,7 @@ with sync_playwright() as p:
     verdicts, texts = {}, [pg.locator('[data-testid="apply-prompt"]').inner_text()]
     for oid in ["agree", "mechanism-plus-evidence", "tune-capacitance", "tune-gains"]:
         pg.locator(f'label:has([data-testid="apply-{oid}"])').click(); pg.locator('[data-testid="check-reasoning"]').click(); pg.wait_for_timeout(100)
-        fb = pg.locator('[data-testid="apply-feedback"]').inner_text(); verdicts[oid] = fb.startswith("Defensible."); texts.append(fb)
+        fb = pg.locator('[data-testid="apply-feedback"]').inner_text(); verdicts[oid] = pg.locator('[data-testid="apply-status"]').get_attribute("data-status") == "good"; texts.append(fb)
         texts.append(pg.locator(f'label:has([data-testid="apply-{oid}"])').inner_text())
     rec("L6 apply: feedback per option, exactly one defensible (mechanism-plus-evidence)", ok6 and sum(verdicts.values()) == 1 and verdicts["mechanism-plus-evidence"], str(verdicts))
     pg.screenshot(path=f"{OUT}/shots/m1-1440-4-apply.png", full_page=True)

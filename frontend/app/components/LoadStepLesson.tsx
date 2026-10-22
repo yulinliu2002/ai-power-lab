@@ -27,6 +27,27 @@ const BTN_PRIMARY =
 const BTN_GHOST =
   "border border-hairline-strong px-4 py-2 text-[13px] font-semibold text-secondary hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary";
 
+/**
+ * Correctness status shown only after submission (SPEC-012 A4). Icon AND text carry the
+ * meaning; colour (DESIGN.md status-good / status-critical) only reinforces it.
+ */
+function StatusBadge({ ok, label, testId }: { ok: boolean; label: string; testId: string }) {
+  return (
+    <span
+      data-testid={testId}
+      data-status={ok ? "good" : "critical"}
+      className={`inline-flex items-center gap-2 border px-2.5 py-1 text-[13px] font-semibold ${
+        ok ? "border-status-good text-status-good" : "border-status-critical text-status-critical"
+      }`}
+    >
+      <svg aria-hidden="true" viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        {ok ? <path d="M3 8.5l3.2 3.2L13 4.8" /> : <path d="M4 4l8 8M12 4l-8 8" />}
+      </svg>
+      {label}
+    </span>
+  );
+}
+
 function Choices<T extends string>({
   name,
   legend,
@@ -34,6 +55,7 @@ function Choices<T extends string>({
   value,
   onChange,
   disabled,
+  markSelected,
 }: {
   name: string;
   legend: string;
@@ -41,6 +63,8 @@ function Choices<T extends string>({
   value: T | null;
   onChange: (id: T) => void;
   disabled?: boolean;
+  /** After submission: tag the learner's own pick in text (never the unselected options). */
+  markSelected?: boolean;
 }) {
   return (
     <fieldset className="flex max-w-3xl flex-col gap-2" disabled={disabled}>
@@ -63,6 +87,11 @@ function Choices<T extends string>({
                 : "border-hairline bg-surface text-secondary hover:text-primary"
             }`}
           >
+            {markSelected && value === o.id && (
+              <span className="mb-1 block font-mono text-meta uppercase text-primary" data-testid={`${name}-your-answer`}>
+                Your answer
+              </span>
+            )}
             {o.label}
           </span>
         </label>
@@ -75,12 +104,15 @@ function Choices<T extends string>({
 export function PredictPicker({
   choice,
   committed,
+  observed,
   onChoose,
   onCommit,
   onOpenDiscover,
 }: {
   choice: PredictionId | null;
   committed: boolean;
+  /** The live run's outcome class, or null while it is unavailable. Used only after commit; never rendered before. */
+  observed: ObservedOutcome | null;
   onChoose: (id: PredictionId) => void;
   onCommit: () => void;
   onOpenDiscover: () => void;
@@ -94,7 +126,11 @@ export function PredictPicker({
         value={choice}
         onChange={onChoose}
         disabled={committed}
+        markSelected={committed}
       />
+      {committed && choice && (
+        <PredictFeedback choice={choice} observed={observed} />
+      )}
       {!committed ? (
         <div className="flex flex-wrap items-center gap-3">
           <button type="button" data-testid="commit-prediction" disabled={choice === null} onClick={onCommit} className={BTN_PRIMARY}>
@@ -110,6 +146,31 @@ export function PredictPicker({
           </button>
         </div>
       )}
+    </div>
+  );
+}
+
+/** Predict feedback after commit: correct or incorrect against the simplified model only. */
+function PredictFeedback({ choice, observed }: { choice: PredictionId; observed: ObservedOutcome | null }) {
+  if (observed === null) {
+    return (
+      <p role="status" data-testid="predict-feedback" className="max-w-3xl text-[13px] text-secondary">
+        The model run is not available, so this prediction cannot be checked yet.
+      </p>
+    );
+  }
+  const ok = choice === observed;
+  return (
+    <div role="status" data-testid="predict-feedback" className="flex max-w-3xl flex-col gap-2 border border-hairline bg-surface px-4 py-3">
+      <StatusBadge ok={ok} label={ok ? "Correct" : "Incorrect"} testId="predict-status" />
+      <p className="text-[13px] leading-relaxed text-secondary" data-testid="predict-scope">
+        <span className="font-semibold text-primary">Correct or incorrect here means matching this simplified model, </span>
+        not a claim about every real converter or data center.
+      </p>
+      <p className="text-[13px] leading-relaxed text-secondary" data-testid="predict-model-result">
+        <span className="font-semibold text-primary">Model run: </span>
+        {OBSERVED_TEXT[observed]} The causal explanation follows in Discover and Explain.
+      </p>
     </div>
   );
 }
@@ -300,6 +361,7 @@ export function ApplyQuestionPanel() {
           setChoice(id);
           setChecked(false);
         }}
+        markSelected={checked}
       />
       <div>
         <button type="button" data-testid="check-reasoning" disabled={choice === null} onClick={() => setChecked(true)} className={BTN_PRIMARY}>
@@ -307,10 +369,14 @@ export function ApplyQuestionPanel() {
         </button>
       </div>
       {checked && picked && (
-        <p role="status" data-testid="apply-feedback" className="max-w-3xl border border-hairline bg-surface px-4 py-3 text-[13px] leading-relaxed text-secondary">
-          <span className="font-semibold text-primary">{picked.defensible ? "Defensible. " : "Not defensible. "}</span>
-          {picked.feedback}
-        </p>
+        <div role="status" data-testid="apply-feedback" className="flex max-w-3xl flex-col gap-2 border border-hairline bg-surface px-4 py-3">
+          <StatusBadge
+            ok={picked.defensible}
+            label={picked.defensible ? "Defensible engineering judgment" : "Not defensible"}
+            testId="apply-status"
+          />
+          <p className="text-[13px] leading-relaxed text-secondary">{picked.feedback}</p>
+        </div>
       )}
     </div>
   );

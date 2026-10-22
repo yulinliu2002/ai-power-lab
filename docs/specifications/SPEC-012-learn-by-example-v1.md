@@ -334,3 +334,14 @@ Requested by the Human Engineering Lead after Human Visual QA of the M1 Load Ste
 - Whether the frontend is deployed with a backend (affects D1 only).
 - The SST specification (24 pages) was read from extracted text and the white paper's cited sections were read, but Mt. Diablo v1.0.0 and the NVIDIA technical blog behind some §6.7 items were not opened.
 - §5.4 values come from one scratch run, reproduced independently by Codex (read-only run of the comparison function: every classification and state list matched; thermal floor contact and trip times observed). They are design input, not acceptance values.
+
+## 15d. Amendment A4: correctness feedback in Predict and Apply (M1, Human-requested)
+
+Scope: Load Step lesson only, presentation only. No engine, API, chart, Explain or lesson-structure change.
+
+- **A4-1 Predict.** After the learner commits, show a status badge with an icon and the text "Correct" when the pick equals the live run's outcome class (`observedOutcome`, unchanged), otherwise an icon and "Incorrect". A sentence states that this means matching the simplified model, not a claim about every real converter or data center. The model-run statement (`OBSERVED_TEXT`) is shown; the causal explanation stays in Discover and Explain (A3 hiding of causal hints before commit is unchanged).
+- **A4-2 Apply.** After "Check my reasoning", show an icon and "Defensible engineering judgment" for the defensible option, otherwise an icon and "Not defensible", followed by the existing explanation.
+- **A4-3 Secrecy.** Before submission nothing in text, icon, colour class, `data-*` attribute or accessible name depends on correctness.
+- **A4-4 Colour.** Status uses the DESIGN.md `status-good` / `status-critical` tokens; meaning is carried by icon and text as well.
+- **A4-5 Selection.** The submitted pick is tagged "Your answer" in text; unselected options are not marked.
+- **Limitation.** "Correct" means agreement with this simplified model's outcome class only.

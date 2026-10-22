@@ -1,0 +1,11 @@
+PASS C3 Predict: nothing reveals correctness before commit (no pick / each pick) [[], [], []]
+PASS C1 Predict: Correct only for the observed outcome, Incorrect otherwise; icon + text + model-scope sentence 
+PASS C4 Predict: committed answer tagged 'Your answer' (one only, on the checked option) 
+PASS C5 Predict: status classes are status-good / status-critical tokens 
+PASS C3 Apply: nothing reveals defensibility before 'Check my reasoning' (any pick) []
+PASS C2 Apply: 'Defensible engineering judgment' only for the defensible option, 'Not defensible' otherwise; icon + text + explanation 
+PASS C4 Apply: submitted answer tagged 'Your answer' (one only, on the checked option) 
+PASS C5 Apply: status classes are status-good / status-critical tokens 
+PASS C6 Apply: changing the pick clears the previous verdict 
+PASS C7 no horizontal overflow at 390 px; console clean at both widths []
+TOTAL 10 PASS 0 FAIL
