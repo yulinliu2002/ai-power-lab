@@ -19,11 +19,16 @@ BASE, API, OUT = sys.argv[1].rstrip("/"), sys.argv[2].rstrip("/"), sys.argv[3]
 os.makedirs(OUT + "/shots", exist_ok=True)
 IDS = ["load_step", "sustained_high_load", "thermal_trip", "grid_sag", "grid_loss"]
 STEPS = ["predict", "discover", "explain", "apply"]
+PARTS = {"predict": ["situation", "predict"], "discover": ["observe", "modeled"], "explain": ["explain", "limits"], "apply": ["not-modeled", "decision", "validation"]}
 D_L = [
     "These cases run the five fixed Sandbox scenarios on a simplified average-value model. Results show how the model behaves under stated illustrative assumptions, not how real equipment behaves.",
     "In the grid-sag, grid-loss and thermal-trip cases, 'bus collapse' means the integrator reached its numerical energy floor. It is not a physically meaningful residual voltage.",
     "Real-world fault behavior listed under 'not modeled' is described from public sources or general engineering principle. It is not simulated here, and no result on this page validates it.",
 ]
+def _src(rel, key):
+    m = re.search(key + r':\s*\n?\s*"((?:[^"\\]|\\.)*)"', open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../../frontend/app/lib", rel)).read())
+    return m.group(1).replace('\\"', '"')
+SRC_D = [_src("architectureChoicesData.ts", k) for k in ("sim", "block", "illustrative")]
 norm = lambda s: re.sub(r"\s+", " ", s)
 strip = lambda t: re.sub(r"\bOCP(?:WP|SST)?\b", "", re.sub(r"\bRD[1-7]\b", "", re.sub(r"\bv[\d.]+", "", re.sub(r"\bRev [\d.]+", "", re.sub(r"§[\d.]+(?:[–-][\d.]+)?", "", t)))))
 res = []
@@ -61,7 +66,7 @@ with sync_playwright() as p:
 
     # S1
     panel = norm(pg.locator('[data-testid="learn-disclosures"]').inner_text())
-    rec("S1 six disclosures visible on load", pg.locator('[data-testid="learn-disclosures"] li').count() == 6 and all(norm(d) in panel for d in D_L)
+    rec("S1 six disclosures visible on load", pg.locator('[data-testid="learn-disclosures"] li').count() == 6 and all(norm(d) in panel for d in D_L + SRC_D)
         and pg.locator('[data-testid="learn-disclosures"]').is_visible())
 
     for i in IDS:
@@ -78,6 +83,15 @@ with sync_playwright() as p:
             for t in art.locator("[data-static-prose]").evaluate_all("ns=>ns.map(n=>{const c=n.cloneNode(true);c.querySelectorAll('[data-equation]').forEach(x=>x.remove());return c.textContent})"):
                 nodes += 1
                 if re.search(r"\d", strip(t)): hits.append(t[:80])
+            # A1-R1 mapping: exactly this step's parts are mounted, none of the other steps' parts
+            want = [f"part-{x}" for x in PARTS[s]]
+            unwanted = [f"part-{x}" for o in others for x in PARTS[o]]
+            mounted_ok &= all(pg.locator(f'[data-testid="{w}"]').count() == 1 for w in want) and all(pg.locator(f'[data-testid="{u}"]').count() == 0 for u in unwanted)
+            # A1-R3: exactly the current step button carries aria-current="step"
+            cur = pg.locator('[data-testid="learn-stepper"] button[aria-current="step"]')
+            mounted_ok &= cur.count() == 1 and cur.get_attribute("data-testid") == f"step-tab-{s}"
+            ov1 = pg.evaluate("()=>[document.documentElement.scrollWidth,document.documentElement.clientWidth]")
+            mounted_ok &= ov1[0] == ov1[1]
             if s == "discover":
                 T = norm(art.inner_text())
                 strings = {"outcome_label": pt["outcome_label"], "outcome_detail": pt["outcome_detail"], "recovery_label": pt["recovery_label"],
@@ -94,6 +108,22 @@ with sync_playwright() as p:
         rec(f"S2 {i} four steps reachable, only current mounted", mounted_ok)
         rec(f"S3 {i} static scan (union over steps = 7 nodes)", nodes == 7 and not hits, f"nodes={nodes} hits={hits}")
         rec(f"S5 {i} no refetch on step change", len(reqs) == base_reqs, f"extra={len(reqs) - base_reqs}")
+
+    # Back navigation, case-change reset, re-activating the current step (Codex findings 2 and 3)
+    pick(pg, "load_step"); pg.wait_for_timeout(1200)
+    step(pg, "explain")
+    pg.locator('[data-testid="step-prev"]').click(); pg.wait_for_timeout(150)
+    back_ok = pg.locator('[data-testid="step-discover"]').count() == 1
+    pick(pg, "grid_sag"); pg.wait_for_timeout(1200)
+    reset_ok = pg.locator('[data-testid="step-predict"]').count() == 1
+    pg.locator('[data-testid="step-tab-predict"]').click(); pg.wait_for_timeout(150)
+    same_focus = pg.evaluate("()=>document.activeElement && document.activeElement.textContent") or ""
+    rec("S6 Back works, case change resets to Predict, re-activating the current step focuses its heading", back_ok and reset_ok and "Step 1 of 4" in same_focus, same_focus)
+    # Focus from the bottom of a long step brings the heading into view (Codex finding 1)
+    pick(pg, "load_step"); pg.wait_for_timeout(1500); step(pg, "discover")
+    pg.locator('[data-testid="step-next"]').scroll_into_view_if_needed(); pg.locator('[data-testid="step-next"]').focus(); pg.keyboard.press("Enter"); pg.wait_for_timeout(300)
+    box = pg.evaluate("()=>{const e=document.activeElement.getBoundingClientRect();return [e.top,e.bottom,innerHeight]}")
+    rec("S6 Next from the bottom of Discover leaves the new step heading in view (1440 px)", 0 <= box[0] < box[2] and box[1] <= box[2], str(box))
 
     # S6 keyboard
     pick(pg, "load_step"); pg.wait_for_timeout(800)
@@ -143,6 +173,10 @@ with sync_playwright() as p:
             allok &= ov[0] == ov[1]
             if not ov[0] == ov[1]: print("overflow", i, s, ov)
             pm.screenshot(path=f"{OUT}/shots/learn-390-{i}-{s}.png", full_page=True)
+    pick(pm, "load_step"); pm.wait_for_timeout(1500); step(pm, "discover")
+    pm.locator('[data-testid="step-next"]').scroll_into_view_if_needed(); pm.locator('[data-testid="step-next"]').focus(); pm.keyboard.press("Enter"); pm.wait_for_timeout(300)
+    mb = pm.evaluate("()=>{const e=document.activeElement.getBoundingClientRect();return [e.top,e.bottom,innerHeight]}")
+    rec("S6 Next from the bottom of Discover leaves the new step heading in view (390 px)", 0 <= mb[0] < mb[2] and mb[1] <= mb[2], str(mb))
     rec("S9 390 px no horizontal overflow, 5 cases x 4 steps", allok)
     rec("S9 390 px console clean", not merr, str(merr[:3]))
     b.close()

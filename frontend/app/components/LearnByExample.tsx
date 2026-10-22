@@ -193,11 +193,14 @@ function CaseView({
   const userMoved = useRef(false);
   useEffect(() => {
     // Keyboard and screen-reader users land on the new step's heading; the first render is left alone.
-    if (userMoved.current) stepHeading.current?.focus({ preventScroll: true });
+    // Focus is allowed to scroll: Back/Next sit below long content, and the heading must come into view.
+    if (userMoved.current) stepHeading.current?.focus();
   }, [step]);
   const go = (id: LearnStepId) => {
     userMoved.current = true;
-    setStep(id);
+    // Re-activating the current step changes no state, so the effect would not run: focus its heading directly.
+    if (id === step) stepHeading.current?.focus();
+    else setStep(id);
   };
   const stepIndex = LEARN_STEPS.findIndex((s) => s.id === step);
   const prev = LEARN_STEPS[stepIndex - 1];
@@ -221,7 +224,7 @@ function CaseView({
         <h3
           ref={stepHeading}
           tabIndex={-1}
-          className="font-mono text-meta uppercase text-secondary focus:outline-none"
+          className="font-mono text-meta uppercase text-secondary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary"
         >
           Step {stepIndex + 1} of {LEARN_STEPS.length} &middot; {LEARN_STEPS[stepIndex].label}
         </h3>
