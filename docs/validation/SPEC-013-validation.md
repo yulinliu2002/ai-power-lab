@@ -2,7 +2,7 @@
 
 **Spec:** `docs/specifications/SPEC-013-industry-career-v1.md` (v0.3, adopted 2026-10-21)
 **Baseline:** `main` at `f2c46ae49cfa3682d9c9e488ec03b636c4b5101c` (merge of PR #10, SPEC-014).
-**Status:** Local verification complete. **Independent Codex implementation review: not yet run** (the Codex CLI is not available in the cloud container that implemented this; AC-13 is open). **AC-17 Human Product Review: awaiting.** CI is reported separately on the PR.
+**Status:** Local verification complete. **Independent Codex implementation review recorded in §6** (REQUEST CHANGES, no blockers; AC-13 recorded, its findings are addressed or listed there). **AC-17 Human Product Review: awaiting.** CI is reported separately on the PR.
 
 ## 1. Deviations from the adopted spec (reported, not silently resolved)
 
@@ -21,10 +21,10 @@
 | `npm run typecheck` | pass |
 | `npm run lint` | pass |
 | `npm run build` | pass; `/industry` prerendered static |
-| Content script (58 checks: AC-2..AC-5, AC-7..AC-9, AC-14, AC-16, AC-19..AC-22, AC-25, R1, R10, R19, R20) | `ALL CHECKS PASSED` |
+| Content script (60 checks after the review round: AC-2..AC-5, AC-7..AC-9, AC-14, AC-16, AC-19..AC-22, AC-25, R1, R10, R19, R20) | `ALL CHECKS PASSED` |
 | Python suite `pytest -q` | 190 passed (no Python change in this diff) |
-| AC-18 `/architecture` unchanged | `architectureChoicesData.ts`, `ArchitectureChoices.tsx`, `EvidenceTag.tsx` have no diff against `main`; the page's inputs are identical, so its output is. No before/after text diff was taken. |
-| AC-23 viewport (real Chromium, Playwright) | 360 px: scrollWidth 360 = clientWidth 360; 1280 px: 1280 = 1280. Page gutters 24 px |
+| AC-18 `/architecture` unchanged | Scope clarified after review: `architectureChoicesData.ts`, `ArchitectureChoices.tsx`, `EvidenceTag.tsx` and its styles have no diff against `main`, so the page body and References list are unchanged. The shared nav changes on every page ("(planned)" removed from Industry & Career), so literal whole-page text identity cannot hold. No production-text before/after comparison was taken. |
+| AC-23 viewport (real Chromium, Playwright) | 360 px: scrollWidth 360 = clientWidth 360; 1280 px: 1280 = 1280. Page gutters 24 px (the shared `.ic-page` value; AC-23 asks for 16 px side gutters, read here as at least 16 px, which the Lead may overrule) |
 | AC-15 default view | 5 claim sheets, 5 `<details>`, 0 open on load |
 | AC-24 accessibility | native `<details>/<summary>` (opened by keyboard Enter on the focused summary); question chips are buttons with `aria-pressed`; "Compare with the source" disabled until a question is picked; 85 Tab stops, none without a focus outline; one `h1`, no skipped heading levels. No automated accessibility checker was run (none available without a new dependency) |
 | AC-12 screenshots | in the project files folder `industry-spec013/`: fold, full page and expanded Eaton sheet at 360 and 1280 px |
@@ -51,10 +51,11 @@ Auditor: implementer (not independent). `supported` = a verbatim span was extrac
 | 10 | OCPSST | The specification is titled as a medium-voltage-to-800 VDC power conversion platform. | Cover page, subtitle | "Medium Voltage to 800 VDC Power Conversion Platform" | supported |
 | 11 | OCPSST | The specification marks voltage levels for seamless redundancy design as to be defined. | Section 5.2.1, item (c), page 14 | "(TBD, pending future definitions) voltage levels for seamless redundancy design" | supported |
 | 12 | OCPSST | The specification says details of grounding will be provided in later revisions. | Section 5.4, page 15 | "Details will be provided in later revisions of the specification." | supported |
-| 13 | EATON | Eaton lists a 15 kV class voltage, a 2 MW overall load power rating, and converter efficiency above 97% at 800 VDC output. | Specifications table: Voltage class; Overall load power rating; Converter efficiency | ">97% @ 800 VDC output" | supported |
-| 14 | EATON | Eaton says the system is designed to support high-voltage DC systems, including emerging 800 VDC. | FAQ | "designed to support high-voltage DC systems, including emerging 800 VDC" | supported |
-| 15 | EATON | Eaton lists the unit as having a hermetically sealed power section with liquid cooling. | Specifications table: Style | "Outdoor with hermetically sealed power section and liquid cooling" | supported |
-
+| 13 | EATON | Eaton lists a 15 kV class voltage. | Specifications table: Voltage class | "15 kV class" | supported |
+| 14 | EATON | Eaton lists a 2 MW overall load power rating. | Specifications table: Overall load power rating | "2 MW" | supported |
+| 15 | EATON | Eaton lists converter efficiency above 97% at 800 VDC output. | Specifications table: Converter efficiency | ">97% @ 800 VDC output" | supported |
+| 16 | EATON | Eaton says the system is designed to support high-voltage DC systems, including emerging 800 VDC. | FAQ | "designed to support high-voltage DC systems, including emerging 800 VDC" | supported |
+| 17 | EATON | Eaton lists the unit as having a hermetically sealed power section with liquid cooling. | Specifications table: Style | "Outdoor with hermetically sealed power section and liquid cooling" | supported |
 
 Negative statements on the sheets ("does not tell you"), with their basis: NVIDIA gives no efficiency figure and no stage count (fetch report, and SPEC-011 audit); Eaton's efficiency row gives no load, temperature or method, its certification line concerns electric vehicle charging, no date and a "subject to change" footer (fetch report of the specification and certification tables); OCP SST TBD items (§4.3, §5.2.1(c), §5.4, fetch report). The OCP-post "does not compare the options" statement is limited to "the passages audited here".
 
@@ -68,8 +69,22 @@ Negative statements on the sheets ("does not tell you"), with their basis: NVIDI
 
 | AC | State |
 |---|---|
-| AC-13 Codex implementation review | **Open.** Not run; no output to preserve |
+| AC-13 Codex implementation review | Recorded in §6; findings 1 and 4 await the Lead |
 | AC-17 Human Product Review (side-by-side screenshots) | **Open**, Human Product Lead only |
 | AC-18 | Met by unchanged inputs; no before/after text diff taken (see §2) |
-| AC-19 | Met except the verbatim-span requirement for the two OCP white-paper claims (deviation 2) |
+| AC-19 | Met except the verbatim-span requirement for the two OCP white-paper claims (deviation 2); the check now fails any other claim without a span |
 | Everything else | Met locally, per §2 |
+
+## 6. Independent Codex review (AC-13)
+
+Codex CLI 0.162.1, read-only, session `01a1612b-4083-7291-8aa5-cfeb48d392ef`, on head `084e006` against base `f2c46ae`. Verdict: **REQUEST CHANGES**, no blockers. Full verbatim output (269 KB) is held on the Lead's Mac in the scratchpad of the review session (`SPEC-013-codex-review.txt`); it is not committed. Codex also opened the OCP white paper and confirmed that §4.2 and §6.3.3 support the two paraphrases, and found the NVIDIA, OCP, OCP SST and Eaton claims faithful to their sources.
+
+| # | Severity | Finding | Disposition |
+|---|---|---|---|
+| 1 | Major | Eaton provenance does not meet AC-3/R17 as written; the check asserted absence from the registry | **Open for the Lead.** Page-local Eaton stays (deviation 1) until a contract decision. The check is relabelled to state it asserts the implemented design, not R17 compliance |
+| 2 | Major | AC-19 audit incomplete: white-paper row lacked support for the bypass assertion; Eaton row spans covered only efficiency; factual assertions in `answers`/`doesNotTell` lacked audit rows; check exempted `paraphrase-checked` | Eaton claim split into three rows with spans ("15 kV class", "2 MW", ">97% @ 800 VDC output"). The check now fails any claim without a span except the two OCP white-paper claims, kept as an explicit exception (Codex confirmed their support in the source; no verbatim span exists for this page). Non-claim assertions are listed below |
+| 3 | Minor | AC-18 overstated | Wording corrected in §2 |
+| 4 | Minor | Gutters 24 px, AC-23 says 16 px | Reported as at least 16 px; Lead may overrule |
+| 5 | Nit | SiteNav file comment changed beyond the `/industry` entry | Accepted: the old comment said Industry was disabled and would now be wrong. Lead may ask for a revert |
+
+Factual assertions outside `claims`, with their basis: OCP post byline (two NVIDIA Data Center Engineering authors; post header as returned by the 2026-10-21 fetch); OCP post posted 2026-08-11 and modified 2026-09-24 (page metadata, same fetch); Eaton certification line concerns electric vehicle charging, the output rows describe charging ports, no publication date, and a "subject to change without notice" footer (Eaton specifications and certification tables, FAQ and footer, 2026-10-21 fetch; Codex confirmed the figures against the live page); OCP SST authors Google, Microsoft, NVIDIA and effective date 6/22/2026 (cover page); white paper v1.0 dated 30 March 2026 (registry citation, confirmed by the SPEC-013 design review).

@@ -345,8 +345,20 @@ export const CLAIM_SHEETS: readonly ClaimSheetData[] = [
     basis: "What Eaton lists on its product page, as read on the date shown. A vendor statement about a product, not a verified performance result.",
     claims: [
       {
-        text: "Eaton lists a 15 kV class voltage, a 2 MW overall load power rating, and converter efficiency above 97% at 800 VDC output.",
-        locator: "Specifications table: Voltage class; Overall load power rating; Converter efficiency",
+        text: "Eaton lists a 15 kV class voltage.",
+        locator: "Specifications table: Voltage class",
+        span: "15 kV class",
+        audit: "supported",
+      },
+      {
+        text: "Eaton lists a 2 MW overall load power rating.",
+        locator: "Specifications table: Overall load power rating",
+        span: "2 MW",
+        audit: "supported",
+      },
+      {
+        text: "Eaton lists converter efficiency above 97% at 800 VDC output.",
+        locator: "Specifications table: Converter efficiency",
         span: ">97% @ 800 VDC output",
         audit: "supported",
       },

@@ -61,7 +61,9 @@ for (const s of CLAIM_SHEETS) {
 check("AC-3 READ_LOG has all five", INDUSTRY_REF_ORDER.every((id) => /^\d{4}-\d{2}-\d{2}$/.test(READ_LOG[id]?.readDate ?? "")));
 
 // R17 variant: the shared registry is untouched.
-check("R17 EATON not in shared REFERENCES", !("EATON" in REFERENCES));
+// Deviation 1 in the validation record: Eaton is page-local so /architecture is unchanged. This asserts the
+// implemented design, not R17 compliance; R17 as written is open pending a Lead decision.
+check("DEVIATION-1 EATON is page-local (R17 as written not met)", !("EATON" in REFERENCES) && INDUSTRY_REFERENCES.EATON.id === "EATON");
 
 // AC-4
 const sst = CLAIM_SHEETS.find((s) => s.sourceId === "OCPSST")!;
@@ -113,8 +115,11 @@ check("AC-16 vocabulary", !vocabHit, vocabHit ? vocabHit[0] : "");
 // AC-19: every claim has a locator; spans <= 25 words; supported claims have a span.
 for (const s of CLAIM_SHEETS) {
   for (const c of s.claims) {
+    // A claim without a span passes only if it is an explicitly recorded exception (the two OCP white-paper
+    // claims, whose 2026-10-21 fetch failed); any other missing span fails.
+    const exception = s.sourceId === "OCPWP" && c.audit === "paraphrase-checked";
     const ok = c.locator.trim().length > 0 && (!c.span || c.span.split(/\s+/).length <= 25) &&
-      (c.audit === "paraphrase-checked" || !!c.span);
+      (exception || (c.audit === "supported" && !!c.span));
     check(`AC-19 ${s.id}: ${c.text.slice(0, 48)}`, ok);
   }
 }
