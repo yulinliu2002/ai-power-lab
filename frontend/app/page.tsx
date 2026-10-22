@@ -126,12 +126,13 @@ const LEARNING_AREAS: ReadonlyArray<LearningArea> = [
   },
   {
     title: "Industry & Career",
-    question: "What's happening in industry, and what does it mean for me?",
+    question: "How do I judge what the industry is claiming?",
     description:
-      "Public company, product, and standards developments in AI data-center power, " +
-      "tracked over time, framed for an engineer building a systems-architecture career path.",
-    href: null,
-    status: "planned",
+      "Read public 800 VDC and solid-state-transformer claims the way an engineer would: " +
+      "what each one says, how strong the evidence is, and which systems-engineering " +
+      "competency it exercises.",
+    href: "/industry",
+    status: "live",
   },
 ];
 
