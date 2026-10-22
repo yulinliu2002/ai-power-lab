@@ -250,7 +250,7 @@ Script: `docs/validation/spec-012-a1/verify_learn_steps.py` (Playwright, Chromiu
 
 ### Amendment A1: Codex review (PR #13, head af119fb)
 
-Verdict **REQUEST CHANGES**: 1 major, 3 minor, 0 blocking (Codex CLI, read-only, session 01a1618b-5fb0-7bf0-b39c-f43b835411de; Codex did not run the browser script or the build). Confirmed by Codex: the step-to-part mapping, the seven static-prose blocks, the six disclosures and `aria-current`. Addressed in the follow-up commit: (1) focus now scrolls the step heading into view and shows a visible focus ring; (2) re-activating the current step focuses its heading; (3) the script now checks all six disclosures verbatim, the part mapping, `aria-current`, case-change reset and Back; (4) the script measures overflow at 1440 px as well as 390 px. Not independently re-reviewed.
+Verdict **REQUEST CHANGES**: 1 major, 3 minor, 0 blocking (Codex CLI, read-only, session 01a1618b-5fb0-7bf0-b39c-f43b835411de; Codex did not run the browser script or the build). Confirmed by Codex: the step-to-part mapping, the seven static-prose blocks, the six disclosures and `aria-current`. Addressed in the follow-up commit: (1) focus now scrolls the step heading into view and shows a visible focus ring; (2) re-activating the current step focuses its heading; (3) the script now checks all six disclosures verbatim, the part mapping, `aria-current`, case-change reset and Back; (4) the script measures overflow at 1440 px as well as 390 px. Re-review of `af119fb..750e0b5` (PR #13): APPROVE; all four findings resolved, no new defects (Codex did not rerun the browser script or the build).
 
 ## Amendment A2: Load Step interactive lesson (verification record, milestone M1)
 
@@ -279,3 +279,7 @@ Verdict **REQUEST CHANGES**: 0 blocking, 0 major, 2 minor (Codex CLI, read-only,
 ### Amendment A4: Codex review (PR #14, diff c7c15b7..53097af)
 
 Verdict **REQUEST CHANGES**: three P2 findings, all in the verification script, none in the feature code (Codex confirmed no pre-submit reveal, icon plus text with the status tokens, Predict "Correct" from `observedOutcome`, and no engine/API/chart/Explain change). Fixed: secrecy probe now reads hidden text, all attributes and aria-referenced text, with positive controls (C9); controlled responses added (C8); unselected-option assertions added (C4). Re-review of `53097af..a7c5ac0`: findings 2 and 3 resolved; finding 1 partly (the `data-testid` branch skipped the general checks and the record overstated C9 coverage). Fixed in the next commit: exception removed, `data-testid` and `aria-labelledby` controls added, coverage wording corrected. Final re-review: pending at time of writing.
+
+## M1 Human acceptance
+
+On 2026-10-22 Jason (Human Engineering Lead) formally approved the M1 Load Step Human Visual QA: the Predict, Discover, Explain and Apply learning experience and the correct/incorrect answer feedback (SPEC-012 A4) are accepted. No further observations are recorded here. At the time of acceptance the verified PR #14 head was `dadea7e` with green CI; Codex closure on A4 was APPROVE (`a7c5ac0..dadea7e`). Merge order and merging are the Human Engineering Lead's: PR #13 first, then PR #14 retargeted to `main`.
