@@ -10,6 +10,7 @@ Usage: python3 -I verify_load_step_lesson.py BASE_URL API_URL OUT_DIR
   L7  Static lesson prose (prediction/apply options and feedback) has no digits and no ranking terms (R6, AC-5)
   L8  Keyboard-only walkthrough of the whole lesson
   L9  Other four cases unchanged: Discover not gated, native details reveal, no prediction picker
+  L11 'Look without predicting' by keyboard reveals Discover and moves focus to the step heading
   L10 390 and 1440 px: no horizontal overflow, console clean, screenshots
 """
 import glob, json, os, re, sys, urllib.request
@@ -66,19 +67,25 @@ with sync_playwright() as p:
     rec("L3 comparison agrees with independent classification", expected_obs == "falls-recovers" and "fell below its reference and then returned" in obs and ver.startswith("Match."), f"{obs} | {ver[:40]}")
     pg.screenshot(path=f"{OUT}/shots/m1-1440-2-discover.png", full_page=True)
     sl = pg.locator('[data-testid="cursor-slider"]')
-    xs0 = cursor_x(pg)
-    ok = len(xs0) == 2 and abs(xs0[0] - xs0[1]) < 0.01
+    t0, t1 = T["time_s"][0], T["time_s"][-1]
+    exp_x = lambda t: 44 + (t - t0) / (t1 - t0) * (600 - 44 - 12)   # TelemetryChart: W=600, MARGIN.left=44, MARGIN.right=12
+    ok, prev_x, moved = True, None, 0
     for idx in (ei, T["v_dc_v"].index(min(T["v_dc_v"])), n // 2, n - 1):
         sl.evaluate("(el,v)=>{const s=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set;s.call(el,String(v));el.dispatchEvent(new Event('input',{bubbles:true}))}", idx)
         pg.wait_for_timeout(120)
         idx_real = int(sl.input_value())
+        ok &= idx_real == idx
         shown = pg.locator('[data-testid="cursor-readout"]').inner_text()
-        v = f"{T['v_dc_v'][idx_real]:.1f} V"; pl = f"{T['p_load_w'][idx_real]/1e3:.1f} kW"; ps = f"{T['p_sst_w'][idx_real]/1e3:.1f} kW"
+        v = f"{T['v_dc_v'][idx]:.1f} V"; pl = f"{T['p_load_w'][idx]/1e3:.1f} kW"; ps = f"{T['p_sst_w'][idx]/1e3:.1f} kW"
+        mm = f"{(T['p_sst_w'][idx]-T['p_load_w'][idx])/1e3:.1f} kW"
         xs = cursor_x(pg)
-        ok &= v in shown and pl in shown and ps in shown and len(xs) == 2 and abs(xs[0] - xs[1]) < 0.01
-        tt = pg.locator('[data-testid="cursor-time"]').inner_text()
-        ok &= f"{T['time_s'][idx_real]:.3f}" in tt
-    rec("L4 cursor readout equals API sample and both chart cursors move together", ok)
+        ok &= all(x in shown for x in (v, pl, ps, mm))
+        ok &= len(xs) == 2 and all(abs(x - exp_x(T["time_s"][idx])) < 0.05 for x in xs)
+        if prev_x is not None and abs(xs[0] - prev_x) > 1: moved += 1
+        prev_x = xs[0] if xs else prev_x
+        ok &= f"{T['time_s'][idx]:.3f}" in pg.locator('[data-testid="cursor-time"]').inner_text()
+        ok &= f"t = {T['time_s'][idx]:.3f} s" in (sl.get_attribute("aria-valuetext") or "")
+    rec("L4 cursor: requested index reached, readout (V, P_load, P_sst, mismatch), time label, aria-valuetext and both chart cursors equal the API sample at that time", ok and moved == 3, f"moved={moved}")
     xs_a = cursor_x(pg)
     pg.locator('[data-testid="jump-minimum"]').click(); pg.wait_for_timeout(120)
     imin = int(sl.input_value()); rec("L4 jump to minimum lands on the voltage minimum", abs(T["v_dc_v"][imin] - min(T["v_dc_v"])) < 1e-6, f"idx={imin}")
@@ -92,9 +99,14 @@ with sync_playwright() as p:
     step(pg, "explain")
     g = norm = re.sub(r"\s+", " ", pg.locator('[data-testid="grounding-panel"]').inner_text())
     shortfall = max((T["p_load_w"][i] - T["p_sst_w"][i]) for i in range(ei, n)) / 1e3
-    tgt = max((T["p_target_w"][i] - T["p_load_w"][i]) for i in range(ei, n) if T["v_dc_v"][i] < vref) / 1e3
-    rec("L5 grounding values equal recomputation from the API",
-        f"{shortfall:.1f} kW" in g and f"{tgt:.1f} kW" in g and f"{vmin:.1f} V" in g and f"{T['p_load_w'][ei-1]/1e3:.1f} kW" in g and f"{T['p_load_w'][ei]/1e3:.1f} kW" in g, g[:160])
+    tgt_i = max((i for i in range(ei, n) if T["v_dc_v"][i] < vref), key=lambda i: T["p_target_w"][i] - T["p_load_w"][i])
+    tgt = (T["p_target_w"][tgt_i] - T["p_load_w"][tgt_i]) / 1e3
+    short_i = max(range(ei, n), key=lambda i: T["p_load_w"][i] - T["p_sst_w"][i])
+    cap = run["thresholds"]["capacitance_f"]; e_kj = 0.5 * cap * (vref**2 - vmin**2) / 1e3
+    rec_el = T["time_s"][last_breach + 1] - t_event if recovered else None
+    need = [f"{shortfall:.1f} kW", f"{T['time_s'][short_i]:.3f} s", f"{tgt:.1f} kW", f"{T['time_s'][tgt_i]:.3f} s", f"{vmin:.1f} V", f"{e_kj:.2f} kJ",
+            f"{T['p_load_w'][ei-1]/1e3:.1f} kW", f"{T['p_load_w'][ei]/1e3:.1f} kW", f"{rec_el:.3f} s"]
+    rec("L5 grounding values (shortfall and time, target-above-demand and time, V_min, energy, demand before/after, recovery) equal recomputation from the API", all(x in g for x in need), str([x for x in need if x not in g]))
     pg.screenshot(path=f"{OUT}/shots/m1-1440-3-explain.png", full_page=True)
 
     # L6 L7
@@ -115,6 +127,13 @@ with sync_playwright() as p:
     rec("L7 lesson prose: no digits, no ranking terms", not any(re.search(r"\d", t) for t in texts) and not any(BANNED.search(t) for t in texts), str([t[:40] for t in texts if re.search(r"\d", t) or BANNED.search(t)]))
     pg.reload(wait_until="networkidle"); pg.wait_for_timeout(800)
     rec("L6 no stored state: reload returns to an uncommitted Predict", pg.locator('[data-testid="commit-prediction"]').is_disabled() and pg.locator('[data-testid="prediction-falls-recovers"]').is_checked() is False)
+
+    # L11 skip path: focus moves to the Discover heading, content is revealed
+    pg.reload(wait_until="networkidle"); pg.wait_for_timeout(800); step(pg, "discover")
+    pg.locator('[data-testid="look-without-predicting"]').focus(); pg.keyboard.press("Enter"); pg.wait_for_timeout(400)
+    fh = pg.evaluate("()=>document.activeElement && document.activeElement.textContent") or ""
+    rec("L11 'Look without predicting' (keyboard) reveals Discover and moves focus to its heading, with no comparison panel", "Step 2 of 4" in fh and pg.locator('[data-testid="observe-live"]').count() == 1 and pg.locator('[data-testid="prediction-comparison"]').count() == 0, fh)
+    pg.reload(wait_until="networkidle"); pg.wait_for_timeout(800)
 
     # L8 keyboard
     pg.focus('[data-testid="step-tab-predict"]')

@@ -4,13 +4,14 @@ PASS L2 reveal hidden before commit
 PASS L1 Discover gated before commit 
 PASS L2 commit locks options and shows reveal 
 PASS L3 comparison agrees with independent classification Model run: The bus voltage fell below its reference and then returned to the recovery band. | Match. This matches the cause chain: del
-PASS L4 cursor readout equals API sample and both chart cursors move together 
+PASS L4 cursor: requested index reached, readout (V, P_load, P_sst, mismatch), time label, aria-valuetext and both chart cursors equal the API sample at that time moved=3
 PASS L4 jump to minimum lands on the voltage minimum idx=2163
 PASS L4 phase annotation changes with the cursor Demand exceeds delivery. The b / Delivery exceeds demand. The c
-PASS L5 grounding values equal recomputation from the API THE SAME CHAIN, MEASURED IN THIS RUN (MODEL OUTPUT) 1. Demand steps; delivery lags Demand goes from 160.0 kW to 320.0 kW; the largest shortfall of delivery belo
+PASS L5 grounding values (shortfall and time, target-above-demand and time, V_min, energy, demand before/after, recovery) equal recomputation from the API []
 PASS L6 apply: feedback per option, exactly one defensible (mechanism-plus-evidence) {'agree': False, 'mechanism-plus-evidence': True, 'tune-capacitance': False, 'tune-gains': False}
 PASS L7 lesson prose: no digits, no ranking terms []
 PASS L6 no stored state: reload returns to an uncommitted Predict 
+PASS L11 'Look without predicting' (keyboard) reveals Discover and moves focus to its heading, with no comparison panel Step 2 of 4 · Discover
 PASS L8 keyboard-only: predict, commit, scrub (arrow keys), next, answer, check scrub 2000->2095
 PASS L10 console clean at 1440 []
 PASS L9 other four cases unchanged (no gate, no picker, no cursor panel, native reveal) 

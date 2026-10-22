@@ -195,7 +195,7 @@ function CaseView({
     // Keyboard and screen-reader users land on the new step's heading; the first render is left alone.
     // Focus is allowed to scroll: Back/Next sit below long content, and the heading must come into view.
     if (userMoved.current) stepHeading.current?.focus();
-  }, [step]);
+  }, [step, skipped]);
   const go = (id: LearnStepId) => {
     userMoved.current = true;
     // Re-activating the current step changes no state, so the effect would not run: focus its heading directly.
@@ -271,7 +271,10 @@ function CaseView({
         )}
 
         {step === "discover" && isLesson && !committed && !skipped && (
-          <DiscoverGate onGoPredict={() => go("predict")} onSkip={() => setSkipped(true)} />
+          <DiscoverGate onGoPredict={() => go("predict")} onSkip={() => {
+            userMoved.current = true;
+            setSkipped(true);
+          }} />
         )}
 
         {step === "discover" && !(isLesson && !committed && !skipped) && (

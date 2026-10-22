@@ -185,6 +185,8 @@ export function CursorPanel({
         <input
           type="range"
           aria-label="Time cursor, both charts"
+          aria-valuetext={`t = ${readout.timeS.toFixed(3)} s, V_dc ${readout.vdcV.toFixed(1)} V, ${PHASE_TEXT[phase].title}`}
+          aria-describedby="cursor-readout-region"
           data-testid="cursor-slider"
           min={0}
           max={last}
@@ -199,7 +201,7 @@ export function CursorPanel({
           }}
           value={index}
           onChange={(e) => onIndex(Number(e.target.value))}
-          className="h-1 min-w-[160px] flex-1 cursor-pointer appearance-none rounded-none bg-hairline accent-accent"
+          className="h-1 min-w-[160px] flex-1 cursor-pointer appearance-none rounded-none bg-hairline accent-accent focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-secondary"
         />
         <span className="font-mono text-[12px] tabular-nums text-primary" data-testid="cursor-time">
           t = {readout.timeS.toFixed(3)} s
@@ -213,7 +215,7 @@ export function CursorPanel({
           </button>
         ))}
       </div>
-      <dl className="grid grid-cols-2 gap-x-6 gap-y-1 font-mono text-[12px] tabular-nums text-secondary sm:grid-cols-4" data-testid="cursor-readout">
+      <dl id="cursor-readout-region" className="grid grid-cols-2 gap-x-6 gap-y-1 font-mono text-[12px] tabular-nums text-secondary sm:grid-cols-4" data-testid="cursor-readout">
         <div><dt className="text-meta uppercase">V_dc</dt><dd className="text-primary">{readout.vdcV.toFixed(1)} V</dd></div>
         <div><dt className="text-meta uppercase">P_load</dt><dd className="text-primary">{readout.pLoadKw.toFixed(1)} kW</dd></div>
         <div><dt className="text-meta uppercase">P_sst</dt><dd className="text-primary">{readout.pSstKw.toFixed(1)} kW</dd></div>

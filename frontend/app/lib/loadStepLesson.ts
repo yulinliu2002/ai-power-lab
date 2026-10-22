@@ -20,7 +20,7 @@ export const PREDICTION_OPTIONS: ReadonlyArray<{ id: PredictionId; label: string
     id: "falls-recovers",
     label: "It falls first, then returns toward its reference.",
     reasoning:
-      "This matches the cause chain: delivery lags demand, the bus supplies the gap and falls, then the controller pushes delivery above demand until the stored energy is refilled.",
+      "This matches the cause chain: delivery lags demand, the bus supplies the gap and falls, then the controller adds corrective power above demand, so delivery overtakes demand and the stored energy is refilled.",
   },
   {
     id: "rises",
@@ -38,7 +38,7 @@ export const PREDICTION_OPTIONS: ReadonlyArray<{ id: PredictionId; label: string
     id: "falls-stays",
     label: "It falls and stays down unless something outside the chain helps.",
     reasoning:
-      "Falling is right. Staying down would mean the controller gives up; here the PI controller keeps raising the power target while the voltage is below its reference, so delivery overtakes demand and refills the bus.",
+      "Falling is right. Whether it stays down depends on the controller and on headroom: here the controller adds a corrective power above demand while the voltage is below its reference and the converter can deliver it, so delivery overtakes demand and refills the bus. With less headroom or saturation that recovery would not be guaranteed, which is why this run shows recovery for this model and these illustrative values only.",
   },
 ];
 
