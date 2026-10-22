@@ -7,7 +7,7 @@ PASS C2 Apply: 'Defensible engineering judgment' only for the defensible option,
 PASS C4 Apply: submitted answer tagged 'Your answer' (one only, on the checked option) 
 PASS C5 Apply: status classes are status-good / status-critical tokens 
 PASS C6 Apply: changing the pick clears the previous verdict 
-PASS C9 secrecy probe is not vacuous: it flags hidden text, sr-only text, data-*, aria-describedby, aria-label and status classes {'hidden text': True, 'sr-only text': True, 'data attribute': True, 'aria-describedby': True, 'aria-label': True, 'status class': True}
+PASS C9 secrecy probe is not vacuous: it flags hidden text, sr-only text, data-*, data-testid, aria-describedby, aria-labelledby, aria-label and status classes {'hidden text': True, 'sr-only text': True, 'data attribute': True, 'aria-describedby': True, 'aria-labelledby': True, 'data-testid': True, 'aria-label': True, 'status class': True}
 PASS C8 Predict follows the run: voltage above reference, never below -> only 'rises' is Correct {'rises': 'Correct', 'falls-recovers': 'Incorrect', 'flat': 'Incorrect', 'falls-stays': 'Incorrect'}
 PASS C8 Predict follows the run: voltage exactly at reference -> only 'flat' is Correct {'rises': 'Incorrect', 'falls-recovers': 'Incorrect', 'flat': 'Correct', 'falls-stays': 'Incorrect'}
 PASS C8 Predict follows the run: voltage falls and stays down -> only 'falls-stays' is Correct {'rises': 'Incorrect', 'falls-recovers': 'Incorrect', 'flat': 'Incorrect', 'falls-stays': 'Correct'}

@@ -49,7 +49,7 @@ def leaks(pg):
         const own=[...e.childNodes].filter(n=>n.nodeType===3).map(n=>n.textContent).join(' ');
         if (W.test(own.replace(/not a claim/gi,''))) out.push('text:'+e.tagName+':'+own.trim().slice(0,40));
         for (const a of e.attributes) {
-          if (a.name==='data-testid') { if (/(status|feedback)/i.test(a.value)) out.push('testid:'+a.value); continue; }
+          if (a.name==='data-testid' && /(status|feedback)/i.test(a.value)) out.push('testid:'+a.value);
           if (/^data-/.test(a.name) && /(status|correct|defensible|good|critical|verdict)/i.test(a.name+' '+a.value)) out.push('data:'+a.name);
           if (W.test(a.value)) out.push('attr:'+a.name+'='+a.value.slice(0,30));
           if (/status-good|status-critical|check|cross/i.test(a.name==='class'?a.value:'')) out.push('class:'+a.value.slice(0,40));
@@ -136,13 +136,15 @@ with sync_playwright() as p:
       "sr-only text": "()=>{const d=document.createElement('span');d.className='sr-only';d.textContent='Incorrect';document.body.appendChild(d)}",
       "data attribute": "()=>document.body.setAttribute('data-verdict','good')",
       "aria-describedby": "()=>{const d=document.createElement('p');d.id='zz';d.hidden=true;d.textContent='Defensible';document.body.appendChild(d);document.body.setAttribute('aria-describedby','zz')}",
+      "aria-labelledby": "()=>{const d=document.createElement('p');d.id='zy';d.textContent='Incorrect';document.body.appendChild(d);document.body.setAttribute('aria-labelledby','zy')}",
+      "data-testid": "()=>document.body.setAttribute('data-testid','correct-answer')",
       "aria-label": "()=>document.body.setAttribute('aria-label','correct answer')",
       "status class": "()=>document.body.classList.add('text-status-good')",
     }
     caught = {}
     for k, js in inj.items():
         fresh(); pg.evaluate(js); caught[k] = bool(leaks(pg))
-    rec("C9 secrecy probe is not vacuous: it flags hidden text, sr-only text, data-*, aria-describedby, aria-label and status classes", all(caught.values()), str(caught))
+    rec("C9 secrecy probe is not vacuous: it flags hidden text, sr-only text, data-*, data-testid, aria-describedby, aria-labelledby, aria-label and status classes", all(caught.values()), str(caught))
 
     # C8 observed-outcome dependency: controlled API responses that produce other outcome classes
     def controlled(label, mutate, expect):
