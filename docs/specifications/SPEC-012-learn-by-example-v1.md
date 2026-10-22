@@ -289,6 +289,17 @@ Independent review: Codex reviews the **actual artifacts** (data module, rendere
 | D8 | Presentation-only optional props on existing Sandbox components | **Decided (approved 2026-10-18)** within the constraints in §0 and R4 |
 | D9 | Static-prose scan allowlist (R6) and the settling-band convention used by R16 | Draft proposes the lists above; Human Engineering Lead may amend the allowlist before approval |
 
+## 15a. Amendment A1: four-step shell (presentation only)
+
+Authorized by decision D-A (design-lab INTEGRATION_PLAN §4, approved by the Human Engineering Lead); implemented after SPEC-014's foundation merged. Scope: layout and navigation of `/learn` only. No change to case content, claims (R16), disclosures, backend, API contracts or physics.
+
+- A1-R1. The eight case parts (§6.2) are grouped into four steps: **Predict** = parts 1-2; **Discover** = part 3 and 6a; **Explain** = parts 4 and 5 (5a and 5b); **Apply** = parts 6b, 7 and 8. Part order inside a step follows §6.2. This supersedes the single-column order of §6.2 and the side-by-side placement of 6a/6b in part 6; 6a and 6b stay visibly distinct (AC-7), now on different steps.
+- A1-R2. All four steps are reachable at any time by a step control and by Back/Next buttons. No gating, scoring or stored state; selecting another case returns to Predict. Only the current step is mounted; both requests (R13) stay at case level, so changing step never refetches.
+- A1-R3. Keyboard: the step control is native buttons (`aria-current="step"`); activating one moves focus to the step heading.
+- A1-R4. The page carries the foundation header, the always-visible Basis panel holding the six disclosures verbatim (AC-6, visible on initial load, in every step), and the Sandbox's simulated-slice signal-path rail. The rail is context only and makes no claim beyond SPEC-014.
+- A1-R5. The static-scan boundary (R6) is unchanged: the seven `data-static-prose` nodes per case, now distributed across steps; the AC-4 scan is run over the union of the steps.
+- A1-AC. Verified by `docs/validation/spec-012-a1/verify_learn_steps.py` (see the validation record, "Amendment A1").
+
 ## 14. Dependencies and Sequencing
 
 1. **PR #8 is merged at `4e6af36`** (provides `EvidenceTag`, label types, `DriverId`, `DISCLOSURES`, `REFERENCES`, nav pattern). `4e6af36` is the AC-12 baseline. Implementation does not start before this spec is approved.

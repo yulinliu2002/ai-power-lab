@@ -35,11 +35,8 @@ export function CaseSelector({
               className="peer sr-only"
             />
             <span
-              className={`block cursor-pointer border px-2.5 py-1 font-sans text-[11px] font-semibold peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-secondary ${
-                isSelected
-                  ? "border-primary bg-surface-raised text-primary"
-                  : "border-hairline bg-surface text-secondary hover:text-primary"
-              }`}
+              className="ic-chipbtn peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-secondary"
+              data-on={isSelected}
             >
               {CASES[id].title}
             </span>

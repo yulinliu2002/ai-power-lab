@@ -241,3 +241,8 @@ out
 
 Branch head served on free ports (the QA worktree's servers on 3000 and 8000 serve `main` and were left running): frontend production build at `http://localhost:3100/learn`, API at `http://localhost:8010`. Ten full-page screenshots (five cases at 1280 px and at true 375 px mobile emulation, device scale 2) were captured with headless Chrome driven over the DevTools protocol, with a recorded `scrollWidth == clientWidth` for every one (no horizontal overflow). They are in `docs/reboot/spec-012-qa-screenshots/` (untracked, not committed).
 
+
+
+## Amendment A1: four-step shell (verification record)
+
+Script: `docs/validation/spec-012-a1/verify_learn_steps.py` (Playwright, Chromium), run against the dev server and a local backend on the same engine, all five cases x four steps at 1440 px and 390 px. Result of the run on the implementation commit: **36 checks, 36 PASS, 0 FAIL** (S1 disclosures on load; S2 steps reachable, only current mounted; S3 AC-4 rendered scan, 7 nodes per case, 0 digit hits; S4 backend strings verbatim in Discover and coverage entries in Explain; S5 no refetch on step change; S6 keyboard Tab/Enter focus on step heading; S7 backend blocked; S8 rapid switching; S9 no horizontal overflow and clean console). Also: `npm run lint`, `npm run typecheck` and `npm run build` pass locally. `pytest` is unaffected (no change under `src/`, `backend/`, `config/`, `scenarios/`, `tests/`). This is the implementer's own verification; it is not independent review. Not verified: real devices, other browsers, screen-reader behavior beyond roles and focus, and the R16 claim script (unchanged data module, not re-run here).
