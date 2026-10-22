@@ -113,7 +113,7 @@ Codex CLI 0.162.1, read-only, session `01a1612b-4083-7291-8aa5-cfeb48d392ef`, on
 
 ### Closure review (head `b27db45`)
 
-Codex CLI, read-only, session `01a1613c-b622-7b10-b601-f7dd237fb5a1`. Verdict: **REQUEST CHANGES**, no blockers. Resolved: Eaton contract, gutters, SiteNav comment and AC-18 scope. Verbatim output is held on the Lead's Mac (`SPEC-013-codex-closure-review.md` equivalent: `SPEC-013-codex-closure-review.txt`, 187 KB); not committed.
+Codex CLI, read-only, session `01a1613c-b622-7b10-b601-f7dd237fb5a1`. Verdict: **REQUEST CHANGES**, no blockers. Resolved: Eaton contract, gutters, SiteNav comment and AC-18 scope. Verbatim output is held on the Lead's Mac (`SPEC-013-codex-closure-review.txt`, 187 KB); not committed.
 
 | Severity | Finding | Disposition |
 |---|---|---|
