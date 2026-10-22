@@ -2,7 +2,7 @@
 
 **Spec:** `docs/specifications/SPEC-013-industry-career-v1.md` (v0.3, adopted 2026-10-21)
 **Baseline:** `main` at `f2c46ae49cfa3682d9c9e488ec03b636c4b5101c` (merge of PR #10, SPEC-014).
-**Status:** Local verification complete. Two independent Codex reviews are recorded in §6 (first: REQUEST CHANGES; closure: REQUEST CHANGES, no blockers, addressed in §6). **AC-17 Human Product Review: awaiting.** CI is reported separately on the PR.
+**Status:** Local verification complete. Two independent Codex reviews are recorded in §6 (first: REQUEST CHANGES; closure: REQUEST CHANGES, no blockers, addressed in §6). **AC-17 Human Product Review: ACCEPT for V1 (2026-10-22, §7).** CI is reported separately on the PR.
 
 ## 1. Deviations and approved amendments
 
@@ -93,7 +93,7 @@ Negative statements on the sheets ("does not tell you"), with their basis: NVIDI
 | AC | State |
 |---|---|
 | AC-13 Codex implementation review | Recorded in §6; findings resolved by the 2026-10-22 amendments; a focused closure review is pending |
-| AC-17 Human Product Review (side-by-side screenshots) | **Open**, Human Product Lead only |
+| AC-17 Human Product Review (side-by-side screenshots) | **Accepted for V1** by the Human Engineering Lead on 2026-10-22 (§7) |
 | AC-18 | Met by unchanged inputs; no before/after text diff taken (see §2) |
 | AC-19 | Met, with the approved exception (spec §16 item 4) for exactly two OCP white-paper claims, which have locators but no verbatim span. Claims and non-claim assertions are audited in §3, and the check fails any other claim without a span, and fails if the exception set is not exactly those two |
 | Everything else | Met locally, per §2 |
@@ -121,3 +121,11 @@ Codex CLI, read-only, session `01a1613c-b622-7b10-b601-f7dd237fb5a1`. Verdict: *
 | Minor | The span exception covered any `paraphrase-checked` OCP white-paper claim; a third unapproved claim passed | The check now identifies the exception by locator and fails unless exactly the two approved claims are exceptions |
 
 A re-run of the closure review was not requested: the Lead asked for one focused closure review, not a further cycle.
+
+## 7. AC-17 Human Product Review
+
+Reviewer: the Human Engineering Lead, on the desktop (1280 px) and mobile (360 px) full-page screenshots of `/industry`, 2026-10-22. Assessment: **ACCEPT for V1**. In the reviewer's words: the page has a distinct role from Architecture Choices, an appropriate evidence-oriented content hierarchy, and an acceptable desktop and mobile layout for this release. The review was of the screenshots; this record does not add walkthrough observations.
+
+Two non-blocking UX improvements are recorded as future work and are **not** implemented in this PR (SPEC-013 design scope is not reopened):
+1. Improve Career Map discoverability and prominence.
+2. Reduce repetitive card density and long-scroll reading friction on mobile.
