@@ -1,0 +1,39 @@
+PASS S1 six disclosures visible on load 
+PASS S4 load_step Discover backend strings verbatim []
+PASS S4 load_step Explain coverage entries verbatim []
+PASS S2 load_step four steps reachable, only current mounted 
+PASS S3 load_step static scan (union over steps = 7 nodes) nodes=7 hits=[]
+PASS S5 load_step no refetch on step change extra=0
+PASS S4 sustained_high_load Discover backend strings verbatim []
+PASS S4 sustained_high_load Explain coverage entries verbatim []
+PASS S2 sustained_high_load four steps reachable, only current mounted 
+PASS S3 sustained_high_load static scan (union over steps = 7 nodes) nodes=7 hits=[]
+PASS S5 sustained_high_load no refetch on step change extra=0
+PASS S4 thermal_trip Discover backend strings verbatim []
+PASS S4 thermal_trip D-L2 present in Discover 
+PASS S4 thermal_trip Explain coverage entries verbatim []
+PASS S2 thermal_trip four steps reachable, only current mounted 
+PASS S3 thermal_trip static scan (union over steps = 7 nodes) nodes=7 hits=[]
+PASS S5 thermal_trip no refetch on step change extra=0
+PASS S4 grid_sag Discover backend strings verbatim []
+PASS S4 grid_sag D-L2 present in Discover 
+PASS S4 grid_sag Explain coverage entries verbatim []
+PASS S2 grid_sag four steps reachable, only current mounted 
+PASS S3 grid_sag static scan (union over steps = 7 nodes) nodes=7 hits=[]
+PASS S5 grid_sag no refetch on step change extra=0
+PASS S4 grid_loss Discover backend strings verbatim []
+PASS S4 grid_loss D-L2 present in Discover 
+PASS S4 grid_loss Explain coverage entries verbatim []
+PASS S2 grid_loss four steps reachable, only current mounted 
+PASS S3 grid_loss static scan (union over steps = 7 nodes) nodes=7 hits=[]
+PASS S5 grid_loss no refetch on step change extra=0
+PASS S6 Back works, case change resets to Predict, re-activating the current step focuses its heading Step 1 of 4 · Predict
+PASS S6 Next from the bottom of Discover leaves the new step heading in view (1440 px) [442.671875, 457.515625, 900]
+PASS S6 keyboard Tab+Enter moves to Discover and focuses its heading Step 2 of 4 · Discover
+PASS S6 Next button advances to Explain 
+PASS S9 console clean on 1440 walkthrough []
+PASS S8 rapid switching ends on selected case 
+PASS S7 backend blocked: static steps render, live parts show errors 
+PASS S6 Next from the bottom of Discover leaves the new step heading in view (390 px) [414.25, 429.09375, 844]
+PASS S9 390 px no horizontal overflow, 5 cases x 4 steps 
+PASS S9 390 px console clean []
