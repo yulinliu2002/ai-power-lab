@@ -11,6 +11,7 @@ Usage: python3 -I verify_correctness_feedback.py BASE_URL API_URL OUT_DIR
       unselected options carry no status styling or marker
   C5  Status colour classes are the DESIGN.md tokens (status-good / status-critical); text alone distinguishes the states
   C6  Apply: changing the pick after submit clears the feedback (no stale verdict)
+  C8  Controlled API responses (rises / flat / falls-stays): 'Correct' follows the run, not a hardcoded answer
   C7  Screenshots at 1440 and 390 px, no horizontal overflow, console clean
 """
 import glob, json, os, re, sys, urllib.request
@@ -37,18 +38,35 @@ STATUS_WORDS = re.compile(r"\b(correct|incorrect|defensible|not defensible)\b", 
 
 def lab(pg, kind, oid): return pg.locator(f'label:has([data-testid="{kind}-{oid}"])')
 def leaks(pg):
-    """Anything that could reveal correctness: status text, status nodes, status colours, aria names."""
+    """Anything that could reveal correctness, including hidden DOM text, every attribute, and
+    text reached through aria-describedby / aria-labelledby."""
     return pg.evaluate("""()=>{
-      const out=[]; const body=document.body.innerText;
-      if (/\\b(correct|incorrect|defensible)\\b/i.test(body.replace(/not a claim/gi,''))) out.push('text');
-      for (const id of ['predict-status','apply-status','predict-feedback','apply-feedback']) if (document.querySelector('[data-testid="'+id+'"]')) out.push(id);
-      if (document.querySelector('[data-status]')) out.push('data-status');
-      if (document.querySelector('[class*="status-good"],[class*="status-critical"]')) out.push('colour-class');
-      for (const e of document.querySelectorAll('[aria-label],[aria-describedby],[title]')) {
-        const v=(e.getAttribute('aria-label')||'')+(e.getAttribute('title')||'');
-        if (/correct|defensible|incorrect/i.test(v)) out.push('aria:'+v);
+      const out=[]; const W=/\\b(correct|incorrect|defensible)\\b/i;
+      const all=[...document.querySelectorAll('body, body *')];
+      for (const e of all) {
+        if (['SCRIPT','STYLE'].includes(e.tagName)) continue;
+        // textContent includes display:none / sr-only / aria-hidden text that innerText omits
+        const own=[...e.childNodes].filter(n=>n.nodeType===3).map(n=>n.textContent).join(' ');
+        if (W.test(own.replace(/not a claim/gi,''))) out.push('text:'+e.tagName+':'+own.trim().slice(0,40));
+        for (const a of e.attributes) {
+          if (a.name==='data-testid') { if (/(status|feedback)/i.test(a.value)) out.push('testid:'+a.value); continue; }
+          if (/^data-/.test(a.name) && /(status|correct|defensible|good|critical|verdict)/i.test(a.name+' '+a.value)) out.push('data:'+a.name);
+          if (W.test(a.value)) out.push('attr:'+a.name+'='+a.value.slice(0,30));
+          if (/status-good|status-critical|check|cross/i.test(a.name==='class'?a.value:'')) out.push('class:'+a.value.slice(0,40));
+        }
+        for (const k of ['aria-describedby','aria-labelledby']) {
+          const v=e.getAttribute(k); if (!v) continue;
+          for (const id of v.split(/\\s+/)) { const t=document.getElementById(id); if (t && W.test(t.textContent)) out.push(k+':'+id); }
+        }
       }
       return out;}""")
+
+def unsel_clean(pg, kind):
+    """Every UNSELECTED option: no 'Your answer', no status/correctness words, no status classes, no svg icon, no data-status."""
+    return pg.evaluate("""(kind)=>[...document.querySelectorAll('input[data-testid^="'+kind+'-"][type=radio]')].filter(i=>!i.checked).every(i=>{
+      const l=i.closest('label'); const h=l.outerHTML;
+      return !/your answer/i.test(l.textContent) && !/\\b(correct|incorrect|defensible)\\b/i.test(l.textContent)
+        && !/status-good|status-critical|data-status/.test(h) && l.querySelectorAll('svg').length===0;})""", kind)
 
 exe = glob.glob("/opt/pw-browsers/chromium-*/chrome-linux*/chrome")
 with sync_playwright() as p:
@@ -77,7 +95,7 @@ with sync_playwright() as p:
         ok1 &= txt == want and icon and (good == (oid == OBSERVED)) and "simplified model" in scope and "not a claim about every real" in scope
         yours = pg.locator('[data-testid="prediction-your-answer"]')
         others = pg.locator('label:has([data-testid^="prediction-"]) [data-testid="prediction-your-answer"]').count()
-        ok4 &= yours.count() == 1 and yours.evaluate("e=>e.closest('label').querySelector('input').checked") is True and others == 1
+        ok4 &= yours.count() == 1 and yours.evaluate("e=>e.closest('label').querySelector('input').checked") is True and others == 1 and yours.inner_text().strip().lower() == "your answer" and unsel_clean(pg, "prediction")
         cls = st.get_attribute("class")
         ok5 &= ("status-good" in cls) == (oid == OBSERVED) and ("status-critical" in cls) == (oid != OBSERVED)
         pg.screenshot(path=f"{OUT}/shots/a4-1440-predict-{oid}.png", full_page=True)
@@ -102,7 +120,7 @@ with sync_playwright() as p:
         expl = pg.locator('[data-testid="apply-feedback"] p').inner_text().strip()
         ok2 &= txt == want and st.locator("svg").count() == 1 and good == (oid == DEFENSIBLE) and len(expl) > 40
         mine = pg.locator('[data-testid="apply-your-answer"]')
-        ok4a &= mine.count() == 1 and mine.evaluate("e=>e.closest('label').querySelector('input').checked") is True
+        ok4a &= mine.count() == 1 and mine.evaluate("e=>e.closest('label').querySelector('input').checked") is True and mine.inner_text().strip().lower() == "your answer" and unsel_clean(pg, "apply")
         cls = st.get_attribute("class"); ok5a &= ("status-good" in cls) == (oid == DEFENSIBLE) and ("status-critical" in cls) == (oid != DEFENSIBLE)
         pg.screenshot(path=f"{OUT}/shots/a4-1440-apply-{oid}.png", full_page=True)
     rec("C2 Apply: 'Defensible engineering judgment' only for the defensible option, 'Not defensible' otherwise; icon + text + explanation", ok2)
@@ -110,6 +128,42 @@ with sync_playwright() as p:
     rec("C5 Apply: status classes are status-good / status-critical tokens", ok5a)
     lab(pg, "apply", "agree").click(); pg.wait_for_timeout(100)
     rec("C6 Apply: changing the pick clears the previous verdict", pg.locator('[data-testid="apply-feedback"]').count() == 0 and pg.locator('[data-testid="apply-your-answer"]').count() == 0)
+
+    # C9 positive controls: the secrecy probe must fire on each kind of leak it claims to catch
+    fresh()
+    inj = {
+      "hidden text": "()=>{const d=document.createElement('span');d.style.display='none';d.textContent='Correct';document.body.appendChild(d)}",
+      "sr-only text": "()=>{const d=document.createElement('span');d.className='sr-only';d.textContent='Incorrect';document.body.appendChild(d)}",
+      "data attribute": "()=>document.body.setAttribute('data-verdict','good')",
+      "aria-describedby": "()=>{const d=document.createElement('p');d.id='zz';d.hidden=true;d.textContent='Defensible';document.body.appendChild(d);document.body.setAttribute('aria-describedby','zz')}",
+      "aria-label": "()=>document.body.setAttribute('aria-label','correct answer')",
+      "status class": "()=>document.body.classList.add('text-status-good')",
+    }
+    caught = {}
+    for k, js in inj.items():
+        fresh(); pg.evaluate(js); caught[k] = bool(leaks(pg))
+    rec("C9 secrecy probe is not vacuous: it flags hidden text, sr-only text, data-*, aria-describedby, aria-label and status classes", all(caught.values()), str(caught))
+
+    # C8 observed-outcome dependency: controlled API responses that produce other outcome classes
+    def controlled(label, mutate, expect):
+        pg2 = b.new_page(viewport={"width": 1440, "height": 900})
+        def fulfil(route):
+            r = json.loads(json.dumps(run)); mutate(r); route.fulfill(status=200, content_type="application/json", body=json.dumps(r))
+        pg2.route("**/api/v1/simulations/load-step*", fulfil)
+        res_ = {}
+        for oid in PRED:
+            pg2.goto(BASE + "/learn", wait_until="networkidle"); pg2.wait_for_timeout(900)
+            pg2.locator(f'label:has([data-testid="prediction-{oid}"])').click(); pg2.locator('[data-testid="commit-prediction"]').click(); pg2.wait_for_timeout(250)
+            res_[oid] = pg2.locator('[data-testid="predict-status"]').inner_text().strip()
+        pg2.close()
+        rec(f"C8 Predict follows the run: {label} -> only '{expect}' is Correct", all(v == ("Correct" if k == expect else "Incorrect") for k, v in res_.items()), str(res_))
+    def to_rises(r): r["timeseries"]["v_dc_v"] = [vref * 1.02] * n
+    def to_flat(r): r["timeseries"]["v_dc_v"] = [vref] * n
+    def to_stays_down(r):
+        v = r["timeseries"]["v_dc_v"]; r["timeseries"]["v_dc_v"] = [x if i < ei else vref * 0.9 for i, x in enumerate(v)]
+    controlled("voltage above reference, never below", to_rises, "rises")
+    controlled("voltage exactly at reference", to_flat, "flat")
+    controlled("voltage falls and stays down", to_stays_down, "falls-stays")
 
     # C7 mobile
     m = b.new_page(viewport={"width": 390, "height": 844}); merr = []
