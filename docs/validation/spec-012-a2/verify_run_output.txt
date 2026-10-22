@@ -1,9 +1,12 @@
 PASS L1 predict picker has four options 
 PASS L2 commit disabled before a pick 
-PASS L2 reveal hidden before commit 
+PASS L12 Predict answer and causal hints absent from the page before commit (no pick / after a pick / on the Discover gate) [[], [], [], []]
+PASS L13 case selector and four-step control fully inside the first 1440x900 screen; limitation visible; basis collapsed [309.078125, 339.828125, 425.46875, 483.96875, 900]
 PASS L1 Discover gated before commit 
-PASS L2 commit locks options and shows reveal 
+PASS L2 commit locks options; the expected-outcome text is still not on the Predict step 
 PASS L3 comparison agrees with independent classification Model run: The bus voltage fell below its reference and then returned to the recovery band. | Match. This matches the cause chain: del
+PASS L14 Discover: three cause-chain steps (<=60 words), technical explanation collapsed by default and holds the interpretation and engineering result words=52
+PASS L12 expected outcome and reasoning appear only after commit, in Discover 
 PASS L4 cursor: requested index reached, readout (V, P_load, P_sst, mismatch), time label, aria-valuetext and both chart cursors equal the API sample at that time moved=3
 PASS L4 jump to minimum lands on the voltage minimum idx=2163
 PASS L4 phase annotation changes with the cursor Demand exceeds delivery. The b / Delivery exceeds demand. The c
@@ -15,5 +18,6 @@ PASS L11 'Look without predicting' (keyboard) reveals Discover and moves focus t
 PASS L8 keyboard-only: predict, commit, scrub (arrow keys), next, answer, check scrub 2000->2095
 PASS L10 console clean at 1440 []
 PASS L9 other four cases unchanged (no gate, no picker, no cursor panel, native reveal) 
+PASS L13 390x844: case selector and four-step control fully inside the first screen [466.234375, 681.578125, 844]
 PASS L10 390 px no horizontal overflow on all four steps 
 PASS L10 390 px console clean []

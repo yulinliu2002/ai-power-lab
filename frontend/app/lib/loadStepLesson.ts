@@ -17,30 +17,31 @@ export type PredictionId = "falls-recovers" | "rises" | "flat" | "falls-stays";
 
 export const PREDICTION_OPTIONS: ReadonlyArray<{ id: PredictionId; label: string; reasoning: string }> = [
   {
-    id: "falls-recovers",
-    label: "It falls first, then returns toward its reference.",
-    reasoning:
-      "This matches the cause chain: delivery lags demand, the bus supplies the gap and falls, then the controller adds corrective power above demand, so delivery overtakes demand and the stored energy is refilled.",
-  },
-  {
     id: "rises",
-    label: "It rises, because more demand pulls more power into the bus.",
+    label: "It rises above its reference.",
     reasoning:
       "Demand does not push power in. Delivered power follows its target with a lag, and the bus supplies whatever delivery does not cover, so stored energy drops first.",
   },
   {
+    id: "falls-recovers",
+    label: "It falls, then returns toward its reference.",
+    reasoning:
+      "This matches the cause chain: delivery lags demand, the bus supplies the gap and falls, then the controller adds corrective power above demand, so delivery overtakes demand and the stored energy is refilled.",
+  },
+  {
     id: "flat",
-    label: "It stays put, because the converter follows demand immediately.",
+    label: "It stays at its reference.",
     reasoning:
       "That would need an instant converter. In this model delivered power follows its target only with a first-order lag, so a gap opens at the step.",
   },
   {
     id: "falls-stays",
-    label: "It falls and stays down unless something outside the chain helps.",
+    label: "It falls and stays down.",
     reasoning:
       "Falling is right. Whether it stays down depends on the controller and on headroom: here the controller adds a corrective power above demand while the voltage is below its reference and the converter can deliver it, so delivery overtakes demand and refills the bus. With less headroom or saturation that recovery would not be guaranteed, which is why this run shows recovery for this model and these illustrative values only.",
   },
 ];
+
 
 export type ObservedOutcome = "falls-recovers" | "rises" | "flat" | "falls-stays";
 
@@ -210,3 +211,14 @@ export const APPLY_QUESTION = {
 } as const;
 
 export type ApplyOptionId = (typeof APPLY_QUESTION.options)[number]["id"];
+
+/**
+ * Discover: the physical cause chain in three short, visually structured
+ * steps (static, number-free prose). The detailed technical explanation sits
+ * in a separate expandable section; the Explain step has the full chain.
+ */
+export const CAUSE_CHAIN_SHORT: ReadonlyArray<{ title: string; body: string }> = [
+  { title: "Delivery lags demand", body: "Demand jumps at once; the converter's power follows with a lag." },
+  { title: "The bus pays", body: "The DC link covers the gap, so stored energy and voltage fall." },
+  { title: "Control refills it", body: "The controller adds corrective power until the voltage is back." },
+];

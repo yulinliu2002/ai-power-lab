@@ -4,6 +4,7 @@ import { useState } from "react";
 
 import {
   APPLY_QUESTION,
+  CAUSE_CHAIN_SHORT,
   OBSERVED_TEXT,
   PHASE_TEXT,
   PREDICTION_OPTIONS,
@@ -136,9 +137,12 @@ export function DiscoverGate({ onGoPredict, onSkip }: { onGoPredict: () => void;
 export function PredictionComparison({
   choice,
   observed,
+  expected,
 }: {
   choice: PredictionId;
   observed: ObservedOutcome;
+  /** The authored expected-outcome text; shown only here, after the learner has committed. */
+  expected: string;
 }) {
   const picked = PREDICTION_OPTIONS.find((o) => o.id === choice)!;
   const match = choice === observed;
@@ -157,7 +161,34 @@ export function PredictionComparison({
         <span className="font-semibold text-primary">{match ? "Match. " : "Not a match. "}</span>
         {picked.reasoning}
       </p>
+      <p className="text-[13px] leading-relaxed text-secondary" data-testid="prediction-expected">
+        <span className="font-semibold text-primary">Expected outcome: </span>
+        {expected}
+      </p>
     </div>
+  );
+}
+
+/** Discover: the physical cause chain in three short, visually structured steps. */
+export function CauseChainCard() {
+  return (
+    <section aria-label="Cause chain in three steps" data-testid="cause-chain" data-static-prose className="flex flex-col gap-2">
+      <h5 className="font-mono text-meta uppercase text-secondary">Why it happens, in three steps</h5>
+      <ol className="grid grid-cols-1 gap-0 border border-hairline sm:grid-cols-3">
+        {CAUSE_CHAIN_SHORT.map((c, i) => (
+          <li key={c.title} className="flex gap-3 border-hairline px-4 py-3 [&:nth-child(n+2)]:border-t sm:[&:nth-child(n+2)]:border-l sm:[&:nth-child(n+2)]:border-t-0">
+            {/* data-equation: the list numeral is excluded from the static-prose digit scan (SPEC-012 R6, list numbering). */}
+            <span aria-hidden="true" data-equation className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-hairline-strong font-mono text-meta text-primary">
+              {i + 1}
+            </span>
+            <span className="flex flex-col gap-0.5">
+              <span className="text-[14px] font-semibold text-primary">{c.title}</span>
+              <span className="text-[13px] leading-snug text-secondary">{c.body}</span>
+            </span>
+          </li>
+        ))}
+      </ol>
+    </section>
   );
 }
 

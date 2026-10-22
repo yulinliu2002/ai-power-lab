@@ -312,6 +312,15 @@ Scope: the `load_step` case only; the other four cases are unchanged. Requested 
 - A2-R6 Authored prose follows R6 (no digits) and AC-5 (no ranking terms); the model numbers are live.
 - A2-Limits. The lesson teaches one mechanism of one averaged, illustrative model. It does not validate any architecture, and the controller is modeled with perfect load measurement and no switching behavior (src/controller.py).
 
+## 15c. Amendment A3: compact layout and a genuinely predictive Predict (M1 Human Visual QA feedback)
+
+Requested by the Human Engineering Lead after Human Visual QA of the M1 Load Step lesson (2026-10-22). Presentation and authored-prose changes only: no change to the engine, numerical results, API contracts, chart calculations, the five cases' claims (R16) or the other four cases' behavior.
+
+- A3-R1 **Layout.** The case selector and the four-step control sit in the first screen (1440x900 and 390x844). One concise limitation statement is always visible ("Model limitation: a simplified average-value model with illustrative values. It shows how the model behaves, not how real equipment behaves."). The six disclosures (AC-6) and the signal-path rail are in a native expandable section, collapsed by default, with all text in the DOM. **This is a Human-approved deviation** from DESIGN.md §1 and SPEC-014 F4 (Basis panel always visible, never collapsed) for `/learn` only, and it supersedes the "visible on initial load" wording of A1-R4 and AC-6: the concise statement is the always-visible disclosure, the six verbatim texts are one activation away. The stale "Industry & Career (planned)" hand-off now links to the implemented `/industry`.
+- A3-R2 **Predict.** Before commitment the page shows no causal hint, expected outcome or explanation. The four options are outcome-only, with the correct one not in first position. The Situation and Predict-question prose of the Load Step case no longer mention the converter's lag or the bus energy (those facts remain in Explain). The expected-outcome text and the per-option reasoning are shown only after commit, in Discover. Preserved: the model assumptions, the claims, and the native details reveal in the other four cases.
+- A3-R3 **Discover density.** The physical cause chain is three short steps (static, number-free, 60 words or fewer in total). The long interpretation prose and the engineering result tiles with their basis are in a collapsed, separately labeled "Detailed technical explanation and engineering result" section. The backend strings of AC-8, the charts, cursor, timeline, dominant stress and modeled outcome stay visible.
+- A3-R4 The static-prose scan now covers 8 nodes for the Load Step case (the cause-chain card is a `data-static-prose` node; its list numerals are marked `data-equation` as list numbering per R6).
+
 ## 14. Dependencies and Sequencing
 
 1. **PR #8 is merged at `4e6af36`** (provides `EvidenceTag`, label types, `DriverId`, `DISCLOSURES`, `REFERENCES`, nav pattern). `4e6af36` is the AC-12 baseline. Implementation does not start before this spec is approved.

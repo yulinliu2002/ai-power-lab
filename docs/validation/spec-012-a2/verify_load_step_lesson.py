@@ -19,6 +19,7 @@ from playwright.sync_api import sync_playwright
 BASE, API, OUT = sys.argv[1].rstrip("/"), sys.argv[2].rstrip("/"), sys.argv[3]
 os.makedirs(OUT + "/shots", exist_ok=True)
 res = []
+norm = lambda x: re.sub(r"\s+", " ", x)
 def rec(check, ok, detail=""):
     res.append({"check": check, "result": "PASS" if ok else "FAIL", "detail": detail})
     print(("PASS " if ok else "FAIL ") + check, detail)
@@ -49,16 +50,36 @@ with sync_playwright() as p:
     pg.goto(BASE + "/learn", wait_until="networkidle"); pg.wait_for_timeout(1200)
 
     # L1, L2
+    pg.screenshot(path=f"{OUT}/shots/m1-1440-0-fold.png")
     pg.screenshot(path=f"{OUT}/shots/m1-1440-1-predict.png", full_page=True)
     rec("L1 predict picker has four options", pg.locator('[data-testid^="prediction-"][type="radio"]').count() == 4)
     rec("L2 commit disabled before a pick", pg.locator('[data-testid="commit-prediction"]').is_disabled())
-    rec("L2 reveal hidden before commit", pg.locator('[data-testid="predict-reveal"]').count() == 0)
+    # L12 (amendment A3): the answer and its causal explanation are hidden until commitment, after a pick too
+    src = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../../frontend/app/lib/loadStepLesson.ts")).read()
+    data = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../../frontend/app/lib/learnByExampleData.ts")).read()
+    reveal = re.search(r'reveal:\s*"((?:[^"\\]|\\.)*)"', data[data.index("load_step: {"):]).group(1)
+    reasonings = re.findall(r'reasoning:\s*\n?\s*"((?:[^"\\]|\\.)*)"', src)
+    hints = ["lag", "refill", "stored energy", "time constant", "corrective", "drain", "first-order", "the gap", "feedforward"]
+    def leaks():
+        body = norm(pg.evaluate("()=>document.body.innerText")).lower()
+        return [x[:30] for x in [reveal] + reasonings if norm(x).lower() in body] + [h for h in hints if re.search(r"\b" + re.escape(h) + r"\b", body)] + (["Expected outcome"] if "expected outcome" in body else [])
+    l0 = leaks()
+    pg.locator('label:has([data-testid="prediction-rises"])').click(); pg.wait_for_timeout(100)
+    l1 = leaks()
+    pg.locator('label:has([data-testid="prediction-falls-recovers"])').click(); pg.wait_for_timeout(100)
+    l2 = leaks()
+    pg.screenshot(path=f"{OUT}/shots/m1-1440-1b-predict-picked.png", full_page=True)
+    step(pg, "discover"); l3 = leaks()
+    rec("L12 Predict answer and causal hints absent from the page before commit (no pick / after a pick / on the Discover gate)", not (l0 or l1 or l2 or l3) and len(reasonings) == 4 and len(reveal) > 20, str([l0, l1, l2, l3]))
+    # L13 (amendment A3): case selector and stepper high on the page, details collapsed by default
+    fb = pg.evaluate("()=>{const s=document.querySelector('fieldset input[name=\"learn-case\"]').closest('fieldset').getBoundingClientRect(),t=document.querySelector('[data-testid=\"learn-stepper\"]').getBoundingClientRect();return [s.top,s.bottom,t.top,t.bottom,innerHeight]}")
+    rec("L13 case selector and four-step control fully inside the first 1440x900 screen; limitation visible; basis collapsed", fb[1] < fb[4] and fb[3] < fb[4] and pg.locator('[data-testid="learn-limitation"]').is_visible() and pg.locator('[data-testid="learn-basis"]').get_attribute("open") is None, str(fb))
     step(pg, "discover")
     rec("L1 Discover gated before commit", pg.locator('[data-testid="discover-gate"]').is_visible() and pg.locator('[data-testid="observe-live"]').count() == 0 and pg.locator('[data-testid="cursor-panel"]').count() == 0)
     step(pg, "predict")
     pg.locator('label:has([data-testid="prediction-falls-recovers"])').click()
     pg.locator('[data-testid="commit-prediction"]').click(); pg.wait_for_timeout(200)
-    rec("L2 commit locks options and shows reveal", pg.locator('[data-testid="prediction-committed"]').is_visible() and pg.locator('[data-testid="prediction-falls-recovers"]').is_disabled() and pg.locator('[data-testid="predict-reveal"]').count() == 1)
+    rec("L2 commit locks options; the expected-outcome text is still not on the Predict step", pg.locator('[data-testid="prediction-committed"]').is_visible() and pg.locator('[data-testid="prediction-falls-recovers"]').is_disabled() and pg.locator('[data-testid="prediction-expected"]').count() == 0 and not leaks())
 
     # L3 L4
     pg.get_by_role("button", name=re.compile("Check it against the model")).click(); pg.wait_for_timeout(1800)
@@ -66,6 +87,15 @@ with sync_playwright() as p:
     ver = pg.locator('[data-testid="prediction-verdict"]').inner_text()
     rec("L3 comparison agrees with independent classification", expected_obs == "falls-recovers" and "fell below its reference and then returned" in obs and ver.startswith("Match."), f"{obs} | {ver[:40]}")
     pg.screenshot(path=f"{OUT}/shots/m1-1440-2-discover.png", full_page=True)
+    # L14 (amendment A3): Discover density: exactly three short cause-chain steps, detailed explanation collapsed and separate
+    cc = pg.locator('[data-testid="cause-chain"] li'); td = pg.locator('[data-testid="technical-details"]')
+    words = len(re.findall(r"\w+", pg.locator('[data-testid="cause-chain"]').inner_text()))
+    td_text_closed = pg.locator('[data-testid="technical-details"]').inner_text()
+    td.locator("summary").click(); pg.wait_for_timeout(150)
+    td_text_open = pg.locator('[data-testid="technical-details"]').inner_text()
+    td.locator("summary").click()
+    rec("L14 Discover: three cause-chain steps (<=60 words), technical explanation collapsed by default and holds the interpretation and engineering result", cc.count() == 3 and words <= 60 and "WHY THIS HAPPENED" not in td_text_closed.upper() and "WHY THIS HAPPENED" in td_text_open.upper() and "ENGINEERING RESULT" in td_text_open.upper(), f"words={words}")
+    rec("L12 expected outcome and reasoning appear only after commit, in Discover", pg.locator('[data-testid="prediction-expected"]').count() == 1)
     sl = pg.locator('[data-testid="cursor-slider"]')
     t0, t1 = T["time_s"][0], T["time_s"][-1]
     exp_x = lambda t: 44 + (t - t0) / (t1 - t0) * (600 - 44 - 12)   # TelemetryChart: W=600, MARGIN.left=44, MARGIN.right=12
@@ -156,7 +186,7 @@ with sync_playwright() as p:
     ok9 = True
     for cid in ["sustained_high_load", "thermal_trip", "grid_sag", "grid_loss"]:
         pick(pg, cid); pg.wait_for_timeout(1500)
-        step(pg, "predict"); a = pg.locator('[data-testid="predict-picker"]').count() == 0 and pg.locator("details summary").count() == 1
+        step(pg, "predict"); a = pg.locator('[data-testid="predict-picker"]').count() == 0 and pg.locator('[data-testid="part-predict"] details summary').count() == 1
         step(pg, "discover"); a &= pg.locator('[data-testid="discover-gate"]').count() == 0 and pg.locator('[data-testid="cursor-panel"]').count() == 0 and pg.locator('[data-testid="observe-live"]').count() == 1
         step(pg, "explain"); a &= pg.locator('[data-testid="grounding-panel"]').count() == 0
         step(pg, "apply"); a &= pg.locator('[data-testid="apply-question"]').count() == 0 and pg.locator('[data-testid="part-decision"]').count() == 1
@@ -168,6 +198,9 @@ with sync_playwright() as p:
     pm = b.new_page(viewport={"width": 390, "height": 844}); merr = []
     pm.on("console", lambda m: merr.append(m.text) if m.type in ("error", "warning") else None)
     pm.goto(BASE + "/learn", wait_until="networkidle"); pm.wait_for_timeout(1000)
+    pm.screenshot(path=f"{OUT}/shots/m1-390-0-fold.png")
+    mf = pm.evaluate("()=>{const s=document.querySelector('fieldset input[name=\"learn-case\"]').closest('fieldset').getBoundingClientRect(),t=document.querySelector('[data-testid=\"learn-stepper\"]').getBoundingClientRect();return [s.bottom,t.bottom,innerHeight]}")
+    rec("L13 390x844: case selector and four-step control fully inside the first screen", mf[0] < mf[2] and mf[1] < mf[2], str(mf))
     pm.screenshot(path=f"{OUT}/shots/m1-390-1-predict.png", full_page=True)
     pm.locator('label:has([data-testid="prediction-falls-recovers"])').click(); pm.locator('[data-testid="commit-prediction"]').click()
     allok = True

@@ -40,6 +40,7 @@ import {
   ApplyQuestionPanel,
   CursorPanel,
   DiscoverGate,
+  CauseChainCard,
   GroundingPanel,
   PredictPicker,
   PredictionComparison,
@@ -241,13 +242,7 @@ function CaseView({
             <Section title="Predict" testId="part-predict">
               <StaticProse>
                 <p className="max-w-3xl text-[14px] leading-relaxed text-primary">{c.predict.question}</p>
-                {isLesson ? (
-                  committed && (
-                    <p className="max-w-3xl text-[12.5px] leading-relaxed text-secondary" data-testid="predict-reveal">
-                      {c.predict.reveal}
-                    </p>
-                  )
-                ) : (
+                {isLesson ? null : (
                   <details className="max-w-3xl">
                     <summary className="cursor-pointer font-sans text-[12px] font-semibold uppercase tracking-[0.04em] text-secondary hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary">
                       Show the expected outcome
@@ -561,8 +556,10 @@ function RunView({ c, data, prediction }: { c: Case; data: ScenarioRunResponse; 
     <div className="flex flex-col gap-3">
       {/* The interpretation's prose points at the Power Balance chart "below",
           so it sits above the charts (SPEC-012 R5). */}
-      {metrics && prediction && <PredictionComparison choice={prediction} observed={observedOutcome(metrics, vRef)} />}
-      {metrics && <EngineeringInterpretation metrics={metrics} voltageReferenceV={vRef} />}
+      {metrics && prediction && (
+        <PredictionComparison choice={prediction} observed={observedOutcome(metrics, vRef)} expected={c.predict.reveal} />
+      )}
+      {metrics && <CauseChainCard />}
       {metrics && (
         <CursorPanel
           index={cursorIndex}
@@ -615,7 +612,17 @@ function RunView({ c, data, prediction }: { c: Case; data: ScenarioRunResponse; 
         />
       </div>
       <ProtectionTimeline timeline={data.protection_timeline} />
-      {metrics && <TransientMetricsPanel metrics={metrics} voltageReferenceV={vRef} />}
+      {metrics && (
+        <details className="border border-hairline bg-surface px-4 py-3" data-testid="technical-details">
+          <summary className="cursor-pointer font-sans text-[13px] font-semibold text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary">
+            Detailed technical explanation and engineering result
+          </summary>
+          <div className="flex flex-col gap-3 pt-3">
+            <EngineeringInterpretation metrics={metrics} voltageReferenceV={vRef} />
+            <TransientMetricsPanel metrics={metrics} voltageReferenceV={vRef} />
+          </div>
+        </details>
+      )}
       {c.busCollapseCase && (
         <p className="max-w-3xl text-[11.5px] leading-relaxed text-secondary">{LEARN_DISCLOSURES.d2}</p>
       )}
