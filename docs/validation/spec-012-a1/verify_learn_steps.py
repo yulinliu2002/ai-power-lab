@@ -47,6 +47,9 @@ def truth(i):
 
 def step(pg, s):
     pg.locator(f'[data-testid="step-tab-{s}"]').click(); pg.wait_for_timeout(150)
+    # Load Step lesson (amendment A2) gates Discover until a prediction is committed or skipped explicitly.
+    if s == "discover" and pg.locator('[data-testid="look-without-predicting"]').count():
+        pg.locator('[data-testid="look-without-predicting"]').click(); pg.wait_for_timeout(150)
 
 def pick(pg, i):
     pg.locator(f'label:has([data-testid="case-option-{i}"])').click()
@@ -62,10 +65,14 @@ with sync_playwright() as p:
     pg.goto(BASE + "/learn", wait_until="networkidle"); pg.wait_for_timeout(1500)
 
     # S1
+    # Amendment A3: a concise limitation is always visible; the six disclosures are in a collapsed-by-default expandable section
+    lim_ok = pg.locator('[data-testid="learn-limitation"]').is_visible() and pg.locator('[data-testid="learn-basis"]').get_attribute("open") is None
+    pg.locator('[data-testid="learn-basis"] summary').click(); pg.wait_for_timeout(150)
     panel = norm(pg.locator('[data-testid="learn-disclosures"]').inner_text())
-    rec("S1 six disclosures visible on load", pg.locator('[data-testid="learn-disclosures"] li').count() == 6 and all(norm(d) in panel for d in D_L + SRC_D)
+    rec("S1 concise limitation visible on load; six disclosures verbatim in the expandable section (collapsed by default); rail inside it", lim_ok and pg.locator('[data-testid="signal-path-rail"]').is_visible() and pg.locator('[data-testid="learn-disclosures"] li').count() == 6 and all(norm(d) in panel for d in D_L + SRC_D)
         and pg.locator('[data-testid="learn-disclosures"]').is_visible())
 
+    pg.locator('[data-testid="learn-basis"] summary').click()   # collapse again
     for i in IDS:
         pick(pg, i); pg.wait_for_timeout(1800)
         base_reqs = len(reqs)
@@ -103,7 +110,7 @@ with sync_playwright() as p:
                 rec(f"S4 {i} Explain coverage entries verbatim", not bad, str(bad))
             pg.screenshot(path=f"{OUT}/shots/learn-1440-{i}-{s}.png", full_page=True)
         rec(f"S2 {i} four steps reachable, only current mounted", mounted_ok)
-        rec(f"S3 {i} static scan (union over steps = 7 nodes)", nodes == 7 and not hits, f"nodes={nodes} hits={hits}")
+        rec(f"S3 {i} static scan (union over steps = 7 nodes, 8 for the Load Step lesson)", nodes == (8 if i == "load_step" else 7) and not hits, f"nodes={nodes} hits={hits}")
         rec(f"S5 {i} no refetch on step change", len(reqs) == base_reqs, f"extra={len(reqs) - base_reqs}")
 
     # Back navigation, case-change reset, re-activating the current step (Codex findings 2 and 3)

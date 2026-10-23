@@ -300,6 +300,27 @@ Authorized by decision D-A (design-lab INTEGRATION_PLAN §4, approved by the Hum
 - A1-R5. The static-scan boundary (R6) is unchanged: the seven `data-static-prose` nodes per case, now distributed across steps; the AC-4 scan is run over the union of the steps.
 - A1-AC. Verified by `docs/validation/spec-012-a1/verify_learn_steps.py` (see the validation record, "Amendment A1").
 
+## 15b. Amendment A2: Load Step interactive lesson (milestone M1)
+
+Scope: the `load_step` case only; the other four cases are unchanged. Requested by the Human Engineering Lead (milestone M1). No change to `src/`, `backend/`, API contracts, physics, thresholds or the R16 claims. Stacked on A1.
+
+- A2-R1 **Predict.** The learner picks one of four qualitative outcomes and commits. Committing locks the pick; nothing is scored or stored (reload resets). The expected-outcome reveal for this case appears only after commit (the native details reveal remains for the other four cases).
+- A2-R2 **Discover.** Discover is gated until a prediction is committed or the learner chooses "Look without predicting". This is the one exception to A1-R2 (no gating) and it is explicit and reversible. After commit the page compares the pick with the live run; the observed class is derived only from `computeTransientMetrics` fields (minimum below reference, recovery time, direction of the largest deviation), with no new threshold.
+- A2-R3 **Interactive trace.** One time cursor (slider, arrow keys in coarse steps, Shift+Arrow one sample, jump buttons to the step, the minimum and the settled time) drives the cursor line on both existing charts and a readout of V_dc, P_load, P_sst and P_sst - P_load read from the returned samples. Annotations: the load-step and settled event markers, the existing minimum marker and reference line, and a phase note chosen only by the sign of P_sst - P_load (and the recovery time), tied to dE/dt = P_sst - P_load. The cursor only selects an already-returned sample.
+- A2-R4 **Explain.** The existing four-step cause chain is unchanged; a "measured in this run" panel shows its counterparts from the same response: demand before and after the step, the largest shortfall, the energy given up (E = 1/2 C V^2, from `computeTransientMetrics`), the minimum voltage, how far the PI power target rose above demand while below reference, and the recovery time. This allows two read-only presentation calculations beyond `computeTransientMetrics` (largest value of target minus demand while below reference; sample reads), recorded here as the bounded exception to the "no computation beyond `computeTransientMetrics`" rule.
+- A2-R5 **Apply.** One engineering-judgment question on limitations, requirements and validation evidence, with per-option feedback and exactly one defensible answer (accept the run as a mechanism and ask for measurements of the real converter, storage and controller). Followed by the existing decision link and validation reasoning (R7 evidence kinds). No scoring, ranking or stored state.
+- A2-R6 Authored prose follows R6 (no digits) and AC-5 (no ranking terms); the model numbers are live.
+- A2-Limits. The lesson teaches one mechanism of one averaged, illustrative model. It does not validate any architecture, and the controller is modeled with perfect load measurement and no switching behavior (src/controller.py).
+
+## 15c. Amendment A3: compact layout and a genuinely predictive Predict (M1 Human Visual QA feedback)
+
+Requested by the Human Engineering Lead after Human Visual QA of the M1 Load Step lesson (2026-10-22). Presentation and authored-prose changes only: no change to the engine, numerical results, API contracts, chart calculations, the five cases' claims (R16) or the other four cases' behavior.
+
+- A3-R1 **Layout.** The case selector and the four-step control sit in the first screen (1440x900 and 390x844). One concise limitation statement is always visible ("Model limitation: a simplified average-value model with illustrative values. It shows how the model behaves, not how real equipment behaves."). The six disclosures (AC-6) and the signal-path rail are in a native expandable section, collapsed by default, with all text in the DOM. **This is a Human-approved deviation** from DESIGN.md §1 and SPEC-014 F4 (Basis panel always visible, never collapsed) for `/learn` only, and it supersedes the "visible on initial load" wording of A1-R4 and AC-6: the concise statement is the always-visible disclosure, the six verbatim texts are one activation away. The stale "Industry & Career (planned)" hand-off now links to the implemented `/industry`.
+- A3-R2 **Predict.** Before commitment the page shows no causal hint, expected outcome or explanation. The four options are outcome-only, with the correct one not in first position. The Situation and Predict-question prose of the Load Step case no longer mention the converter's lag or the bus energy (those facts remain in Explain). The expected-outcome text and the per-option reasoning are shown only after commit, in Discover. Preserved: the model assumptions, the claims, and the native details reveal in the other four cases.
+- A3-R3 **Discover density.** The physical cause chain is three short steps (static, number-free, 60 words or fewer in total). The long interpretation prose and the engineering result tiles with their basis are in a collapsed, separately labeled "Detailed technical explanation and engineering result" section. The backend strings of AC-8, the charts, cursor, timeline, dominant stress and modeled outcome stay visible.
+- A3-R4 The static-prose scan now covers 8 nodes for the Load Step case (the cause-chain card is a `data-static-prose` node; its list numerals are marked `data-equation` as list numbering per R6).
+
 ## 14. Dependencies and Sequencing
 
 1. **PR #8 is merged at `4e6af36`** (provides `EvidenceTag`, label types, `DriverId`, `DISCLOSURES`, `REFERENCES`, nav pattern). `4e6af36` is the AC-12 baseline. Implementation does not start before this spec is approved.
@@ -313,3 +334,14 @@ Authorized by decision D-A (design-lab INTEGRATION_PLAN §4, approved by the Hum
 - Whether the frontend is deployed with a backend (affects D1 only).
 - The SST specification (24 pages) was read from extracted text and the white paper's cited sections were read, but Mt. Diablo v1.0.0 and the NVIDIA technical blog behind some §6.7 items were not opened.
 - §5.4 values come from one scratch run, reproduced independently by Codex (read-only run of the comparison function: every classification and state list matched; thermal floor contact and trip times observed). They are design input, not acceptance values.
+
+## 15d. Amendment A4: correctness feedback in Predict and Apply (M1, Human-requested)
+
+Scope: Load Step lesson only, presentation only. No engine, API, chart, Explain or lesson-structure change.
+
+- **A4-1 Predict.** After the learner commits, show a status badge with an icon and the text "Correct" when the pick equals the live run's outcome class (`observedOutcome`, unchanged), otherwise an icon and "Incorrect". A sentence states that this means matching the simplified model, not a claim about every real converter or data center. The model-run statement (`OBSERVED_TEXT`) is shown; the causal explanation stays in Discover and Explain (A3 hiding of causal hints before commit is unchanged).
+- **A4-2 Apply.** After "Check my reasoning", show an icon and "Defensible engineering judgment" for the defensible option, otherwise an icon and "Not defensible", followed by the existing explanation.
+- **A4-3 Secrecy.** Before submission nothing in text, icon, colour class, `data-*` attribute or accessible name depends on correctness.
+- **A4-4 Colour.** Status uses the DESIGN.md `status-good` / `status-critical` tokens; meaning is carried by icon and text as well.
+- **A4-5 Selection.** The submitted pick is tagged "Your answer" in text; unselected options are not marked.
+- **Limitation.** "Correct" means agreement with this simplified model's outcome class only.

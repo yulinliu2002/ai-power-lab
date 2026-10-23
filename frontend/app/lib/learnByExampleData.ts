@@ -168,11 +168,11 @@ export const CASES: Record<ScenarioName, Case> = {
     busCollapseCase: false,
     drivers: ["rd2"],
     situation: {
-      text: "The AI load suddenly asks for more power while the chain is in a steady state. The converter cannot deliver the new demand instantly, so something else has to cover the gap. The question is what the DC bus does in the meantime and what brings it back.",
+      text: "The AI load suddenly asks for more power while the chain is in a steady state. The question is what the DC bus voltage does afterward.",
       ...MODEL_ASSUMPTION("the Sandbox's fixed load-step preset"),
     },
     predict: {
-      question: "Before looking at the chart: after the load steps up, does the bus voltage rise, fall, or stay put, and what finally restores it?",
+      question: "Before looking at any result: after the load steps up, what do you expect the DC bus voltage to do?",
       reveal: "Expect the voltage to fall first, because demand exceeds delivered power until the converter catches up, and then to return toward its reference once the controller has pushed delivered power above demand long enough to refill the bus energy.",
       ...AUTHORED("Authored expectation; checked against the live response by the verification script."),
     },
