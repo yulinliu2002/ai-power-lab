@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
   BOUNDARIES,
@@ -27,6 +27,7 @@ import { computeTransientMetrics, formatEnergyDeficitKj } from "../lib/transient
 import { CaseSelector } from "./CaseSelector";
 import { EngineeringInterpretation } from "./EngineeringInterpretation";
 import { EvidenceTag } from "./EvidenceTag";
+import { LEARN_STEPS, LearnStepper, type LearnStepId } from "./LearnStepper";
 import { ProtectionCoordination } from "./ProtectionCoordination";
 import { ProtectionTimeline } from "./ProtectionTimeline";
 import { TelemetryChart } from "./TelemetryChart";
@@ -43,6 +44,11 @@ import { TransientMetricsPanel } from "./TransientMetricsPanel";
  * loading/error states (R13); each case view is keyed by the selected case
  * and cancels its in-flight request on unmount, so a slow earlier response
  * cannot overwrite the selected case.
+ *
+ * Four-step shell (SPEC-012 amendment A1): the eight parts are grouped as
+ * Predict = 1-2, Discover = 3 + 6a, Explain = 4-5, Apply = 6b, 7, 8. Only the
+ * current step's parts are mounted, but both requests live in `CaseView`, so
+ * switching steps never refetches and every step is reachable at any time.
  */
 
 type Remote<T> =
@@ -157,160 +163,222 @@ function CaseView({
       ? (comparison.data.find((e) => e.scenario === selected) ?? null)
       : null;
 
+  const [step, setStep] = useState<LearnStepId>("predict");
+  const stepHeading = useRef<HTMLHeadingElement>(null);
+  const userMoved = useRef(false);
+  useEffect(() => {
+    // Keyboard and screen-reader users land on the new step's heading; the first render is left alone.
+    // Focus is allowed to scroll: Back/Next sit below long content, and the heading must come into view.
+    if (userMoved.current) stepHeading.current?.focus();
+  }, [step]);
+  const go = (id: LearnStepId) => {
+    userMoved.current = true;
+    // Re-activating the current step changes no state, so the effect would not run: focus its heading directly.
+    if (id === step) stepHeading.current?.focus();
+    else setStep(id);
+  };
+  const stepIndex = LEARN_STEPS.findIndex((s) => s.id === step);
+  const prev = LEARN_STEPS[stepIndex - 1];
+  const next = LEARN_STEPS[stepIndex + 1];
+
   return (
-    <article data-testid={`case-${selected}`} className="flex flex-col gap-6">
+    <article data-testid={`case-${selected}`} className="flex flex-col gap-5">
+      <header className="flex flex-col gap-1.5">
+        <h2 className="text-heading text-primary">{c.title}</h2>
+        <p className="font-mono text-meta uppercase text-secondary">
+          Informs{" "}
+          {c.drivers
+            .map((d) => `${d.toUpperCase()} ${DRIVERS.find((x) => x.id === d)?.title ?? ""}`)
+            .join(" · ")}
+        </p>
+      </header>
 
-        <header className="flex flex-col gap-1.5">
-          <h2 className="text-[15px] font-bold text-primary">{c.title}</h2>
-          <p className="font-mono text-[10.5px] uppercase tracking-[0.06em] text-secondary">
-            Informs{" "}
-            {c.drivers
-              .map((d) => `${d.toUpperCase()} ${DRIVERS.find((x) => x.id === d)?.title ?? ""}`)
-              .join(" · ")}
-          </p>
-        </header>
+      <LearnStepper current={step} onSelect={go} />
 
-        <Section title="Situation" testId="part-situation">
-          <StaticProse>
-            <Para text={c.situation.text} />
-            <EvidenceTag evidence={c.situation.evidence} basis={c.situation.basis} refs={c.situation.refs} />
-          </StaticProse>
-        </Section>
+      <div data-testid={`step-${step}`} className="flex flex-col gap-6">
+        <h3
+          ref={stepHeading}
+          tabIndex={-1}
+          className="font-mono text-meta uppercase text-secondary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary"
+        >
+          Step {stepIndex + 1} of {LEARN_STEPS.length} &middot; {LEARN_STEPS[stepIndex].label}
+        </h3>
 
-        <Section title="Predict" testId="part-predict">
-          <StaticProse>
-            <p className="max-w-3xl text-[12.5px] leading-relaxed text-primary">{c.predict.question}</p>
-            <details className="max-w-3xl">
-              <summary className="cursor-pointer font-sans text-[11px] font-semibold uppercase tracking-[0.04em] text-secondary hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary">
-                Show the expected outcome
-              </summary>
-              <p className="pt-1.5 text-[12.5px] leading-relaxed text-secondary">{c.predict.reveal}</p>
-            </details>
-            <EvidenceTag evidence={c.predict.evidence} basis={c.predict.basis} refs={c.predict.refs} />
-          </StaticProse>
-        </Section>
-
-        <Section title="Observe (live model output)" testId="part-observe">
-          <ObserveBlock c={c} run={run} entry={entry} comparison={comparison} />
-        </Section>
-
-        <Section title="Explain" testId="part-explain">
-          <StaticProse>
-            <ol className="flex max-w-3xl list-decimal flex-col gap-2 pl-5 text-[12.5px] leading-relaxed text-secondary">
-              {c.explain.steps.map((s, i) => (
-                <li key={i} className="pl-1">
-                  <span>{s.text}</span>
-                  {s.equation && (
-                    <code
-                      data-equation
-                      className="mt-0.5 block font-mono text-[11.5px] text-primary"
-                    >
-                      {s.equation}
-                    </code>
-                  )}
-                </li>
-              ))}
-            </ol>
-            <p className="max-w-3xl text-[12.5px] leading-relaxed text-primary">
-              <span className="font-semibold">Limiting quantity: </span>
-              {c.explain.limitingQuantity}
-            </p>
-            <EvidenceTag evidence={c.explain.evidence} basis={c.explain.basis} refs={c.explain.refs} />
-          </StaticProse>
-        </Section>
-
-        <Section title="Limits of this model" testId="part-limits">
-          <StaticProse>
-            <ul className="flex max-w-3xl flex-col gap-2">
-              {c.limits.map((l, i) => (
-                <li key={i} className="flex flex-col gap-1">
-                  <Para text={l.text} />
-                  <EvidenceTag evidence={l.evidence} basis={l.basis} refs={l.refs} />
-                </li>
-              ))}
-            </ul>
-          </StaticProse>
-          <div className={CONTRAST_WRAP} data-testid="part-coverage">
-            <LiveCoverage run={run} />
-          </div>
-        </Section>
-
-        <Section title="Modeled outcome and what the model does not represent" testId="part-modeled">
-          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-            <div
-              data-testid="panel-modeled"
-              className="flex flex-col gap-2 border border-hairline bg-surface px-3 py-3"
-            >
-              <h3 className="font-sans text-[11.5px] font-semibold uppercase tracking-[0.04em] text-secondary">
-                Modeled outcome (simplified model, not a prediction for real equipment)
-              </h3>
-              <ModeledOutcome run={run} entry={entry} comparison={comparison} />
-              {c.busCollapseCase && (
-                <p className="text-[12px] leading-relaxed text-secondary" data-testid="d-l2">
-                  {LEARN_DISCLOSURES.d2}
-                </p>
-              )}
-            </div>
-            <div
-              data-testid="panel-not-modeled"
-              className="flex flex-col gap-2 border border-dashed border-secondary bg-surface-raised px-3 py-3"
-            >
-              <h3 className="font-sans text-[11.5px] font-semibold uppercase tracking-[0.04em] text-secondary">
-                Real-world behavior this engine does not represent
-              </h3>
+        {step === "predict" && (
+          <>
+            <Section title="Situation" testId="part-situation">
               <StaticProse>
-                <ul className="flex flex-col gap-3">
-                  {c.notModeled.map((n) => (
-                    <li key={n.name} className="flex flex-col gap-1">
-                      <span className="text-[12px] font-semibold text-primary">{n.name}</span>
-                      <Para text={n.text} />
-                      <EvidenceTag evidence={n.evidence} basis={n.basis} refs={n.refs} />
+                <Para text={c.situation.text} />
+                <EvidenceTag evidence={c.situation.evidence} basis={c.situation.basis} refs={c.situation.refs} />
+              </StaticProse>
+            </Section>
+
+            <Section title="Predict" testId="part-predict">
+              <StaticProse>
+                <p className="max-w-3xl text-[14px] leading-relaxed text-primary">{c.predict.question}</p>
+                <details className="max-w-3xl">
+                  <summary className="cursor-pointer font-sans text-[12px] font-semibold uppercase tracking-[0.04em] text-secondary hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary">
+                    Show the expected outcome
+                  </summary>
+                  <p className="pt-1.5 text-[12.5px] leading-relaxed text-secondary">{c.predict.reveal}</p>
+                </details>
+                <EvidenceTag evidence={c.predict.evidence} basis={c.predict.basis} refs={c.predict.refs} />
+              </StaticProse>
+            </Section>
+          </>
+        )}
+
+        {step === "discover" && (
+          <>
+            <Section title="Observe (live model output)" testId="part-observe">
+              <ObserveBlock c={c} run={run} entry={entry} comparison={comparison} />
+            </Section>
+
+            <Section title="Modeled outcome" testId="part-modeled">
+              <div
+                data-testid="panel-modeled"
+                className="flex flex-col gap-2 border border-hairline bg-surface px-3 py-3"
+              >
+                <p className="font-sans text-[12px] font-semibold uppercase tracking-[0.04em] text-secondary">
+                  Modeled outcome (simplified model, not a prediction for real equipment)
+                </p>
+                <ModeledOutcome run={run} entry={entry} comparison={comparison} />
+                {c.busCollapseCase && (
+                  <p className="text-[12px] leading-relaxed text-secondary" data-testid="d-l2">
+                    {LEARN_DISCLOSURES.d2}
+                  </p>
+                )}
+              </div>
+            </Section>
+          </>
+        )}
+
+        {step === "explain" && (
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]">
+            <Section title="Explain" testId="part-explain">
+              <StaticProse>
+                <ol className="flex max-w-3xl list-decimal flex-col gap-3 pl-5 text-[13.5px] leading-relaxed text-secondary">
+                  {c.explain.steps.map((s, i) => (
+                    <li key={i} className="pl-1">
+                      <span>{s.text}</span>
+                      {s.equation && (
+                        <code data-equation className="mt-1 block font-mono text-[12px] text-primary">
+                          {s.equation}
+                        </code>
+                      )}
+                    </li>
+                  ))}
+                </ol>
+                <p className="max-w-3xl text-[13.5px] leading-relaxed text-primary">
+                  <span className="font-semibold">Limiting quantity: </span>
+                  {c.explain.limitingQuantity}
+                </p>
+                <EvidenceTag evidence={c.explain.evidence} basis={c.explain.basis} refs={c.explain.refs} />
+              </StaticProse>
+            </Section>
+
+            <Section title="Limits of this model" testId="part-limits">
+              <StaticProse>
+                <ul className="flex max-w-3xl flex-col gap-2">
+                  {c.limits.map((l, i) => (
+                    <li key={i} className="flex flex-col gap-1">
+                      <Para text={l.text} />
+                      <EvidenceTag evidence={l.evidence} basis={l.basis} refs={l.refs} />
                     </li>
                   ))}
                 </ul>
               </StaticProse>
-            </div>
+              <div className={CONTRAST_WRAP} data-testid="part-coverage">
+                <LiveCoverage run={run} />
+              </div>
+            </Section>
           </div>
-        </Section>
+        )}
 
-        <Section title="Decision link" testId="part-decision">
-          <StaticProse>
-            <Para text={c.decision.text} />
-            <p className="font-mono text-[10.5px] uppercase tracking-[0.04em] text-secondary">
-              {c.decision.drivers.map((d) => d.toUpperCase()).join(" · ")} &middot;{" "}
-              {BOUNDARIES.find((b) => b.id === c.decision.boundary)?.title} boundary
-            </p>
-            <EvidenceTag evidence={c.decision.evidence} basis={c.decision.basis} refs={c.decision.refs} />
-          </StaticProse>
-          <Link
-            href="/architecture"
-            className="self-start border border-hairline px-3 py-1.5 font-mono text-[11px] font-semibold uppercase tracking-[0.04em] text-secondary hover:border-primary hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary"
-          >
-            Open Architecture Choices &rarr;
-          </Link>
-        </Section>
+        {step === "apply" && (
+          <>
+            <Section title="Real-world behavior this engine does not represent" testId="part-not-modeled">
+              <div
+                data-testid="panel-not-modeled"
+                className="flex flex-col gap-2 border border-dashed border-secondary bg-surface-raised px-3 py-3"
+              >
+                <StaticProse>
+                  <ul className="flex flex-col gap-3">
+                    {c.notModeled.map((n) => (
+                      <li key={n.name} className="flex flex-col gap-1">
+                        <span className="text-[12px] font-semibold text-primary">{n.name}</span>
+                        <Para text={n.text} />
+                        <EvidenceTag evidence={n.evidence} basis={n.basis} refs={n.refs} />
+                      </li>
+                    ))}
+                  </ul>
+                </StaticProse>
+              </div>
+            </Section>
 
-        <Section title="Validation reasoning" testId="part-validation">
-          <StaticProse>
-            <p className="max-w-3xl text-[12px] leading-relaxed text-secondary">
-              What would have to be shown before relying on this behavior for a real design.
-            </p>
-            <ul className="flex max-w-3xl flex-col gap-2">
-              {c.validation.map((v) => (
-                <li key={v.verifies} className="flex flex-col gap-0.5 text-[12.5px] leading-relaxed text-secondary">
-                  <span>{v.verifies}</span>
-                  <span className="font-mono text-[10.5px] uppercase tracking-[0.04em] text-secondary">
-                    Evidence: {v.kinds.join(" + ")}
-                  </span>
-                </li>
-              ))}
-            </ul>
-            <p className="font-mono text-[10.5px] text-secondary">
-              {EVIDENCE_LABEL_TEXT.assumption} &mdash; an illustrative list, not a complete plan for any facility.
-            </p>
-          </StaticProse>
-        </Section>
+            <Section title="Decision link" testId="part-decision">
+              <StaticProse>
+                <Para text={c.decision.text} />
+                <p className="font-mono text-meta uppercase text-secondary">
+                  {c.decision.drivers.map((d) => d.toUpperCase()).join(" · ")} &middot;{" "}
+                  {BOUNDARIES.find((b) => b.id === c.decision.boundary)?.title} boundary
+                </p>
+                <EvidenceTag evidence={c.decision.evidence} basis={c.decision.basis} refs={c.decision.refs} />
+              </StaticProse>
+              <Link
+                href="/architecture"
+                className="self-start border border-hairline px-3 py-1.5 font-mono text-[12px] font-semibold uppercase tracking-[0.04em] text-secondary hover:border-primary hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary"
+              >
+                Open Architecture Choices &rarr;
+              </Link>
+            </Section>
 
+            <Section title="Validation reasoning" testId="part-validation">
+              <StaticProse>
+                <p className="max-w-3xl text-[12.5px] leading-relaxed text-secondary">
+                  What would have to be shown before relying on this behavior for a real design.
+                </p>
+                <ul className="flex max-w-3xl flex-col gap-2">
+                  {c.validation.map((v) => (
+                    <li key={v.verifies} className="flex flex-col gap-0.5 text-[13px] leading-relaxed text-secondary">
+                      <span>{v.verifies}</span>
+                      <span className="font-mono text-meta uppercase text-secondary">
+                        Evidence: {v.kinds.join(" + ")}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+                <p className="font-mono text-meta text-secondary">
+                  {EVIDENCE_LABEL_TEXT.assumption} &mdash; an illustrative list, not a complete plan for any facility.
+                </p>
+              </StaticProse>
+            </Section>
+          </>
+        )}
+
+        <div className="flex flex-wrap items-center gap-3 border-t border-hairline pt-4">
+          {prev && (
+            <button
+              type="button"
+              data-testid="step-prev"
+              onClick={() => go(prev.id)}
+              className="border border-hairline-strong px-4 py-2 text-[13px] font-semibold text-secondary hover:text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary"
+            >
+              &larr; Back: {prev.label}
+            </button>
+          )}
+          {next && (
+            <button
+              type="button"
+              data-testid="step-next"
+              onClick={() => go(next.id)}
+              className="bg-accent px-4 py-2 text-[13px] font-semibold text-canvas hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary"
+            >
+              Next: {next.label} &rarr;
+            </button>
+          )}
+        </div>
+      </div>
     </article>
   );
 }
@@ -326,9 +394,9 @@ function Section({
 }) {
   return (
     <section data-testid={testId} className="flex flex-col gap-2 border-t border-hairline pt-4">
-      <h3 className="font-sans text-[13px] font-semibold uppercase tracking-[0.04em] text-secondary">
+      <h4 className="font-sans text-[13px] font-semibold uppercase tracking-[0.04em] text-secondary">
         {title}
-      </h3>
+      </h4>
       {children}
     </section>
   );
